@@ -656,7 +656,7 @@
     cmt_lat => cmt_lat_SAC,cmt_lon => cmt_lon_SAC,cmt_depth => cmt_depth_SAC, &
     hdur => cmt_hdur_SAC,M0,Mrr,Mtt,Mpp,Mrt,Mrp,Mtp,event_name_SAC, &
     pde_lat => elat_SAC,pde_lon => elon_SAC,pde_depth => depth_SAC, &
-    mb => mb_SAC,ms,Mw
+    mb => mb_SAC,ms => ms_SAC,Mw
 
   implicit none
   character(len=*) :: quakemlstring
@@ -674,7 +674,7 @@
   write(cmt_lat_str, "(g12.5)") cmt_lat
   write(cmt_lon_str, "(g12.5)") cmt_lon
   write(cmt_depth_str, "(g12.5)") cmt_depth*1000 ! km to m conversion
-  write(hdur_str, "(g12.5)") hdur
+  write(hdur_str, "(g12.5)") hdur*2
   write(M0_str, "(g12.5)") M0*1e-7 ! dyn-cm to N-m conversion
   write(mb_str, "(g12.5)") mb
   write(ms_str, "(g12.5)") ms

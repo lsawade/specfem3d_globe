@@ -33,15 +33,14 @@
   implicit none
 
   ! local parameters
+  integer :: isource,i,j,k,iglob,ispec
+  double precision :: timeval,time_t
   double precision :: stf
   real(kind=CUSTOM_REAL) :: stf_used
-  integer :: isource,i,j,k,iglob,ispec
-  double precision :: f0
+  ! for gpu
   double precision, dimension(NSOURCES) :: stf_pre_compute
-  double precision :: timeval,time_t
 
-  double precision, external :: comp_source_time_function
-  double precision, external :: comp_source_time_function_rickr
+  double precision, external :: get_stf_viscoelastic
 
   ! checks if anything to do for noise simulation
   if (NOISE_TOMOGRAPHY /= 0) return
@@ -53,12 +52,12 @@
     time_t = dble(it-1)*DT - t0
   endif
 
-
   if (.not. GPU_MODE) then
     ! on CPU
+! openmp solver
 !$OMP PARALLEL if (NSOURCES > 100) &
 !$OMP DEFAULT(SHARED) &
-!$OMP PRIVATE(isource,timeval,iglob,f0,stf_used,stf,ispec,i,j,k)
+!$OMP PRIVATE(isource,timeval,iglob,stf_used,stf,ispec,i,j,k)
 !$OMP DO
     do isource = 1,NSOURCES
 
@@ -70,113 +69,50 @@
         ! sets current time for this source
         timeval = time_t - tshift_src(isource)
 
+        ! determines source time function value
+        stf = get_stf_viscoelastic(timeval,isource)
+
+        ! distinguishes between single and double precision for reals
+        stf_used = real(stf,kind=CUSTOM_REAL)
+
         ! adds source contribution
-        !-------------POINT FORCE-----------------------------------------------
-        if (USE_FORCE_POINT_SOURCE) then
-
-          !! note: for use_force_point_source xi/eta/gamma are in the range [1,NGLL*]
-          !iglob = ibool_crust_mantle(nint(xi_source(isource)), &
-          !                           nint(eta_source(isource)), &
-          !                           nint(gamma_source(isource)), &
-          !                           ispec_selected_source(isource))
-
-          if (force_stf(isource) == 0) then
-            ! source time function value
-            stf = comp_source_time_function(timeval,hdur_Gaussian(isource))
-
-            !     distinguish between single and double precision for reals
-            stf_used = real(stf, kind=CUSTOM_REAL)
-          else if (force_stf(isource) == 1) then
-            !! question from DK DK: not sure how the line below works, how can a duration be used as a frequency???
-            f0 = hdur(isource) !! using hdur as a FREQUENCY just to avoid changing CMTSOLUTION file format
-
-            ! This is the expression of a Ricker; should be changed according maybe to the Par_file.
-            stf_used = comp_source_time_function_rickr(timeval,f0)
-          else
-            stop 'unsupported force_stf value!'
-          endif
-
-          ! we use a force in a single direction along one of the components:
-          !  x/y/z or E/N/Z-direction would correspond to 1/2/3 = COMPONENT_FORCE_SOURCE
-          ! e.g. nu_source(3,:) here would be a source normal to the surface (z-direction).
-          !accel_crust_mantle(:,iglob) = accel_crust_mantle(:,iglob) &
-          !                 + sngl( nu_source(COMPONENT_FORCE_SOURCE,:,isource) ) * stf_used
-          !     add the tilted point force source array
-          do k = 1,NGLLZ
-            do j = 1,NGLLY
-              do i = 1,NGLLX
-                iglob = ibool_crust_mantle(i,j,k,ispec)
-
-                accel_crust_mantle(:,iglob) = accel_crust_mantle(:,iglob) &
-                  + sourcearrays(:,i,j,k,isource)*stf_used
-
-              enddo
+        do k = 1,NGLLZ
+          do j = 1,NGLLY
+            do i = 1,NGLLX
+              iglob = ibool_crust_mantle(i,j,k,ispec)
+!$OMP ATOMIC
+              accel_crust_mantle(1,iglob) = accel_crust_mantle(1,iglob) + sourcearrays(1,i,j,k,isource)*stf_used
+!$OMP ATOMIC
+              accel_crust_mantle(2,iglob) = accel_crust_mantle(2,iglob) + sourcearrays(2,i,j,k,isource)*stf_used
+!$OMP ATOMIC
+              accel_crust_mantle(3,iglob) = accel_crust_mantle(3,iglob) + sourcearrays(3,i,j,k,isource)*stf_used
             enddo
           enddo
-        !-------------POINT FORCE-----------------------------------------------
-
-        else
-          ! source time function value
-          stf = comp_source_time_function(timeval,hdur_Gaussian(isource))
-
-          !     distinguish between single and double precision for reals
-          stf_used = real(stf, kind=CUSTOM_REAL)
-
-          !     add source array
-          do k = 1,NGLLZ
-            do j = 1,NGLLY
-              do i = 1,NGLLX
-                iglob = ibool_crust_mantle(i,j,k,ispec)
-
-                accel_crust_mantle(:,iglob) = accel_crust_mantle(:,iglob) &
-                  + sourcearrays(:,i,j,k,isource)*stf_used
-
-              enddo
-            enddo
-          enddo
-
-        endif ! USE_FORCE_POINT_SOURCE
+        enddo
 
       endif
 
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   else
     ! on GPU
     ! prepares buffer with source time function values, to be copied onto GPU
-    !-------------POINT FORCE-----------------------------------------------
-    if (USE_FORCE_POINT_SOURCE) then
-      do isource = 1,NSOURCES
-        ! sets current time for this source
-        timeval = time_t - tshift_src(isource)
+    do isource = 1,NSOURCES
+      ! sets current time for this source
+      timeval = time_t - tshift_src(isource)
 
-        ! source time function value
-        if (force_stf(isource) == 0) then
-          stf_pre_compute(isource) = comp_source_time_function(timeval,hdur_Gaussian(isource))
-        else if (force_stf(isource) == 1) then
-          f0 = hdur(isource) !! using hdur as a FREQUENCY just to avoid changing CMTSOLUTION file format
-          !stf_pre_compute(isource) = FACTOR_FORCE_SOURCE * comp_source_time_function_rickr(timeval,f0)
-          stf_pre_compute(isource) = comp_source_time_function_rickr(timeval,f0)
-        else
-          stop 'unsupported force_stf value!'
-        endif
-      enddo
-    else
-    !-------------POINT FORCE-----------------------------------------------
-      do isource = 1,NSOURCES
-        ! sets current time for this source
-        timeval = time_t - tshift_src(isource)
+      ! determines source time function value
+      stf = get_stf_viscoelastic(timeval,isource)
 
-        ! source time function value
-        stf_pre_compute(isource) = comp_source_time_function(timeval,hdur_Gaussian(isource))
-      enddo
-    endif
+      ! stores current stf values
+      stf_pre_compute(isource) = stf
+    enddo
+
     ! adds sources: only implements SIMTYPE=1 and NOISE_TOM = 0
     call compute_add_sources_gpu(Mesh_pointer,NSOURCES,stf_pre_compute)
   endif
-
 
   end subroutine compute_add_sources
 
@@ -192,8 +128,10 @@
   implicit none
 
   ! local parameters
-  integer :: irec,irec_local,i,j,k,iglob
+  real(kind=CUSTOM_REAL),dimension(NDIM) :: stf_array
+  integer :: irec,irec_local,num_loc,i,j,k,iglob,ispec
   integer :: ivec_index
+  integer,dimension(nadj_rec_local) :: rec_local
   logical :: ibool_read_adj_arrays
 
   ! note: we check if nadj_rec_local > 0 before calling this routine, but better be safe...
@@ -210,88 +148,141 @@
   ! adds adjoint sources
   if (.not. GPU_MODE) then
     ! on CPU
-    irec_local = 0
-    do irec = 1,nrec
 
+! work-around a cray compiler issue with the loop below.
+! the issue occurs when running debugging flag -g without optimization specifier (-O0). the compiler still tries to
+! optimize the routines, but runs into the following internal error:
+!
+!*** Optimization assertion failure:
+!   'Analyze_aliases'
+!
+!   Error detected     ::  File 'pdgcs/v_df.c', line 8282
+!   Initiated from     ::  Line 1562 (v_main.c)
+!   Optimizer built    ::  2017-12-05 (production)
+!
+!   File               ::  src/specfem3D/compute_add_sources.f90
+!   function           ::  compute_add_sources_adjoint
+!   at or near line    ::  229
+!
+!problematic part:
+!    irec_local = 0
+!    do irec = 1,nrec
+!
+!      ! adds source (only if this proc carries the source)
+!      if (myrank == islice_selected_rec(irec)) then
+!        irec_local = irec_local + 1
+!        do ..
+!         ..
+!        enddo
+!      endif
+!    enddo <-- this is the line mentioned in the error
+!
+! the work-around gets first all local receivers and then loops only over
+! these local ones (without the need of the if-case)
+!
+! note: cray compilation with -g but without -O0 still fails for routines in compute_stacey_*.f90
+!       cray version 8.6.x needs -O0 when debugging flags are used. as a work around, the following
+!       debugging flags work for crayftn: -g -G0 -O0 -Rb -eF -rm -eC -eD -ec -en -eI -ea
+
+    ! fill local receivers first
+    irec_local = 0
+    rec_local(:) = 0
+    do irec = 1,nrec
       ! adds source (only if this proc carries the source)
       if (myrank == islice_selected_rec(irec)) then
         irec_local = irec_local + 1
-
-        ! adjoint source array index
-        ivec_index = iadj_vec(it)
-
-        ! adds source contributions
-        do k = 1,NGLLZ
-          do j = 1,NGLLY
-            do i = 1,NGLLX
-              iglob = ibool_crust_mantle(i,j,k,ispec_selected_rec(irec))
-
-              ! adds adjoint source acting at this time step (it):
-              !
-              ! note: we use index iadj_vec(it) which is the corresponding time step
-              !          for the adjoint source acting at this time step (it)
-              !
-              ! see routine: setup_sources_receivers_adjindx() how this adjoint index array is set up
-              !
-              !           e.g. total length NSTEP = 3000, chunk length NTSTEP_BETWEEN_READ_ADJSRC= 1000
-              !           then for it = 1,..1000, first block has iadjsrc(1,1) with start = 2001 and end = 3000;
-              !           corresponding iadj_vec(it) goes from
-              !           iadj_vec(1) = 1000, iadj_vec(2) = 999 to iadj_vec(1000) = 1,
-              !           that is, originally the idea was
-              !           source_adjoint(.. iadj_vec(1) ) corresponds to adjoint source trace at time index 3000
-              !           source_adjoint(.. iadj_vec(2) ) corresponds to adjoint source trace at time index 2999
-              !           ..
-              !           source_adjoint(.. iadj_vec(1000) ) corresponds to adjoint source trace at time index 2001
-              !           then a new block will be read, etc, and it is going down till to adjoint source trace at time index 1
-              !
-              ! now comes the tricky part:
-              !           adjoint source traces are based on the seismograms from the forward run;
-              !           such seismograms have a time step index 1 which corresponds to time -t0
-              !           then time step index 2 which corresponds to -t0 + DT, and
-              !           the last time step in the file at time step NSTEP corresponds to time -t0 + (NSTEP-1)*DT
-              !           (see how we add the sources to the simulation in compute_add_sources() and
-              !             how we write/save the seismograms and wavefields at the end of the time loop).
-              !
-              !           then you use that seismogram and take e.g. the velocity of it for a traveltime adjoint source
-              !
-              !           now we read it in again, and remember the last time step in
-              !           the file at NSTEP corresponds to -t0 + (NSTEP-1)*DT
-              !
-              !           the same time step is saved for the forward wavefields to reconstruct them;
-              !           however, the Newmark time scheme acts at the very beginning of this time loop
-              !           such that we have the backward/reconstructed wavefield updated by
-              !           a single time step into the direction -DT and b_displ(it=1) would  corresponds to -t0 + (NSTEP-1)*DT - DT
-              !           after the Newmark (predictor) time step update.
-              !           however, we will read the backward/reconstructed wavefield at the end of the first time loop,
-              !           such that b_displ(it=1) corresponds to -t0 + (NSTEP-1)*DT (which is the one saved in the files).
-              !
-              !           for the kernel calculations, we want:
-              !             adjoint wavefield at time t, starting from 0 to T
-              !             and forward wavefield at time T-t, starting from T down to 0
-              !           let's say time 0 corresponds to -t0 = -t0 + (it - 1)*DT at it=1
-              !             and time T corresponds to -t0 + (NSTEP-1)*DT  at it = NSTEP
-              !
-              !           as seen before, the time for the forward wavefield b_displ(it=1) would then
-              !           correspond to time -t0 + (NSTEP-1)*DT - DT, which is T - DT.
-              !           the corresponding time for the adjoint wavefield thus would be 0 + DT
-              !           and the adjoint source index would be iadj_vec(it+1)
-              !           however, iadj_vec(it+1) which would go from 999 down to 0. 0 is out of bounds.
-              !           we thus would have to read in the adjoint source trace beginning from 2999 down to 0.
-              !           index 0 is not defined in the adjoint source trace, and would be set to zero.
-              !
-              !           however, since this complicates things, we read the backward/reconstructed
-              !           wavefield at the end of the first time loop, such that b_displ(it=1) corresponds to -t0 + (NSTEP-1)*DT.
-              !           assuming that until that end the backward/reconstructed wavefield and adjoint fields
-              !           have a zero contribution to adjoint kernels.
-              accel_crust_mantle(:,iglob) = accel_crust_mantle(:,iglob) &
-                            + source_adjoint(:,irec_local,ivec_index)*(hxir_store(irec_local,i)*&
-                                             hetar_store(irec_local,j)*hgammar_store(irec_local,k))
-            enddo
-          enddo
-        enddo
+        rec_local(irec_local) = irec
       endif
-
     enddo
+    num_loc = irec_local
+
+    ! checks
+    if (irec_local /= nadj_rec_local) then
+      print *,'Invalid number of local adjoint receivers in compute_add_sources_adjoint() routine:',irec_local,nadj_rec_local
+    endif
+
+    do irec_local = 1,num_loc
+
+      ! adds source (only if this proc carries the source)
+      irec = rec_local(irec_local)
+
+      ispec = ispec_selected_rec(irec)
+
+      ! adjoint source array index
+      ivec_index = iadj_vec(it)
+
+      stf_array(:) = source_adjoint(:,irec_local,ivec_index)
+
+      ! adds source contributions
+      do k = 1,NGLLZ
+        do j = 1,NGLLY
+          do i = 1,NGLLX
+            iglob = ibool_crust_mantle(i,j,k,ispec)
+
+            ! adds adjoint source acting at this time step (it):
+            !
+            ! note: we use index iadj_vec(it) which is the corresponding time step
+            !          for the adjoint source acting at this time step (it)
+            !
+            ! see routine: setup_sources_receivers_adjindx() how this adjoint index array is set up
+            !
+            !           e.g. total length NSTEP = 3000, chunk length NTSTEP_BETWEEN_READ_ADJSRC= 1000
+            !           then for it = 1,..1000, first block has iadjsrc(1,1) with start = 2001 and end = 3000;
+            !           corresponding iadj_vec(it) goes from
+            !           iadj_vec(1) = 1000, iadj_vec(2) = 999 to iadj_vec(1000) = 1,
+            !           that is, originally the idea was
+            !           source_adjoint(.. iadj_vec(1) ) corresponds to adjoint source trace at time index 3000
+            !           source_adjoint(.. iadj_vec(2) ) corresponds to adjoint source trace at time index 2999
+            !           ..
+            !           source_adjoint(.. iadj_vec(1000) ) corresponds to adjoint source trace at time index 2001
+            !           then a new block will be read, etc, and it is going down till to adjoint source trace at time index 1
+            !
+            ! now comes the tricky part:
+            !           adjoint source traces are based on the seismograms from the forward run;
+            !           such seismograms have a time step index 1 which corresponds to time -t0
+            !           then time step index 2 which corresponds to -t0 + DT, and
+            !           the last time step in the file at time step NSTEP corresponds to time -t0 + (NSTEP-1)*DT
+            !           (see how we add the sources to the simulation in compute_add_sources() and
+            !             how we write/save the seismograms and wavefields at the end of the time loop).
+            !
+            !           then you use that seismogram and take e.g. the velocity of it for a traveltime adjoint source
+            !
+            !           now we read it in again, and remember the last time step in
+            !           the file at NSTEP corresponds to -t0 + (NSTEP-1)*DT
+            !
+            !           the same time step is saved for the forward wavefields to reconstruct them;
+            !           however, the Newmark time scheme acts at the very beginning of this time loop
+            !           such that we have the backward/reconstructed wavefield updated by
+            !           a single time step into the direction -DT and b_displ(it=1) would  corresponds to -t0 + (NSTEP-1)*DT - DT
+            !           after the Newmark (predictor) time step update.
+            !           however, we will read the backward/reconstructed wavefield at the end of the first time loop,
+            !           such that b_displ(it=1) corresponds to -t0 + (NSTEP-1)*DT (which is the one saved in the files).
+            !
+            !           for the kernel calculations, we want:
+            !             adjoint wavefield at time t, starting from 0 to T
+            !             and forward wavefield at time T-t, starting from T down to 0
+            !           let's say time 0 corresponds to -t0 = -t0 + (it - 1)*DT at it=1
+            !             and time T corresponds to -t0 + (NSTEP-1)*DT  at it = NSTEP
+            !
+            !           as seen before, the time for the forward wavefield b_displ(it=1) would then
+            !           correspond to time -t0 + (NSTEP-1)*DT - DT, which is T - DT.
+            !           the corresponding time for the adjoint wavefield thus would be 0 + DT
+            !           and the adjoint source index would be iadj_vec(it+1)
+            !           however, iadj_vec(it+1) which would go from 999 down to 0. 0 is out of bounds.
+            !           we thus would have to read in the adjoint source trace beginning from 2999 down to 0.
+            !           index 0 is not defined in the adjoint source trace, and would be set to zero.
+            !
+            !           however, since this complicates things, we read the backward/reconstructed
+            !           wavefield at the end of the first time loop, such that b_displ(it=1) corresponds to -t0 + (NSTEP-1)*DT.
+            !           assuming that until that end the backward/reconstructed wavefield and adjoint fields
+            !           have a zero contribution to adjoint kernels.
+            accel_crust_mantle(:,iglob) = accel_crust_mantle(:,iglob) &
+                          + stf_array(:) * (hxir_store(irec_local,i) * hetar_store(irec_local,j) * hgammar_store(irec_local,k))
+          enddo ! NGLLX
+        enddo ! NGLLY
+      enddo ! NGLLZ
+
+    enddo ! irec_local
 
   else
 
@@ -356,17 +347,15 @@
   implicit none
 
   ! local parameters
+  integer :: isource,i,j,k,iglob,ispec
+  integer :: it_tmp
+  double precision :: timeval,time_t
   double precision :: stf
   real(kind=CUSTOM_REAL) :: stf_used
-  integer :: isource,i,j,k,iglob,ispec
-  double precision :: f0
+  ! for gpu
   double precision, dimension(NSOURCES) :: stf_pre_compute
-  double precision :: timeval,time_t
 
-  double precision, external :: comp_source_time_function
-  double precision, external :: comp_source_time_function_rickr
-
-  integer :: it_tmp
+  double precision, external :: get_stf_viscoelastic
 
   ! checks if anything to do for noise simulation
   if (NOISE_TOMOGRAPHY /= 0) return
@@ -415,7 +404,6 @@
     time_t = dble(NSTEP-it_tmp)*DT - t0
   endif
 
-
   if (.not. GPU_MODE) then
     ! on CPU
     do isource = 1,NSOURCES
@@ -428,72 +416,24 @@
         ! sets current time for this source
         timeval = time_t - tshift_src(isource)
 
-        !-------------POINT FORCE-----------------------------------------------
-        if (USE_FORCE_POINT_SOURCE) then
+        ! determines source time function value
+        stf = get_stf_viscoelastic(timeval,isource)
 
-           !! note: for use_force_point_source xi/eta/gamma are in the range [1,NGLL*]
-           !iglob = ibool_crust_mantle(nint(xi_source(isource)), &
-           !              nint(eta_source(isource)), &
-           !              nint(gamma_source(isource)), &
-           !              ispec_selected_source(isource))
+        ! distinguishes between single and double precision for reals
+        stf_used = real(stf,kind=CUSTOM_REAL)
 
-           !! question from DK DK: not sure how the line below works, how can a duration be used as a frequency???
-           if (force_stf(isource) == 0) then
-             ! source time function value
-             stf = comp_source_time_function(timeval,hdur_Gaussian(isource))
+        ! adds source contribution
+        do k = 1,NGLLZ
+          do j = 1,NGLLY
+            do i = 1,NGLLX
+              iglob = ibool_crust_mantle(i,j,k,ispec)
 
-             !     distinguish between single and double precision for reals
-             stf_used = real(stf, kind=CUSTOM_REAL)
-           else if (force_stf(isource) == 1) then
-             !! question from DK DK: not sure how the line below works, how can a duration be used as a frequency???
-             f0 = hdur(isource) !! using hdur as a FREQUENCY just to avoid changing CMTSOLUTION file format
+              b_accel_crust_mantle(:,iglob) = b_accel_crust_mantle(:,iglob) &
+                + sourcearrays(:,i,j,k,isource) * stf_used
 
-             ! This is the expression of a Ricker; should be changed according maybe to the Par_file.
-             stf_used = comp_source_time_function_rickr(timeval,f0)
-           else
-             stop 'unsupported force_stf value!'
-           endif
-
-           ! e.g. we use nu_source(3,:) here if we want a source normal to the surface.
-           ! note: time step is now at NSTEP-it
-           !b_accel_crust_mantle(:,iglob) = b_accel_crust_mantle(:,iglob) &
-           !                   + sngl( nu_source(COMPONENT_FORCE_SOURCE,:,isource) ) * stf_used
-          !     add tilted point force source array
-          do k = 1,NGLLZ
-            do j = 1,NGLLY
-              do i = 1,NGLLX
-                iglob = ibool_crust_mantle(i,j,k,ispec)
-
-                b_accel_crust_mantle(:,iglob) = b_accel_crust_mantle(:,iglob) &
-                  + sourcearrays(:,i,j,k,isource)*stf_used
-
-              enddo
             enddo
           enddo
-
-        else
-        !-------------POINT FORCE-----------------------------------------------
-
-          ! see note above: time step corresponds now to NSTEP-it
-          stf = comp_source_time_function(timeval,hdur_Gaussian(isource))
-
-          !     distinguish between single and double precision for reals
-          stf_used = real(stf, kind=CUSTOM_REAL)
-
-          !     add source array
-          do k = 1,NGLLZ
-            do j = 1,NGLLY
-              do i = 1,NGLLX
-                iglob = ibool_crust_mantle(i,j,k,ispec)
-
-                b_accel_crust_mantle(:,iglob) = b_accel_crust_mantle(:,iglob) &
-                  + sourcearrays(:,i,j,k,isource)*stf_used
-
-              enddo
-            enddo
-          enddo
-
-        endif ! USE_FORCE_POINT_SOURCE
+        enddo
 
       endif
 
@@ -502,33 +442,73 @@
   else
     ! on GPU
     ! prepares buffer with source time function values, to be copied onto GPU
-    !-------------POINT FORCE-----------------------------------------------
-    if (USE_FORCE_POINT_SOURCE) then
-      do isource = 1,NSOURCES
-        ! sets current time for this source
-        timeval = time_t - tshift_src(isource)
-        ! source time function contribution
-        if (force_stf(isource) == 0) then
-          stf_pre_compute(isource) = comp_source_time_function(timeval,hdur_Gaussian(isource))
-        else if (force_stf(isource) == 1) then
-          f0 = hdur(isource) !! using hdur as a FREQUENCY just to avoid changing CMTSOLUTION file format
-          !stf_pre_compute(isource) = FACTOR_FORCE_SOURCE * comp_source_time_function_rickr(timeval,f0)
-          stf_pre_compute(isource) = comp_source_time_function_rickr(timeval,f0)
-        else
-          stop 'unsupported force_stf value!'
-        endif
-      enddo
-    else
-    !-------------POINT FORCE-----------------------------------------------
-      do isource = 1,NSOURCES
-        ! sets current time for this source
-        timeval = time_t - tshift_src(isource)
-        ! source time function contribution
-        stf_pre_compute(isource) = comp_source_time_function(timeval,hdur_Gaussian(isource))
-      enddo
-    endif
+    do isource = 1,NSOURCES
+      ! sets current time for this source
+      timeval = time_t - tshift_src(isource)
+
+      ! determines source time function value
+      stf = get_stf_viscoelastic(timeval,isource)
+
+      ! stores current stf values
+      stf_pre_compute(isource) = stf
+    enddo
+
     ! adds sources: only implements SIMTYPE=3 (and NOISE_TOM = 0)
     call compute_add_sources_backward_gpu(Mesh_pointer,NSOURCES,stf_pre_compute)
   endif
 
   end subroutine compute_add_sources_backward
+
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  double precision function get_stf_viscoelastic(time_source_dble,isource)
+
+! returns source time function value for specified time
+
+  use specfem_par, only: USE_FORCE_POINT_SOURCE,force_stf,hdur,hdur_Gaussian
+
+  implicit none
+
+  double precision,intent(in) :: time_source_dble
+  integer,intent(in) :: isource
+
+  ! local parameters
+  double precision :: stf,f0
+
+  double precision, external :: comp_source_time_function
+  double precision, external :: comp_source_time_function_rickr
+  double precision, external :: comp_source_time_function_gauss
+
+  ! note: calling comp_source_time_function() includes the handling for external source time functions
+
+  ! determines source time function value
+  if (USE_FORCE_POINT_SOURCE) then
+    ! single point force
+    ! single point force
+    select case(force_stf(isource))
+    case (0)
+      ! Gaussian source time function value
+      stf = comp_source_time_function_gauss(time_source_dble,hdur_Gaussian(isource))
+    case (1)
+      ! Ricker source time function
+      f0 = hdur(isource) ! using hdur as a FREQUENCY just to avoid changing FORCESOLUTION file format
+      stf = comp_source_time_function_rickr(time_source_dble,f0)
+    case (2)
+      ! Heaviside (step) source time function
+      stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource))
+    case default
+      stop 'unsupported force_stf value!'
+    end select
+  else
+    ! moment-tensor
+    ! Heaviside source time function
+    stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource))
+  endif
+
+  ! return value
+  get_stf_viscoelastic = stf
+
+  end function get_stf_viscoelastic

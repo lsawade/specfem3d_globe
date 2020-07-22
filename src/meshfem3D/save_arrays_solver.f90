@@ -25,8 +25,7 @@
 !
 !=====================================================================
 
-  subroutine save_arrays_solver(nspec,nglob,idoubling,ibool, &
-                                iregion_code,xstore,ystore,zstore, &
+  subroutine save_arrays_solver(idoubling,ibool,xstore,ystore,zstore, &
                                 NSPEC2D_TOP,NSPEC2D_BOTTOM)
 
   use constants
@@ -36,10 +35,12 @@
     ANISOTROPIC_INNER_CORE,ATTENUATION
 
   use meshfem3D_par, only: &
+    nspec,nglob,iregion_code, &
     NCHUNKS,ABSORBING_CONDITIONS,SAVE_MESH_FILES, &
-    ROTATION,EXACT_MASS_MATRIX_FOR_ROTATION
+    ROTATION,EXACT_MASS_MATRIX_FOR_ROTATION, &
+    OUTPUT_FILES,xstore_glob,ystore_glob,zstore_glob
 
-  use create_regions_mesh_par2, only: &
+  use regions_mesh_par2, only: &
     xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore, &
     gammaxstore,gammaystore,gammazstore, &
     rhostore,dvpstore,kappavstore,kappahstore,muvstore,muhstore,eta_anisostore, &
@@ -59,13 +60,9 @@
 
   implicit none
 
-  integer,intent(in) :: nspec,nglob
-
   ! doubling mesh flag
   integer,dimension(nspec),intent(in) :: idoubling
   integer,dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(in) :: ibool
-
-  integer,intent(in) :: iregion_code
 
   ! arrays with the mesh in double precision
   double precision,dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(in) :: xstore,ystore,zstore
@@ -76,6 +73,10 @@
   ! local parameters
   integer :: i,j,k,ispec,iglob,ier
   real(kind=CUSTOM_REAL),dimension(:),allocatable :: tmp_array
+
+  ! debug file output
+  character(len=MAX_STRING_LEN) :: filename
+  logical,parameter :: DEBUG = .false.
 
   ! mesh databases
   open(unit=IOUT,file=prname(1:len_trim(prname))//'solver_data.bin', &
@@ -310,7 +311,16 @@
   ! uncomment for vp & vs model storage
   if (SAVE_MESH_FILES) then
     ! outputs model files in binary format
-    call save_arrays_solver_meshfiles(nspec)
+    call save_arrays_solver_meshfiles()
+  endif
+
+  ! debug outputs flags as vtk file
+  if (DEBUG) then
+    if (iregion_code == IREGION_CRUST_MANTLE) then
+      write(filename,'(a,i6.6)') trim(OUTPUT_FILES)//'/ispec_is_tiso',myrank
+      call write_VTK_data_elem_l(nspec,nglob,xstore_glob,ystore_glob,zstore_glob,ibool, &
+                                 ispec_is_tiso,filename)
+    endif
   endif
 
   end subroutine save_arrays_solver
@@ -319,23 +329,23 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine save_arrays_solver_meshfiles(nspec)
+  subroutine save_arrays_solver_meshfiles()
 
 ! outputs model files in binary format
 
   use constants
 
+  use meshfem3D_par, only: nspec
+
   use meshfem3D_models_par, only: &
     TRANSVERSE_ISOTROPY,ATTENUATION,ATTENUATION_3D,ATTENUATION_1D_WITH_3D_STORAGE
 
-  use create_regions_mesh_par2, only: &
+  use regions_mesh_par2, only: &
     rhostore,kappavstore,kappahstore,muvstore,muhstore,eta_anisostore, &
     Qmu_store, &
     prname
 
   implicit none
-
-  integer :: nspec
 
   ! local parameters
   integer :: i,j,k,ispec,ier
@@ -471,22 +481,20 @@
 !
 
 
-  subroutine save_arrays_solver_MPI(iregion_code)
+  subroutine save_arrays_solver_MPI()
 
   use meshfem3D_par, only: &
-    LOCAL_PATH, &
+    iregion_code,LOCAL_PATH, &
     IREGION_CRUST_MANTLE,IREGION_OUTER_CORE,IREGION_INNER_CORE, &
     ADIOS_FOR_MPI_ARRAYS
 
-!  use create_MPI_interfaces_par
+!  use MPI_interfaces_par
 
   use MPI_crust_mantle_par
   use MPI_outer_core_par
   use MPI_inner_core_par
 
   implicit none
-
-  integer,intent(in):: iregion_code
 
   select case (iregion_code)
   case (IREGION_CRUST_MANTLE)
@@ -575,25 +583,25 @@
 
   implicit none
 
-  integer :: iregion_code
+  integer,intent(in) :: iregion_code
 
-  character(len=MAX_STRING_LEN) :: LOCAL_PATH
+  character(len=MAX_STRING_LEN),intent(in) :: LOCAL_PATH
 
   ! MPI interfaces
-  integer :: num_interfaces,max_nibool_interfaces
-  integer, dimension(num_interfaces) :: my_neighbors
-  integer, dimension(num_interfaces) :: nibool_interfaces
-  integer, dimension(max_nibool_interfaces,num_interfaces) :: &
+  integer,intent(in) :: num_interfaces,max_nibool_interfaces
+  integer, dimension(num_interfaces),intent(in) :: my_neighbors
+  integer, dimension(num_interfaces),intent(in) :: nibool_interfaces
+  integer, dimension(max_nibool_interfaces,num_interfaces),intent(in) :: &
     ibool_interfaces
 
   ! inner/outer elements
-  integer :: nspec_inner,nspec_outer
-  integer :: num_phase_ispec
-  integer,dimension(num_phase_ispec,2) :: phase_ispec_inner
+  integer,intent(in) :: nspec_inner,nspec_outer
+  integer,intent(in) :: num_phase_ispec
+  integer,dimension(num_phase_ispec,2),intent(in) :: phase_ispec_inner
 
   ! mesh coloring
-  integer :: num_colors_outer,num_colors_inner
-  integer, dimension(num_colors_outer + num_colors_inner) :: &
+  integer,intent(in) :: num_colors_outer,num_colors_inner
+  integer, dimension(num_colors_outer + num_colors_inner),intent(in) :: &
     num_elem_colors
 
   ! local parameters
@@ -648,7 +656,8 @@
   use meshfem3D_models_par, only: &
     SAVE_BOUNDARY_MESH,HONOR_1D_SPHERICAL_MOHO,SUPPRESS_CRUSTAL_MESH
 
-  use create_regions_mesh_par2, only: &
+! boundary kernels
+  use regions_mesh_par2, only: &
     NSPEC2D_MOHO, NSPEC2D_400, NSPEC2D_670, &
     ibelm_moho_top,ibelm_moho_bot,ibelm_400_top,ibelm_400_bot, &
     ibelm_670_top,ibelm_670_bot,normal_moho,normal_400,normal_670, &

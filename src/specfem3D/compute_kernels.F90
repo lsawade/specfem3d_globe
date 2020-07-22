@@ -105,6 +105,7 @@
     ! on CPU
     ! crust_mantle
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec, &
 #ifdef FORCE_VECTORIZATION
@@ -190,7 +191,7 @@
 
         ENDDO_LOOP_IJK
       enddo
-!$OMP enddo
+!$OMP ENDDO
 
     else
 
@@ -281,7 +282,7 @@
         ENDDO_LOOP_IJK
 
       enddo
-!$OMP enddo
+!$OMP ENDDO
 
     endif ! ANISOTROPIC_KL
 
@@ -503,6 +504,7 @@
 
     ! acoustic kernels
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec, &
 #ifdef FORCE_VECTORIZATION
@@ -536,7 +538,7 @@
       ENDDO_LOOP_IJK
 
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
     !deviatoric kernel check
@@ -715,6 +717,7 @@
     ! on CPU
     ! inner_core
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec, &
 #ifdef FORCE_VECTORIZATION
@@ -787,7 +790,7 @@
       ENDDO_LOOP_IJK
 
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   else
@@ -887,6 +890,7 @@
     ! on CPU
     ! crust_mantle
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec, &
 #ifdef FORCE_VECTORIZATION
@@ -913,7 +917,7 @@
       ENDDO_LOOP_IJK
 
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   else

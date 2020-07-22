@@ -173,18 +173,18 @@
   ! Newmark time scheme update
   if (FORCE_VECTORIZATION_VAL) then
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED( NGLOB, displ, veloc, accel, &
 !$OMP deltat, deltatsqover2, deltatover2 ) &
 !$OMP PRIVATE(i)
-
 !$OMP DO
     do i = 1,NGLOB * NDIM
       displ(i,1) = displ(i,1) + deltat * veloc(i,1) + deltatsqover2 * accel(i,1)
       veloc(i,1) = veloc(i,1) + deltatover2 * accel(i,1)
       accel(i,1) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   else
@@ -230,6 +230,7 @@
   ! Newmark time scheme update
   if (FORCE_VECTORIZATION_VAL) then
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED( deltat, deltatsqover2, deltatover2, &
 !$OMP NGLOB_CM, displ_cm, veloc_cm, accel_cm, &
@@ -248,7 +249,7 @@
       veloc_cm(i,1) = veloc_cm(i,1) + deltatover2 * accel_cm(i,1)
       accel_cm(i,1) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
 
 ! inner core
 !$OMP DO
@@ -257,7 +258,7 @@
       veloc_ic(i,1) = veloc_ic(i,1) + deltatover2 * accel_ic(i,1)
       accel_ic(i,1) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo  NOWAIT
+!$OMP ENDDO  NOWAIT
 
 ! outer core
 !$OMP DO
@@ -266,11 +267,12 @@
       veloc_oc(i) = veloc_oc(i) + deltatover2 * accel_oc(i)
       accel_oc(i) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   else
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED( deltat, deltatsqover2, deltatover2, &
 !$OMP NGLOB_CM, displ_cm, veloc_cm, accel_cm, &
@@ -285,7 +287,7 @@
       veloc_cm(:,i) = veloc_cm(:,i) + deltatover2 * accel_cm(:,i)
       accel_cm(:,i) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo  NOWAIT
+!$OMP ENDDO  NOWAIT
 
 ! inner core
 !$OMP DO
@@ -294,7 +296,7 @@
       veloc_ic(:,i) = veloc_ic(:,i) + deltatover2 * accel_ic(:,i)
       accel_ic(:,i) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo  NOWAIT
+!$OMP ENDDO  NOWAIT
 
 ! outer core
 !$OMP DO
@@ -303,7 +305,7 @@
       veloc_oc(i) = veloc_oc(i) + deltatover2 * accel_oc(i)
       accel_oc(i) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   endif
@@ -329,6 +331,7 @@
   ! local parameters
   integer :: i
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED( NGLOB, displ, veloc, accel, &
 !$OMP deltat, deltatsqover2, deltatover2 ) &
@@ -341,7 +344,7 @@
     veloc(i) = veloc(i) + deltatover2 * accel(i)
     accel(i) = 0._CUSTOM_REAL
   enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   end subroutine update_displ_acoustic
@@ -427,6 +430,8 @@
   ! Newmark time scheme
 
   ! update velocity
+
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED(deltatover2, NGLOB, veloc_outer_core, accel_outer_core) &
 !$OMP PRIVATE(i)
@@ -434,7 +439,7 @@
   do i = 1,NGLOB
     veloc_outer_core(i) = veloc_outer_core(i) + deltatover2 * accel_outer_core(i)
   enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   end subroutine update_veloc_acoustic
@@ -537,6 +542,7 @@
 
   if (FORCE_VECTORIZATION_VAL) then
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED( deltatover2, &
 !$OMP NGLOB_CM, veloc_crust_mantle, accel_crust_mantle, &
@@ -548,18 +554,19 @@
     do i = 1,NGLOB_CM * NDIM
       veloc_crust_mantle(i,1) = veloc_crust_mantle(i,1) + deltatover2*accel_crust_mantle(i,1)
     enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
 
     ! inner core
 !$OMP DO
     do i = 1,NGLOB_IC * NDIM
       veloc_inner_core(i,1) = veloc_inner_core(i,1) + deltatover2*accel_inner_core(i,1)
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   else
 
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED( deltatover2, &
 !$OMP NGLOB_CM, veloc_crust_mantle, accel_crust_mantle, &
@@ -571,14 +578,14 @@
     do i = 1,NGLOB_CM
       veloc_crust_mantle(:,i) = veloc_crust_mantle(:,i) + deltatover2*accel_crust_mantle(:,i)
     enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
 
     ! inner core
 !$OMP DO
     do i = 1,NGLOB_IC
       veloc_inner_core(:,i) = veloc_inner_core(:,i) + deltatover2*accel_inner_core(:,i)
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 
   endif

@@ -36,13 +36,13 @@
 
   implicit none
 
-  integer, dimension(MAX_NUM_REGIONS) :: NSPEC
+  integer, dimension(MAX_NUM_REGIONS),intent(in) :: NSPEC
 
-  integer :: MIN_ATTENUATION_PERIOD,MAX_ATTENUATION_PERIOD
+  integer,intent(in) :: MIN_ATTENUATION_PERIOD,MAX_ATTENUATION_PERIOD
 
-  double precision :: R80,R220,R670,RCMB,RICB
+  double precision,intent(in) :: R80,R220,R670,RCMB,RICB
 
-  character(len=MAX_STRING_LEN) :: LOCAL_PATH
+  character(len=MAX_STRING_LEN),intent(in) :: LOCAL_PATH
 
   ! local parameters
   integer :: ier
@@ -135,12 +135,13 @@
         ! the variables read are declared and stored in structure model_ppm_par
         call model_ppm_broadcast()
 
-        ! could use EUcrust07 Vp crustal structure
-        !call model_eucrust_broadcast()
-
       case (THREE_D_MODEL_GAPP2)
         ! GAP model
         call model_gapp2_broadcast()
+
+      case (THREE_D_MODEL_SGLOBE,THREE_D_MODEL_SGLOBE_ISO)
+        ! SGLOBE-rani model
+        call model_sglobe_broadcast()
 
       case default
         call exit_MPI(myrank,'3D model not defined')
@@ -174,7 +175,7 @@
 
   ! attenuation
   if (ATTENUATION) then
-    call model_attenuation_broadcast(AM_V,MIN_ATTENUATION_PERIOD,MAX_ATTENUATION_PERIOD)
+    call model_attenuation_broadcast(MIN_ATTENUATION_PERIOD,MAX_ATTENUATION_PERIOD)
 
     ! 3D attenuation
     if (ATTENUATION_3D) then
@@ -183,8 +184,7 @@
     else
       ! sets up attenuation coefficients according to the chosen, "pure" 1D model
       ! (including their 1D-crustal profiles)
-      call model_attenuation_setup(REFERENCE_1D_MODEL,RICB,RCMB, &
-                                   R670,R220,R80,AM_V,AM_S,AS_V,CRUSTAL)
+      call model_attenuation_setup(REFERENCE_1D_MODEL,RICB,RCMB,R670,R220,R80,CRUSTAL)
     endif
 
   endif
@@ -211,7 +211,7 @@
 !
 !---
 
-  select case (ITYPE_CRUSTAL_MODEL)
+  select case (REFERENCE_CRUSTAL_MODEL)
 
     case (ICRUST_CRUST1)
       ! crust 1.0
@@ -227,12 +227,20 @@
       call model_crustmaps_broadcast()
 
     case (ICRUST_EPCRUST)
-      ! EPcrust
+      ! EPcrust (regional crustal model for Europe)
       call model_epcrust_broadcast()
+      ! by default crust 1.0 (global coverage)
+      call model_crust_1_0_broadcast()
 
     case (ICRUST_CRUST_SH)
       ! SH crustmaps
       call model_crust_sh_broadcast()
+
+    case (ICRUST_EUCRUST)
+      ! EUcrust07 Vp crustal structure (regional crustal model)
+      call model_eucrust_broadcast()
+      ! by default (vs,rho,eta,moho) from crust 1.0 (global coverage)
+      call model_crust_1_0_broadcast()
 
     case default
       stop 'crustal model type not defined'
@@ -266,15 +274,15 @@
 
   implicit none
 
-  integer iregion_code,idoubling
-  double precision r_prem,rho
-  double precision vpv,vph,vsv,vsh,eta_aniso
-  double precision Qkappa,Qmu
-  double precision RICB,RCMB,RTOPDDOUBLEPRIME,R80,R120,R220,R400, &
+  integer :: iregion_code,idoubling
+  double precision :: r_prem,rho
+  double precision :: vpv,vph,vsv,vsh,eta_aniso
+  double precision :: Qkappa,Qmu
+  double precision :: RICB,RCMB,RTOPDDOUBLEPRIME,R80,R120,R220,R400, &
     R600,R670,R771,RMOHO,RMIDDLE_CRUST,ROCEAN
 
   ! local parameters
-  double precision drhodr,vp,vs
+  double precision :: drhodr,vp,vs
 
 !---
 !
@@ -288,12 +296,34 @@
     case (REFERENCE_MODEL_PREM)
       ! PREM (by Dziewonski & Anderson) - used also as background for 3D models
       if (TRANSVERSE_ISOTROPY) then
-        ! get the anisotropic PREM parameters
+        ! default PREM:
+        !   gets anisotropic PREM parameters, with radial anisotropic extension (from moho to surface for crustal model)
         call model_prem_aniso(r_prem,rho,vpv,vph,vsv,vsh,eta_aniso, &
                   Qkappa,Qmu,idoubling,CRUSTAL,ONE_CRUST,RICB,RCMB,RTOPDDOUBLEPRIME, &
                   R600,R670,R220,R771,R400,R80,RMOHO,RMIDDLE_CRUST,ROCEAN)
+
+        ! specific 3D models with PREM references which would become too fast at shorter periods ( < 40s Love waves)
+        !select case (THREE_D_MODEL)
+        !
+        ! eventually sgloberani, check...
+        !case (THREE_D_MODEL_SGLOBE,THREE_D_MODEL_SGLOBE_ISO)
+        !  ! gets anisotropic PREM parameters, with isotropic extension (from moho to surface for crustal model)
+        !  call model_prem_aniso_extended_isotropic(r_prem,rho,vpv,vph,vsv,vsh,eta_aniso,Qkappa,Qmu, &
+        !            idoubling,CRUSTAL,ONE_CRUST,RICB,RCMB,RTOPDDOUBLEPRIME, &
+        !            R600,R670,R220,R771,R400,R80,RMOHO,RMIDDLE_CRUST,ROCEAN)
+        !
+        ! eventually also Ritsema models, check...
+        !case (THREE_D_MODEL_S20RTS,THREE_D_MODEL_S40RTS)
+        !  ! gets anisotropic PREM parameters, with isotropic extension (from moho to surface for crustal model)
+        !  call model_prem_aniso_extended_isotropic(r_prem,rho,vpv,vph,vsv,vsh,eta_aniso,Qkappa,Qmu, &
+        !            idoubling,CRUSTAL,ONE_CRUST,RICB,RCMB,RTOPDDOUBLEPRIME, &
+        !            R600,R670,R220,R771,R400,R80,RMOHO,RMIDDLE_CRUST,ROCEAN)
+        !
+        !case default
+        !  continue
+        !end select
       else
-        ! isotropic model
+        ! isotropic PREM model
         call model_prem_iso(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL, &
                   ONE_CRUST,.true.,RICB,RCMB,RTOPDDOUBLEPRIME, &
                   R600,R670,R220,R771,R400,R80,RMOHO,RMIDDLE_CRUST,ROCEAN)
@@ -344,7 +374,7 @@
 
   ! needs to set vpv,vph,vsv,vsh and eta_aniso for isotropic models
   if (.not. TRANSVERSE_ISOTROPY) then
-     ! in the case of s362iso we want to save the anisotropic constants for the Voight average
+     ! in the case of s362iso we want to save the anisotropic constants for the Voigt average
      if (.not. (REFERENCE_1D_MODEL == REFERENCE_MODEL_1DREF .and. ISOTROPIC_3D_MANTLE)) then
       vpv = vp
       vph = vp
@@ -440,7 +470,7 @@
 
   ! gets parameters for isotropic 3D mantle model
   !
-  ! note: there can be transverse isotropy in the mantle, but only Lam'e parameters
+  ! note: there can be transverse isotropy in the mantle, but only Lame parameters
   !           like kappav,kappah,muv,muh and eta_aniso are used for these simulations
   !
   ! note: in general, models here make use of perturbation values with respect to their
@@ -550,15 +580,18 @@
         endif
 
         if (TRANSVERSE_ISOTROPY) then
+          ! tiso perturbation
           vpv = vpv*(1.0d0+dble(xdvpv))
           vph = vph*(1.0d0+dble(xdvph))
           vsv = vsv*(1.0d0+dble(xdvsv))
           vsh = vsh*(1.0d0+dble(xdvsh))
         else
+          ! isotropic model
           vpv = vpv+xdvpv
           vph = vph+xdvph
           vsv = vsv+xdvsv
           vsh = vsh+xdvsh
+          ! isotropic average (considers anisotropic parameterization eta,vsv,vsh,vpv,vph)
           vp = sqrt(((8.d0+4.d0*eta_aniso)*vph*vph + 3.d0*vpv*vpv &
                     + (8.d0 - 8.d0*eta_aniso)*vsv*vsv)/15.d0)
           vs = sqrt(((1.d0-2.d0*eta_aniso)*vph*vph + vpv*vpv &
@@ -567,10 +600,10 @@
           vph = vp
           vsv = vs
           vsh = vs
-          eta_aniso=1.0d0
+          eta_aniso = 1.0d0
         endif
 
-      case (THREE_D_MODEL_PPM )
+      case (THREE_D_MODEL_PPM)
         ! point profile model
         call model_PPM(r_used,theta,phi,dvs,dvp,drho)
         vpv = vpv*(1.0d0+dvp)
@@ -579,13 +612,50 @@
         vsh = vsh*(1.0d0+dvs)
         rho = rho*(1.0d0+drho)
 
-      case (THREE_D_MODEL_GAPP2 )
+      case (THREE_D_MODEL_GAPP2)
         ! 3D GAP model (Obayashi)
         call mantle_gapmodel(r_used,theta,phi,dvs,dvp,drho)
         vpv = vpv*(1.0d0+dvp)
         vph = vph*(1.0d0+dvp)
         vsv = vsv*(1.0d0+dvs)
         vsh = vsh*(1.0d0+dvs)
+        rho = rho*(1.0d0+drho)
+
+      case (THREE_D_MODEL_SGLOBE,THREE_D_MODEL_SGLOBE_ISO)
+        ! 3D SGLOBE-rani model (Chang)
+
+        ! normally mantle perturbations are taken from 24.4km (R_MOHO) up.
+        ! we need to add the if statement for sgloberani_iso or sgloberani_aniso to take from 50km up:
+        if (r_prem > RCMB/R_EARTH .and. r_prem < 6321000.d0/R_EARTH) then
+          r_used = r
+        else   ! if (r_prem >= 6321000.d0/R_EARTH) then
+          ! this will then "extend the mantle up to the surface" from 50km depth
+          r_used = 6321000.d0/R_EARTH
+        endif
+
+        call mantle_sglobe(r_used,theta,phi,dvsv,dvsh,dvp,drho)
+
+        if (TRANSVERSE_ISOTROPY) then
+          ! tiso perturbation
+          vpv = vpv*(1.0d0+dvp)
+          vph = vph*(1.0d0+dvp)
+          vsv = vsv*(1.0d0+dvsv)
+          vsh = vsh*(1.0d0+dvsh)
+        else
+          ! isotropic model
+          vpv = vpv*(1.0d0+dvp)
+          vph = vph*(1.0d0+dvp)
+          vsv = vsv*(1.0d0+dvsv)
+          vsh = vsh*(1.0d0+dvsh)
+          ! Voigt average
+          vp = sqrt( (2.d0*vpv**2 + vph**2)/3.d0 )
+          vs = sqrt( (2.d0*vsv**2 + vsh**2)/3.d0 )
+          vph = vp
+          vpv = vp
+          vsh = vs
+          vsv = vs
+          eta_aniso = 1.d0
+        endif
         rho = rho*(1.0d0+drho)
 
       case default
@@ -626,7 +696,7 @@
         endif
       endif
       call model_aniso_mantle(r_used,theta,phi,rho,c11,c12,c13,c14,c15,c16, &
-                        c22,c23,c24,c25,c26,c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
+                              c22,c23,c24,c25,c26,c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
     else
       ! fills the rest of the mantle with the isotropic model
@@ -674,7 +744,7 @@
 !         !call model_attenuation_1D_PREM(r_prem, Qmu, idoubling)
 !          call model_atten3D_QRFSI12(r_prem*R_EARTH_KM,theta_degrees,phi_degrees,Qmu,idoubling)
 !          ! Get tau_e from tau_s and Qmu
-!         call model_attenuation_getstored_tau(Qmu, T_c_source, tau_s, tau_e, AM_V, AM_S, AS_V)
+!         call model_attenuation_getstored_tau(Qmu, T_c_source, tau_s, tau_e)
 !       endif
 
   end subroutine meshfem3D_models_get3Dmntl_val
@@ -695,17 +765,17 @@
 
   implicit none
 
-  integer :: iregion_code
+  integer,intent(in) :: iregion_code
   ! note: r is the exact radius (and not r_prem with tolerance)
-  double precision :: xmesh,ymesh,zmesh,r
-  double precision :: vpv,vph,vsv,vsh,rho,eta_aniso,dvp
+  double precision,intent(in) :: xmesh,ymesh,zmesh,r
+  double precision,intent(inout) :: vpv,vph,vsv,vsh,rho,eta_aniso,dvp
 
   ! the 21 coefficients for an anisotropic medium in reduced notation
-  double precision :: c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26,c33, &
-                   c34,c35,c36,c44,c45,c46,c55,c56,c66
+  double precision,intent(inout) :: c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26,c33, &
+                                    c34,c35,c36,c44,c45,c46,c55,c56,c66
 
   logical,intent(in) :: elem_in_crust
-  double precision :: moho
+  double precision,intent(out) :: moho
 
   ! local parameters
   double precision :: r_dummy,theta,phi
@@ -752,16 +822,6 @@
         call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,found_crust,elem_in_crust)
       endif
 
-    case (THREE_D_MODEL_PPM)
-      ! takes vs,rho from default crust
-      call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,found_crust,elem_in_crust)
-
-      ! takes vp from eucrust07
-      !call model_eucrust(lat,lon,r,vpc_eu,found_eucrust)
-      !if (found_eucrust) then
-      !  vpvc=vpc_eu; vphc=vpc_eu
-      !endif
-
     case default
       ! default crust
       call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,found_crust,elem_in_crust)
@@ -779,8 +839,10 @@
 
     ! sets anisotropy in crustal region as well
     if (ANISOTROPIC_3D_MANTLE .and. iregion_code == IREGION_CRUST_MANTLE) then
-      c11 = rho*vpv*vpv
-      c12 = rho*(vpv*vpv-2.*vsv*vsv)
+      ! equivalent with an isotropic elastic tensor (given vpv and vsv as isotropic wave speeds)
+      ! note: todo - this could be written as a transversely isotropic tensor (given vphc,vpvc,vshc,vsvc and etac from above)
+      c11 = rho * vpv*vpv
+      c12 = rho * (vpv*vpv - 2.d0*vsv*vsv)
       c13 = c12
       c14 = 0.d0
       c15 = 0.d0
@@ -794,7 +856,7 @@
       c34 = 0.d0
       c35 = 0.d0
       c36 = 0.d0
-      c44 = rho*vsv*vsv
+      c44 = rho * vsv*vsv
       c45 = 0.d0
       c46 = 0.d0
       c55 = c44
@@ -827,6 +889,8 @@
   ! local parameters
   ! for isotropic crust
   double precision :: vpc,vsc
+  double precision :: vpc_area,vsc_area,rhoc_area,moho_area
+  logical :: found_crust_area,point_in_area
 
   ! initializes
   vpvc = 0.d0
@@ -852,8 +916,9 @@
 ! ADD YOUR MODEL HERE
 !
 !---
+  ! lat/lon range: [-90,90] / [-180,180]
 
-  select case (ITYPE_CRUSTAL_MODEL)
+  select case (REFERENCE_CRUSTAL_MODEL)
 
     case (ICRUST_CRUST1)
       ! crust 1.0
@@ -881,15 +946,44 @@
       vshc = vsc
 
     case (ICRUST_EPCRUST)
-      call model_epcrust(lat,lon,r,vpc,vsc,rhoc,moho,found_crust,elem_in_crust)
-      vpvc = vpc
-      vphc = vpc
-      vsvc = vsc
-      vshc = vsc
+      ! if defined within lat/lon-range, takes vp/vs/rho/moho from eucrust07
+      call model_epcrust(lat,lon,r,vpc_area,vsc_area,rhoc_area,moho_area,found_crust_area,elem_in_crust,point_in_area)
+      if (point_in_area) then
+        vpvc = vpc_area
+        vphc = vpc_area
+        vsvc = vsc_area
+        vshc = vsc_area
+        rhoc = rhoc_area
+        moho = moho_area
+        found_crust = found_crust_area
+      else
+        ! by default takes Crust1.0 values
+        call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,found_crust,elem_in_crust)
+        vpvc = vpc
+        vphc = vpc
+        vsvc = vsc
+        vshc = vsc
+      endif
 
     case (ICRUST_CRUST_SH)
       ! SH crust: provides TI crust
       call crust_sh(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,found_crust,elem_in_crust)
+
+    case (ICRUST_EUCRUST)
+      ! by default takes Crust1.0 values for vs/vp/rho/moho
+      call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,found_crust,elem_in_crust)
+      vpvc = vpc
+      vphc = vpc
+      vsvc = vsc
+      vshc = vsc
+      ! if defined within lat/lon-range, takes vp/moho from eucrust07
+      call model_eucrust(lat,lon,r,vpc_area,moho_area,found_crust_area,point_in_area)
+      if (point_in_area) then
+        vpvc = vpc_area
+        vphc = vpc_area
+        moho = moho_area
+        found_crust = found_crust_area
+      endif
 
     case default
       stop 'crustal model type not defined'
@@ -1010,7 +1104,7 @@
   endif
 
   ! Get tau_e from tau_s and Qmu
-  call model_attenuation_getstored_tau(Qmu, T_c_source, tau_s, tau_e, AM_V, AM_S, AS_V)
+  call model_attenuation_getstored_tau(Qmu, T_c_source, tau_s, tau_e)
 
   end subroutine meshfem3D_models_getatten_val
 

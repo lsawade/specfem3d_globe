@@ -27,7 +27,7 @@
 
 ! save header file OUTPUT_FILES/values_from_mesher.h
 
-  subroutine save_header_file(NSPEC,NGLOB,NPROC,NPROCTOT, &
+  subroutine save_header_file(NSPEC_REGIONS,NGLOB_REGIONS,NPROC,NPROCTOT, &
                               static_memory_size, &
                               NSPEC2D_TOP,NSPEC2D_BOTTOM, &
                               NSPEC2DMAX_YMIN_YMAX,NSPEC2DMAX_XMIN_XMAX, &
@@ -73,7 +73,6 @@
     CENTER_LATITUDE_IN_DEGREES,GAMMA_ROTATION_AZIMUTH, &
     DT,NEX_XI,NEX_ETA, &
     NPROC_XI,NPROC_ETA, &
-    SAVE_REGULAR_KL, &
     PARTIAL_PHYS_DISPERSION_ONLY, &
     ABSORBING_CONDITIONS,EXACT_MASS_MATRIX_FOR_ROTATION, &
     ATT1,ATT2,ATT3,ATT4,ATT5, &
@@ -84,7 +83,7 @@
 
   implicit none
 
-  integer, dimension(MAX_NUM_REGIONS) :: NSPEC,NGLOB
+  integer, dimension(MAX_NUM_REGIONS) :: NSPEC_REGIONS,NGLOB_REGIONS
 
   integer :: NPROC,NPROCTOT,NT_DUMP_ATTENUATION_optimal
 
@@ -133,10 +132,49 @@
 
   logical :: PRINT_INFO_TO_SCREEN
 
-! evaluate the amount of static memory needed by the solver
+  ! UNDO_ATTENUATION
+  ! note: we will always calculate the value for NT_DUMP_ATTENUATION_optimal even if it will not be used
+  !       this will avoid the need to recompile the solver if one wants to switch between simulations
+  !       with UNDO_ATTENUATION set to .true. or .false.
+
+  ! optimal dumping interval calculation can only be done when SIMULATION_TYPE == 3 in the Par_file,
+  ! thus set it to that value here in this serial code even if it has a different value in the Par_file
+  saved_SIMULATION_TYPE = SIMULATION_TYPE
+  SIMULATION_TYPE = 3
+
+  ! evaluate the amount of static memory needed by the solver, but imposing that SIMULATION_TYPE = 3
+  ! because that is by far the most expensive setup for runs in terms of memory usage, thus that is
+  ! the type of run for which we need to make sure that everything fits in memory
   call memory_eval(doubling_index,this_region_has_a_doubling, &
                    ner,NEX_PER_PROC_XI,NEX_PER_PROC_ETA, &
-                   ratio_sampling_array,NPROCTOT,NSPEC,NGLOB, &
+                   ratio_sampling_array,NPROCTOT,NSPEC_REGIONS,NGLOB_REGIONS, &
+                   NSPECMAX_ANISO_IC,NSPECMAX_ISO_MANTLE,NSPECMAX_TISO_MANTLE, &
+                   NSPECMAX_ANISO_MANTLE,NSPEC_CRUST_MANTLE_ATTENUATION, &
+                   NSPEC_INNER_CORE_ATTENUATION, &
+                   NSPEC_CRUST_MANTLE_STR_OR_ATT,NSPEC_INNER_CORE_STR_OR_ATT, &
+                   NSPEC_CRUST_MANTLE_STR_AND_ATT,NSPEC_INNER_CORE_STR_AND_ATT, &
+                   NSPEC_CRUST_MANTLE_STRAIN_ONLY,NSPEC_INNER_CORE_STRAIN_ONLY, &
+                   NSPEC_CRUST_MANTLE_ADJOINT, &
+                   NSPEC_OUTER_CORE_ADJOINT,NSPEC_INNER_CORE_ADJOINT, &
+                   NGLOB_CRUST_MANTLE_ADJOINT,NGLOB_OUTER_CORE_ADJOINT, &
+                   NGLOB_INNER_CORE_ADJOINT,NSPEC_OUTER_CORE_ROT_ADJOINT, &
+                   NSPEC_CRUST_MANTLE_STACEY,NSPEC_OUTER_CORE_STACEY, &
+                   NGLOB_CRUST_MANTLE_OCEANS,NSPEC_OUTER_CORE_ROTATION, &
+                   NSPEC2D_BOTTOM,NSPEC2D_TOP,static_memory_size)
+
+  call compute_optimized_dumping(static_memory_size,NT_DUMP_ATTENUATION_optimal,number_of_dumpings_to_do, &
+                   static_memory_size_GB,size_to_store_at_each_time_step,disk_size_of_each_dumping)
+
+  ! restore the simulation type that we have temporarily erased
+  SIMULATION_TYPE = saved_SIMULATION_TYPE
+
+  ! re-calculate and re-set the parameter values (e.g., for NSPEC_CRUST_MANTLE_ADJOINT)
+  ! based on the original simulation type chosen in Par_file
+  !
+  ! evaluate the amount of static memory needed by the solver
+  call memory_eval(doubling_index,this_region_has_a_doubling, &
+                   ner,NEX_PER_PROC_XI,NEX_PER_PROC_ETA, &
+                   ratio_sampling_array,NPROCTOT,NSPEC_REGIONS,NGLOB_REGIONS, &
                    NSPECMAX_ANISO_IC,NSPECMAX_ISO_MANTLE,NSPECMAX_TISO_MANTLE, &
                    NSPECMAX_ANISO_MANTLE,NSPEC_CRUST_MANTLE_ATTENUATION, &
                    NSPEC_INNER_CORE_ATTENUATION, &
@@ -160,10 +198,10 @@
 
     print *,'number of processors = ',NPROCTOT
     print *
-    print *,'maximum number of points per region = ',nglob(IREGION_CRUST_MANTLE)
+    print *,'maximum number of points per region = ',NGLOB_REGIONS(IREGION_CRUST_MANTLE)
     print *
-    print *,'total elements per slice = ',sum(NSPEC)
-    print *,'total points per slice = ',sum(nglob)
+    print *,'total elements per slice = ',sum(NSPEC_REGIONS)
+    print *,'total points per slice = ',sum(NGLOB_REGIONS)
     print *
     print *,'the time step of the solver will be DT = ',sngl(DT),' (s)'
     print *,'the (approximate) minimum period resolved will be = ', &
@@ -180,7 +218,7 @@
     endif
     print *,'on NEC SX, make sure "loopcnt=" parameter'
 ! use fused loops on NEC SX
-    print *,'in Makefile is greater than max vector length = ',nglob(IREGION_CRUST_MANTLE)*NDIM
+    print *,'in Makefile is greater than max vector length = ',NGLOB_REGIONS(IREGION_CRUST_MANTLE) * NDIM
     print *
 
     print *,'approximate static memory needed by the solver:'
@@ -223,41 +261,7 @@
 
   endif ! of if (PRINT_INFO_TO_SCREEN)
 
-  ! note: we will always calculate the value for NT_DUMP_ATTENUATION_optimal even if it will not be used
-  !       this will avoid the need to recompile the solver if one wants to switch between simulations
-  !       with UNDO_ATTENUATION set to .true. or .false.
-
-  ! optimal dumping interval calculation can only be done when SIMULATION_TYPE == 3 in the Par_file,
-  ! thus set it to that value here in this serial code even if it has a different value in the Par_file
-  saved_SIMULATION_TYPE = SIMULATION_TYPE
-  SIMULATION_TYPE = 3
-
-  ! evaluate the amount of static memory needed by the solver, but imposing that SIMULATION_TYPE = 3
-  ! because that is by far the most expensive setup for runs in terms of memory usage, thus that is
-  ! the type of run for which we need to make sure that everything fits in memory
-  call memory_eval(doubling_index,this_region_has_a_doubling, &
-                   ner,NEX_PER_PROC_XI,NEX_PER_PROC_ETA, &
-                   ratio_sampling_array,NPROCTOT,NSPEC,NGLOB, &
-                   NSPECMAX_ANISO_IC,NSPECMAX_ISO_MANTLE,NSPECMAX_TISO_MANTLE, &
-                   NSPECMAX_ANISO_MANTLE,NSPEC_CRUST_MANTLE_ATTENUATION, &
-                   NSPEC_INNER_CORE_ATTENUATION, &
-                   NSPEC_CRUST_MANTLE_STR_OR_ATT,NSPEC_INNER_CORE_STR_OR_ATT, &
-                   NSPEC_CRUST_MANTLE_STR_AND_ATT,NSPEC_INNER_CORE_STR_AND_ATT, &
-                   NSPEC_CRUST_MANTLE_STRAIN_ONLY,NSPEC_INNER_CORE_STRAIN_ONLY, &
-                   NSPEC_CRUST_MANTLE_ADJOINT, &
-                   NSPEC_OUTER_CORE_ADJOINT,NSPEC_INNER_CORE_ADJOINT, &
-                   NGLOB_CRUST_MANTLE_ADJOINT,NGLOB_OUTER_CORE_ADJOINT, &
-                   NGLOB_INNER_CORE_ADJOINT,NSPEC_OUTER_CORE_ROT_ADJOINT, &
-                   NSPEC_CRUST_MANTLE_STACEY,NSPEC_OUTER_CORE_STACEY, &
-                   NGLOB_CRUST_MANTLE_OCEANS,NSPEC_OUTER_CORE_ROTATION, &
-                   NSPEC2D_BOTTOM,NSPEC2D_TOP,static_memory_size)
-
-  call compute_optimized_dumping(static_memory_size,NT_DUMP_ATTENUATION_optimal,number_of_dumpings_to_do, &
-                   static_memory_size_GB,size_to_store_at_each_time_step,disk_size_of_each_dumping)
-
-  ! restore the simulation type that we have temporarily erased
-  SIMULATION_TYPE = saved_SIMULATION_TYPE
-
+  ! user output
   if (UNDO_ATTENUATION) then
     if (PRINT_INFO_TO_SCREEN) then
       print *,'*******************************************************************************'
@@ -328,15 +332,15 @@
   write(IOUT,*) '!'
   write(IOUT,*) '! number of processors = ',NPROCTOT ! should be = NPROC
   write(IOUT,*) '!'
-  write(IOUT,*) '! maximum number of points per region = ',NGLOB(IREGION_CRUST_MANTLE)
+  write(IOUT,*) '! maximum number of points per region = ',NGLOB_REGIONS(IREGION_CRUST_MANTLE)
   write(IOUT,*) '!'
 ! use fused loops on NEC SX
   write(IOUT,*) '! on NEC SX, make sure "loopcnt=" parameter'
-  write(IOUT,*) '! in Makefile is greater than max vector length = ',NGLOB(IREGION_CRUST_MANTLE)*NDIM
+  write(IOUT,*) '! in Makefile is greater than max vector length = ',NGLOB_REGIONS(IREGION_CRUST_MANTLE) * NDIM
   write(IOUT,*) '!'
 
-  write(IOUT,*) '! total elements per slice = ',sum(NSPEC)
-  write(IOUT,*) '! total points per slice = ',sum(NGLOB)
+  write(IOUT,*) '! total elements per slice = ',sum(NSPEC_REGIONS)
+  write(IOUT,*) '! total points per slice = ',sum(NGLOB_REGIONS)
   write(IOUT,*) '!'
   write(IOUT,*) '! the time step of the solver will be DT = ',sngl(DT),' (s)'
   write(IOUT,*) '! the (approximate) minimum period resolved will be = ', &
@@ -347,13 +351,13 @@
   write(IOUT,*) '! ---------------------------'
   write(IOUT,*) '!'
   write(IOUT,*) '! exact total number of spectral elements in entire mesh = '
-  write(IOUT,*) '! ',dble(NCHUNKS)*dble(NPROC)*dble(sum(NSPEC)) - subtract_central_cube_elems
+  write(IOUT,*) '! ',dble(NCHUNKS)*dble(NPROC)*dble(sum(NSPEC_REGIONS)) - subtract_central_cube_elems
   write(IOUT,*) '! approximate total number of points in entire mesh = '
-  write(IOUT,*) '! ',dble(NCHUNKS)*dble(NPROC)*dble(sum(NGLOB)) - subtract_central_cube_points
+  write(IOUT,*) '! ',dble(NCHUNKS)*dble(NPROC)*dble(sum(NGLOB_REGIONS)) - subtract_central_cube_points
 ! there are 3 DOFs in solid regions, but only 1 in fluid outer core
   write(IOUT,*) '! approximate total number of degrees of freedom in entire mesh = '
-  write(IOUT,*) '! ',dble(NCHUNKS)*dble(NPROC)*(3.d0*(dble(sum(NGLOB))) &
-    - 2.d0*dble(NGLOB(IREGION_OUTER_CORE))) &
+  write(IOUT,*) '! ',dble(NCHUNKS)*dble(NPROC)*(3.d0*(dble(sum(NGLOB_REGIONS))) &
+    - 2.d0*dble(NGLOB_REGIONS(IREGION_OUTER_CORE))) &
     - 3.d0*subtract_central_cube_points
   write(IOUT,*) '!'
 
@@ -508,13 +512,13 @@
   write(IOUT,*) 'integer, parameter :: NEX_XI_VAL = ',NEX_XI
   write(IOUT,*) 'integer, parameter :: NEX_ETA_VAL = ',NEX_ETA
   write(IOUT,*)
-  write(IOUT,*) 'integer, parameter :: NSPEC_CRUST_MANTLE = ',NSPEC(IREGION_CRUST_MANTLE)
-  write(IOUT,*) 'integer, parameter :: NSPEC_OUTER_CORE = ',NSPEC(IREGION_OUTER_CORE)
-  write(IOUT,*) 'integer, parameter :: NSPEC_INNER_CORE = ',NSPEC(IREGION_INNER_CORE)
+  write(IOUT,*) 'integer, parameter :: NSPEC_CRUST_MANTLE = ',NSPEC_REGIONS(IREGION_CRUST_MANTLE)
+  write(IOUT,*) 'integer, parameter :: NSPEC_OUTER_CORE = ',NSPEC_REGIONS(IREGION_OUTER_CORE)
+  write(IOUT,*) 'integer, parameter :: NSPEC_INNER_CORE = ',NSPEC_REGIONS(IREGION_INNER_CORE)
   write(IOUT,*)
-  write(IOUT,*) 'integer, parameter :: NGLOB_CRUST_MANTLE = ',NGLOB(IREGION_CRUST_MANTLE)
-  write(IOUT,*) 'integer, parameter :: NGLOB_OUTER_CORE = ',NGLOB(IREGION_OUTER_CORE)
-  write(IOUT,*) 'integer, parameter :: NGLOB_INNER_CORE = ',NGLOB(IREGION_INNER_CORE)
+  write(IOUT,*) 'integer, parameter :: NGLOB_CRUST_MANTLE = ',NGLOB_REGIONS(IREGION_CRUST_MANTLE)
+  write(IOUT,*) 'integer, parameter :: NGLOB_OUTER_CORE = ',NGLOB_REGIONS(IREGION_OUTER_CORE)
+  write(IOUT,*) 'integer, parameter :: NGLOB_INNER_CORE = ',NGLOB_REGIONS(IREGION_INNER_CORE)
   write(IOUT,*)
 
   write(IOUT,*) 'integer, parameter :: NSPECMAX_ANISO_IC = ',NSPECMAX_ANISO_IC
@@ -741,13 +745,6 @@
     write(IOUT,*) 'integer, parameter :: NSPEC_OUTER_CORE_3DMOVIE = 1'
   endif
 
-  if (SAVE_REGULAR_KL) then
-    write(IOUT,*) 'integer, parameter :: NM_KL_REG_PTS_VAL = NM_KL_REG_PTS'
-  else
-    write(IOUT,*) 'integer, parameter :: NM_KL_REG_PTS_VAL = 1'
-  endif
-  write(IOUT,*)
-
   ! in the case of Stacey boundary conditions, add C*delta/2 contribution to the mass matrix
   ! on the Stacey edges for the crust_mantle and outer_core regions but not for the inner_core region
   ! thus the mass matrix must be replaced by three mass matrices including the "C" damping matrix
@@ -756,15 +753,15 @@
   ! for the sake of performance, only "rmassz" array will be filled and "rmassx" & "rmassy" will be fictitious / unused
 
   if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
-     NGLOB_XY_CM = NGLOB(IREGION_CRUST_MANTLE)
+     NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
   else
      NGLOB_XY_CM = 1
   endif
   NGLOB_XY_IC = 1
 
   if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
-    NGLOB_XY_CM = NGLOB(IREGION_CRUST_MANTLE)
-    NGLOB_XY_IC = NGLOB(IREGION_INNER_CORE)
+    NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
+    NGLOB_XY_IC = NGLOB_REGIONS(IREGION_INNER_CORE)
   endif
   write(IOUT,*) 'integer, parameter :: NGLOB_XY_CM = ',NGLOB_XY_CM
   write(IOUT,*) 'integer, parameter :: NGLOB_XY_IC = ',NGLOB_XY_IC
@@ -817,10 +814,10 @@
   subroutine compute_optimized_dumping(static_memory_size,NT_DUMP_ATTENUATION_optimal,number_of_dumpings_to_do, &
                                        static_memory_size_GB,size_to_store_at_each_time_step,disk_size_of_each_dumping)
 
-  use shared_parameters, only: NGLOB,NSPEC,NSTEP, &
+  use shared_parameters, only: NGLOB_REGIONS,NSPEC_REGIONS,NSTEP, &
     ROTATION,ATTENUATION,GPU_MODE, &
     MEMORY_INSTALLED_PER_CORE_IN_GB,PERCENT_OF_MEM_TO_USE_PER_CORE,NOISE_TOMOGRAPHY, &
-    NSPEC2D_TOP
+    NSPEC2D_TOP,UNDO_ATTENUATION
 
   use constants, only: NGLLX,NGLLY,NGLLZ,NDIM,N_SLS,CUSTOM_REAL, &
     IREGION_CRUST_MANTLE,IREGION_INNER_CORE,IREGION_OUTER_CORE
@@ -833,20 +830,23 @@
 
   double precision :: what_we_can_use_in_GB
 
-  if (MEMORY_INSTALLED_PER_CORE_IN_GB < 0.1d0) &
-       stop 'less than 100 MB per core for MEMORY_INSTALLED_PER_CORE_IN_GB does not seem realistic; exiting...'
+  ! checks for undo attenuation setup
+  if (UNDO_ATTENUATION) then
+    if (MEMORY_INSTALLED_PER_CORE_IN_GB < 0.1d0) &
+         stop 'less than 100 MB per core for MEMORY_INSTALLED_PER_CORE_IN_GB does not seem realistic; exiting...'
 !! DK DK the value below will probably need to be increased one day, on future machines
-  if (MEMORY_INSTALLED_PER_CORE_IN_GB > 512.d0) &
-       stop 'more than 512 GB per core for MEMORY_INSTALLED_PER_CORE_IN_GB does not seem realistic; exiting...'
+    if (MEMORY_INSTALLED_PER_CORE_IN_GB > 512.d0) &
+         stop 'more than 512 GB per core for MEMORY_INSTALLED_PER_CORE_IN_GB does not seem realistic; exiting...'
 
-  if (PERCENT_OF_MEM_TO_USE_PER_CORE < 50.d0) &
-       stop 'less than 50% for PERCENT_OF_MEM_TO_USE_PER_CORE does not seem realistic; exiting...'
-  if (PERCENT_OF_MEM_TO_USE_PER_CORE > 100.d0) &
-       stop 'more than 100% for PERCENT_OF_MEM_TO_USE_PER_CORE makes no sense; exiting...'
+    if (PERCENT_OF_MEM_TO_USE_PER_CORE < 50.d0) &
+         stop 'less than 50% for PERCENT_OF_MEM_TO_USE_PER_CORE does not seem realistic; exiting...'
+    if (PERCENT_OF_MEM_TO_USE_PER_CORE > 100.d0) &
+         stop 'more than 100% for PERCENT_OF_MEM_TO_USE_PER_CORE makes no sense; exiting...'
 !! DK DK will need to remove the .and. .not. GPU_MODE test here
 !! DK DK if the undo_attenuation buffers are stored on the GPU instead of on the host
-  if (PERCENT_OF_MEM_TO_USE_PER_CORE > 92.d0 .and. .not. GPU_MODE) &
-       stop 'more than 92% for PERCENT_OF_MEM_TO_USE_PER_CORE when not using GPUs is risky; exiting...'
+    if (PERCENT_OF_MEM_TO_USE_PER_CORE > 92.d0 .and. .not. GPU_MODE) &
+         stop 'more than 92% for PERCENT_OF_MEM_TO_USE_PER_CORE when not using GPUs is risky; exiting...'
+  endif
 
   what_we_can_use_in_GB = MEMORY_INSTALLED_PER_CORE_IN_GB * PERCENT_OF_MEM_TO_USE_PER_CORE / 100.d0
 
@@ -865,23 +865,41 @@
 !
 ! if (GPU_MODE) static_memory_size_GB = 0.d0
 
-  if (static_memory_size_GB >= MEMORY_INSTALLED_PER_CORE_IN_GB) &
-    stop 'you are using more memory than what you told us is installed!!! there is an error'
+  ! checks if memory available
+  if (UNDO_ATTENUATION) then
+    if (static_memory_size_GB >= MEMORY_INSTALLED_PER_CORE_IN_GB) then
+      print *
+      print *,'Invalid setup: simulation too big (for UNDO_ATTENUATION)!'
+      print *,'  installed memory per core    = ',sngl(MEMORY_INSTALLED_PER_CORE_IN_GB)
+      print *,'  needed static memory (in GB) = ',sngl(static_memory_size_GB)
+      print *
+      stop 'you are using more memory than what you told us is installed!!! there is an error'
+    endif
 
-  if (static_memory_size_GB >= what_we_can_use_in_GB) &
-    stop 'you are using more memory than what you allowed us to use!!! there is an error'
+    if (static_memory_size_GB >= what_we_can_use_in_GB) then
+      print *
+      print *,'Invalid setup: simulation too big (for UNDO_ATTENUATION)!'
+      print *,'  memory usable per core       = ',sngl(what_we_can_use_in_GB)
+      print *,'  needed static memory (in GB) = ',sngl(static_memory_size_GB)
+      print *
+      stop 'you are using more memory than what you allowed us to use!!! there is an error'
+    endif
+  endif
 
 ! compute the size to store in memory at each time step
   size_to_store_at_each_time_step = 0
 
 ! displ_crust_mantle
-  size_to_store_at_each_time_step = size_to_store_at_each_time_step + dble(NDIM)*NGLOB(IREGION_CRUST_MANTLE)*dble(CUSTOM_REAL)
+  size_to_store_at_each_time_step = size_to_store_at_each_time_step &
+    + dble(NDIM)*NGLOB_REGIONS(IREGION_CRUST_MANTLE)*dble(CUSTOM_REAL)
 
 ! displ_inner_core
-  size_to_store_at_each_time_step = size_to_store_at_each_time_step + dble(NDIM)*NGLOB(IREGION_INNER_CORE)*dble(CUSTOM_REAL)
+  size_to_store_at_each_time_step = size_to_store_at_each_time_step &
+    + dble(NDIM)*NGLOB_REGIONS(IREGION_INNER_CORE)*dble(CUSTOM_REAL)
 
 ! displ_outer_core and accel_outer_core (both being scalar arrays)
-  size_to_store_at_each_time_step = size_to_store_at_each_time_step + 2.d0*NGLOB(IREGION_OUTER_CORE)*dble(CUSTOM_REAL)
+  size_to_store_at_each_time_step = size_to_store_at_each_time_step &
+    + 2.d0*NGLOB_REGIONS(IREGION_OUTER_CORE)*dble(CUSTOM_REAL)
 
 ! noise_surface_movie
   if (NOISE_TOMOGRAPHY == 3) then
@@ -898,26 +916,26 @@
   disk_size_of_each_dumping = 0
 
 ! displ_crust_mantle, veloc_crust_mantle, accel_crust_mantle
-  disk_size_of_each_dumping = disk_size_of_each_dumping + 3.d0*dble(NDIM)*NGLOB(IREGION_CRUST_MANTLE)*dble(CUSTOM_REAL)
+  disk_size_of_each_dumping = disk_size_of_each_dumping + 3.d0*dble(NDIM)*NGLOB_REGIONS(IREGION_CRUST_MANTLE)*dble(CUSTOM_REAL)
 
 ! displ_inner_core, veloc_inner_core, accel_inner_core
-  disk_size_of_each_dumping = disk_size_of_each_dumping + 3.d0*dble(NDIM)*NGLOB(IREGION_INNER_CORE)*dble(CUSTOM_REAL)
+  disk_size_of_each_dumping = disk_size_of_each_dumping + 3.d0*dble(NDIM)*NGLOB_REGIONS(IREGION_INNER_CORE)*dble(CUSTOM_REAL)
 
 ! displ_outer_core, veloc_outer_core, accel_outer_core (all scalar arrays)
-  disk_size_of_each_dumping = disk_size_of_each_dumping + 3.d0*NGLOB(IREGION_OUTER_CORE)*dble(CUSTOM_REAL)
+  disk_size_of_each_dumping = disk_size_of_each_dumping + 3.d0*NGLOB_REGIONS(IREGION_OUTER_CORE)*dble(CUSTOM_REAL)
 
 ! A_array_rotation,B_array_rotation
   if (ROTATION) disk_size_of_each_dumping = disk_size_of_each_dumping + &
-      dble(NGLLX)*dble(NGLLY)*dble(NGLLZ)*NSPEC(IREGION_OUTER_CORE)*2.d0*dble(CUSTOM_REAL)
+      dble(NGLLX)*dble(NGLLY)*dble(NGLLZ)*NSPEC_REGIONS(IREGION_OUTER_CORE)*2.d0*dble(CUSTOM_REAL)
 
   if (ATTENUATION) then
 ! R_memory_crust_mantle
     disk_size_of_each_dumping = disk_size_of_each_dumping + 5.d0*dble(N_SLS)*dble(NGLLX)* &
-      dble(NGLLY)*dble(NGLLZ)*NSPEC(IREGION_CRUST_MANTLE)*dble(CUSTOM_REAL)
+      dble(NGLLY)*dble(NGLLZ)*NSPEC_REGIONS(IREGION_CRUST_MANTLE)*dble(CUSTOM_REAL)
 
 ! R_memory_inner_core
     disk_size_of_each_dumping = disk_size_of_each_dumping + 5.d0*dble(N_SLS)*dble(NGLLX)* &
-      dble(NGLLY)*dble(NGLLZ)*NSPEC(IREGION_INNER_CORE)*dble(CUSTOM_REAL)
+      dble(NGLLY)*dble(NGLLZ)*NSPEC_REGIONS(IREGION_INNER_CORE)*dble(CUSTOM_REAL)
   endif
 
 ! convert to GB

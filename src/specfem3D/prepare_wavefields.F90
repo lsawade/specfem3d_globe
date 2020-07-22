@@ -481,7 +481,10 @@
       ! inner elements
       num_elements = nspec_inner_crust_mantle
     endif
-!$OMP PARALLEL DEFAULT(NONE) &
+
+! openmp solver
+!$OMP PARALLEL if (num_elements > 500) &
+!$OMP DEFAULT(NONE) &
 !$OMP SHARED(init_value,num_elements,iphase,phase_ispec_inner_crust_mantle,ibool_crust_mantle, &
 !$OMP displ_crust_mantle,veloc_crust_mantle,accel_crust_mantle) &
 !$OMP PRIVATE( ispec,ispec_p, &
@@ -512,7 +515,7 @@
         ENDDO_LOOP_IJK
       endif
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
   enddo !iphase
 
@@ -525,7 +528,9 @@
       ! inner elements
       num_elements = nspec_inner_outer_core
     endif
-!$OMP PARALLEL DEFAULT(NONE) &
+! openmp solver
+!$OMP PARALLEL if (num_elements > 500) &
+!$OMP DEFAULT(NONE) &
 !$OMP SHARED(init_value,num_elements,iphase,phase_ispec_inner_outer_core,ibool_outer_core, &
 !$OMP displ_outer_core,veloc_outer_core,accel_outer_core) &
 !$OMP PRIVATE( ispec,ispec_p, &
@@ -556,7 +561,7 @@
         ENDDO_LOOP_IJK
       endif
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
   enddo !iphase
 
@@ -569,7 +574,9 @@
       ! inner elements
       num_elements = nspec_inner_inner_core
     endif
-!$OMP PARALLEL DEFAULT(NONE) &
+
+!$OMP PARALLEL if (num_elements > 500) &
+!$OMP DEFAULT(NONE) &
 !$OMP SHARED(init_value,num_elements,iphase,phase_ispec_inner_inner_core,ibool_inner_core, &
 !$OMP displ_inner_core,veloc_inner_core,accel_inner_core) &
 !$OMP PRIVATE( ispec,ispec_p, &
@@ -600,7 +607,7 @@
         ENDDO_LOOP_IJK
       endif
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
   enddo !iphase
 
@@ -609,6 +616,7 @@
   ! the initialization follows the Newmark update routines, where the looping is directly over global points
 
   if (FORCE_VECTORIZATION_VAL) then
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED(init_value, &
 !$OMP displ_crust_mantle,veloc_crust_mantle,accel_crust_mantle, &
@@ -621,21 +629,21 @@
       veloc_crust_mantle(i,1) = 0._CUSTOM_REAL
       accel_crust_mantle(i,1) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP DO
     do i = 1,NGLOB_OUTER_CORE
       displ_outer_core(i) = init_value
       veloc_outer_core(i) = 0._CUSTOM_REAL
       accel_outer_core(i) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP DO
     do i = 1,NGLOB_INNER_CORE * NDIM
       displ_inner_core(i,1) = init_value
       veloc_inner_core(i,1) = 0._CUSTOM_REAL
       accel_inner_core(i,1) = 0._CUSTOM_REAL
     enddo
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
   else
     do i = 1,NGLOB_CRUST_MANTLE

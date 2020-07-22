@@ -91,15 +91,7 @@
 
   ! turns on/off corresponding 1-D/3-D model flags
   ! and sets radius for each discontinuity and ocean density values
-  call get_model_parameters(MODEL,REFERENCE_1D_MODEL,THREE_D_MODEL, &
-                            ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE,ATTENUATION_3D, &
-                            CASE_3D,CRUSTAL,HETEROGEN_3D_MANTLE,HONOR_1D_SPHERICAL_MOHO, &
-                            ISOTROPIC_3D_MANTLE,ONE_CRUST,TRANSVERSE_ISOTROPY, &
-                            OCEANS,TOPOGRAPHY, &
-                            ROCEAN,RMIDDLE_CRUST,RMOHO,R80,R120,R220,R400,R600,R670,R771, &
-                            RTOPDDOUBLEPRIME,RCMB,RICB,RMOHO_FICTITIOUS_IN_MESHER, &
-                            R80_FICTITIOUS_IN_MESHER,RHO_TOP_OC,RHO_BOTTOM_OC,RHO_OCEANS, &
-                            CEM_REQUEST,CEM_ACCEPT)
+  call get_model_parameters()
 
   ! checks parameters
   call rcp_check_parameters()
@@ -204,10 +196,11 @@
                         DEPTH_FOURTH_DOUBLING_REAL,distance,distance_min,zval, &
                         doubling_index,rmins,rmaxs)
 
-  ! calculates number of elements (NSPEC)
+  ! calculates number of elements (NSPEC_REGIONS)
   call count_elements(NEX_XI,NEX_ETA,NEX_PER_PROC_XI,NPROC, &
                         NEX_PER_PROC_ETA,ratio_divide_central_cube, &
-                        NSPEC,NSPEC2D_XI,NSPEC2D_ETA, &
+                        NSPEC_REGIONS, &
+                        NSPEC2D_XI,NSPEC2D_ETA, &
                         NSPEC2DMAX_XMIN_XMAX,NSPEC2DMAX_YMIN_YMAX,NSPEC2D_BOTTOM,NSPEC2D_TOP, &
                         NSPEC1D_RADIAL, &
                         NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX, &
@@ -222,10 +215,11 @@
                         tmp_sum_nglob2D_xi, tmp_sum_nglob2D_eta,divider,nglob_edges_h, &
                         nglob_edge_v,to_remove)
 
-  ! calculates number of points (NGLOB)
+  ! calculates number of points (NGLOB_REGIONS)
   call count_points(NEX_PER_PROC_XI,NEX_PER_PROC_ETA,ratio_divide_central_cube, &
                         NSPEC1D_RADIAL,NGLOB1D_RADIAL, &
-                        NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX,NGLOB, &
+                        NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX, &
+                        NGLOB_REGIONS, &
                         nblocks_xi,nblocks_eta,ner,ratio_sampling_array, &
                         this_region_has_a_doubling, &
                         ifirst_region, ilast_region, iter_region, iter_layer, &
@@ -241,16 +235,16 @@
 !! DK DK July 2013: to save a huge amount of memory, when 3D attenuation is off it is sufficient to save a single point
 !! DK DK July 2013: per spectral element because the Q attenuation factor is then constant per layer of the geological model
     if (ATTENUATION_3D .or. ATTENUATION_1D_WITH_3D_STORAGE) then
-      ATT1     = NGLLX
-      ATT2     = NGLLY
-      ATT3     = NGLLZ
+      ATT1 = NGLLX
+      ATT2 = NGLLY
+      ATT3 = NGLLZ
     else
-      ATT1     = 1
-      ATT2     = 1
-      ATT3     = 1
+      ATT1 = 1
+      ATT2 = 1
+      ATT3 = 1
     endif
-    ATT4     = NSPEC(IREGION_CRUST_MANTLE)
-    ATT5     = NSPEC(IREGION_INNER_CORE)
+    ATT4 = NSPEC_REGIONS(IREGION_CRUST_MANTLE)
+    ATT5 = NSPEC_REGIONS(IREGION_INNER_CORE)
   else
      ATT1 = 1
      ATT2 = 1

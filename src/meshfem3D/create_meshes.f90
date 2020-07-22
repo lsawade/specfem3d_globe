@@ -28,11 +28,13 @@
   subroutine create_meshes()
 
   use meshfem3D_par
+
   implicit none
 
   ! local parameters
   integer :: ipass
   integer :: ier
+  integer :: offset_proc_xi,offset_proc_eta
 
   ! user output
   if (myrank == 0) then
@@ -71,6 +73,9 @@
   iproc_xi = iproc_xi_slice(myrank)
   iproc_eta = iproc_eta_slice(myrank)
 
+  offset_proc_xi = mod(iproc_xi_slice(myrank),2)
+  offset_proc_eta = mod(iproc_eta_slice(myrank),2)
+
   ! volume of the final mesh, and Earth mass computed in the final mesh
   ! and gravity integrals
   volume_total = ZERO
@@ -108,33 +113,42 @@
       call flush_IMAIN()
     endif
 
+    ! number of spectral elements
+    nspec = NSPEC_REGIONS(iregion_code)
+
+    ! number of global GLL points
+    nglob = NGLOB_REGIONS(iregion_code)
+
     ! compute maximum number of points
-    npointot = NSPEC(iregion_code) * NGLLX * NGLLY * NGLLZ
+    npointot = nspec * NGLLX * NGLLY * NGLLZ
 
     ! use dynamic allocation to allocate memory for arrays
-    allocate(idoubling(NSPEC(iregion_code)), &
-             ibool(NGLLX,NGLLY,NGLLZ,NSPEC(iregion_code)), &
-             xstore(NGLLX,NGLLY,NGLLZ,NSPEC(iregion_code)), &
-             ystore(NGLLX,NGLLY,NGLLZ,NSPEC(iregion_code)), &
-             zstore(NGLLX,NGLLY,NGLLZ,NSPEC(iregion_code)), &
+    allocate(idoubling(nspec), &
+             ibool(NGLLX,NGLLY,NGLLZ,nspec), &
+             xstore(NGLLX,NGLLY,NGLLZ,nspec), &
+             ystore(NGLLX,NGLLY,NGLLZ,nspec), &
+             zstore(NGLLX,NGLLY,NGLLZ,nspec), &
              stat=ier)
     if (ier /= 0 ) call exit_mpi(myrank,'Error allocating memory for arrays')
+    idoubling(:) = 0
+    ibool(:,:,:,:) = 0
+    xstore(:,:,:,:) = 0.d0
+    ystore(:,:,:,:) = 0.d0
+    zstore(:,:,:,:) = 0.d0
 
     ! this for non blocking MPI
-    allocate(is_on_a_slice_edge(NSPEC(iregion_code)), &
-            stat=ier)
+    allocate(is_on_a_slice_edge(nspec),stat=ier)
     if (ier /= 0 ) call exit_mpi(myrank,'Error allocating is_on_a_slice_edge array')
-
+    is_on_a_slice_edge(:) = .false.
 
     ! create all the regions of the mesh
     ! perform two passes in this part to be able to save memory
     do ipass = 1,2
-      call create_regions_mesh(iregion_code, &
-                               NSPEC(iregion_code),NGLOB(iregion_code),npointot, &
+      call create_regions_mesh(npointot, &
                                NEX_PER_PROC_XI,NEX_PER_PROC_ETA, &
                                NSPEC2DMAX_XMIN_XMAX(iregion_code),NSPEC2DMAX_YMIN_YMAX(iregion_code), &
                                NSPEC2D_BOTTOM(iregion_code),NSPEC2D_TOP(iregion_code), &
-                               mod(iproc_xi_slice(myrank),2),mod(iproc_eta_slice(myrank),2), &
+                               offset_proc_xi,offset_proc_eta, &
                                ipass)
 
       ! If we're in the request stage of CEM, exit.

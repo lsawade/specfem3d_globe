@@ -372,31 +372,31 @@
   if ((NCHUNKS_VAL /= 6 .and. ABSORBING_CONDITIONS) .or. &
       (ROTATION_VAL .and. EXACT_MASS_MATRIX_FOR_ROTATION_VAL)) then
     call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
-                           rmassx_crust_mantle, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
-                           my_neighbors_crust_mantle)
+                             rmassx_crust_mantle, &
+                             num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                             nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
+                             my_neighbors_crust_mantle)
 
     call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
-                           rmassy_crust_mantle, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
-                           my_neighbors_crust_mantle)
+                             rmassy_crust_mantle, &
+                             num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                             nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
+                             my_neighbors_crust_mantle)
   endif
 
   if (SIMULATION_TYPE == 3) then
     if (ROTATION_VAL .and. EXACT_MASS_MATRIX_FOR_ROTATION_VAL) then
       call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_XY_CM, &
-                           b_rmassx_crust_mantle, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
-                           my_neighbors_crust_mantle)
+                               b_rmassx_crust_mantle, &
+                               num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                               nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
+                               my_neighbors_crust_mantle)
 
       call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_XY_CM, &
-                           b_rmassy_crust_mantle, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
-                           my_neighbors_crust_mantle)
+                               b_rmassy_crust_mantle, &
+                               num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                               nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
+                               my_neighbors_crust_mantle)
     endif
   endif
 
@@ -453,6 +453,10 @@
     if (ROTATION_VAL .and. EXACT_MASS_MATRIX_FOR_ROTATION_VAL) then
       where(rmassx_inner_core(:) <= 0.0_CUSTOM_REAL) rmassx_inner_core = 1.0_CUSTOM_REAL
       where(rmassy_inner_core(:) <= 0.0_CUSTOM_REAL) rmassy_inner_core = 1.0_CUSTOM_REAL
+      if (SIMULATION_TYPE == 3) then
+        where(b_rmassx_inner_core(:) <= 0.0_CUSTOM_REAL) b_rmassx_inner_core = 1.0_CUSTOM_REAL
+        where(b_rmassy_inner_core(:) <= 0.0_CUSTOM_REAL) b_rmassy_inner_core = 1.0_CUSTOM_REAL
+      endif
     endif
   endif
 
@@ -488,6 +492,7 @@
   if (ier /= 0) stop 'Error allocating rstore for crust/mantle'
 
 #ifdef DANIEL_TEST_OMP_RSTORE
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED(xstore_crust_mantle,ystore_crust_mantle,zstore_crust_mantle,rstore_crust_mantle) &
 !$OMP PRIVATE(i,rval,thetaval,phival)
@@ -500,7 +505,7 @@
     rstore_crust_mantle(3,i) = phival
   enddo
 #ifdef DANIEL_TEST_OMP_RSTORE
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 #endif
 
@@ -509,6 +514,7 @@
   if (ier /= 0) stop 'Error allocating rstore for outer core'
 
 #ifdef DANIEL_TEST_OMP_RSTORE
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED(xstore_outer_core,ystore_outer_core,zstore_outer_core,rstore_outer_core) &
 !$OMP PRIVATE(i,rval,thetaval,phival)
@@ -521,7 +527,7 @@
     rstore_outer_core(3,i) = phival
   enddo
 #ifdef DANIEL_TEST_OMP_RSTORE
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 #endif
 
@@ -530,6 +536,7 @@
   if (ier /= 0) stop 'Error allocating rstore for inner core'
 
 #ifdef DANIEL_TEST_OMP_RSTORE
+! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED(xstore_inner_core,ystore_inner_core,zstore_inner_core,rstore_inner_core) &
 !$OMP PRIVATE(i,rval,thetaval,phival)
@@ -542,7 +549,7 @@
     rstore_inner_core(3,i) = phival
   enddo
 #ifdef DANIEL_TEST_OMP_RSTORE
-!$OMP enddo
+!$OMP ENDDO
 !$OMP END PARALLEL
 #endif
 

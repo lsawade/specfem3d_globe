@@ -34,7 +34,7 @@
 
   ! local parameters
   ! broadcast parameter arrays
-  integer, parameter :: nparam_i = 45
+  integer, parameter :: nparam_i = 46
   integer, dimension(nparam_i) :: bcast_integer
 
   integer, parameter :: nparam_l = 64
@@ -67,7 +67,7 @@
             NTSTEP_BETWEEN_OUTPUT_INFO, &
             NUMBER_OF_RUNS,NUMBER_OF_THIS_RUN,NCHUNKS, &
             SIMULATION_TYPE, &
-            REFERENCE_1D_MODEL,THREE_D_MODEL, &
+            REFERENCE_1D_MODEL,REFERENCE_CRUSTAL_MODEL,THREE_D_MODEL, &
             NPROC,NPROCTOT, &
             NEX_PER_PROC_XI,NEX_PER_PROC_ETA,ratio_divide_central_cube, &
             MOVIE_VOLUME_TYPE,MOVIE_START,MOVIE_STOP, &
@@ -136,7 +136,7 @@
 
   call bcast_all_l(this_region_has_a_doubling,MAX_NUMBER_OF_MESH_LAYERS)
 
-  call bcast_all_i(NSPEC,MAX_NUM_REGIONS)
+  call bcast_all_i(NSPEC_REGIONS,MAX_NUM_REGIONS)
   call bcast_all_i(NSPEC2D_XI,MAX_NUM_REGIONS)
   call bcast_all_i(NSPEC2D_ETA,MAX_NUM_REGIONS)
   call bcast_all_i(NSPEC2DMAX_XMIN_XMAX,MAX_NUM_REGIONS)
@@ -147,7 +147,7 @@
   call bcast_all_i(NGLOB1D_RADIAL,MAX_NUM_REGIONS)
   call bcast_all_i(NGLOB2DMAX_XMIN_XMAX,MAX_NUM_REGIONS)
   call bcast_all_i(NGLOB2DMAX_YMIN_YMAX,MAX_NUM_REGIONS)
-  call bcast_all_i(NGLOB,MAX_NUM_REGIONS)
+  call bcast_all_i(NGLOB_REGIONS,MAX_NUM_REGIONS)
   call bcast_all_i(DIFF_NSPEC1D_RADIAL,NB_SQUARE_CORNERS*NB_CUT_CASE)
   call bcast_all_i(DIFF_NSPEC2D_ETA,NB_SQUARE_EDGES_ONEDIR*NB_CUT_CASE)
   call bcast_all_i(DIFF_NSPEC2D_XI,NB_SQUARE_EDGES_ONEDIR*NB_CUT_CASE)
@@ -185,23 +185,24 @@
     NCHUNKS = bcast_integer(26)
     SIMULATION_TYPE = bcast_integer(27)
     REFERENCE_1D_MODEL = bcast_integer(28)
-    THREE_D_MODEL = bcast_integer(29)
-    NPROC = bcast_integer(30)
-    NPROCTOT = bcast_integer(31)
-    NEX_PER_PROC_XI = bcast_integer(32)
-    NEX_PER_PROC_ETA = bcast_integer(33)
-    ratio_divide_central_cube = bcast_integer(34)
-    MOVIE_VOLUME_TYPE = bcast_integer(35)
-    MOVIE_START = bcast_integer(36)
-    MOVIE_STOP = bcast_integer(37)
-    NOISE_TOMOGRAPHY = bcast_integer(38)
-    ATT1 = bcast_integer(39)
-    ATT2 = bcast_integer(40)
-    ATT3 = bcast_integer(41)
-    ATT4 = bcast_integer(42)
-    ATT5 = bcast_integer(43)
-    GPU_RUNTIME = bcast_integer(44)
-    NUMBER_OF_SIMULTANEOUS_RUNS = bcast_integer(45)
+    REFERENCE_CRUSTAL_MODEL = bcast_integer(29)
+    THREE_D_MODEL = bcast_integer(30)
+    NPROC = bcast_integer(31)
+    NPROCTOT = bcast_integer(32)
+    NEX_PER_PROC_XI = bcast_integer(33)
+    NEX_PER_PROC_ETA = bcast_integer(34)
+    ratio_divide_central_cube = bcast_integer(35)
+    MOVIE_VOLUME_TYPE = bcast_integer(36)
+    MOVIE_START = bcast_integer(37)
+    MOVIE_STOP = bcast_integer(38)
+    NOISE_TOMOGRAPHY = bcast_integer(39)
+    ATT1 = bcast_integer(40)
+    ATT2 = bcast_integer(41)
+    ATT3 = bcast_integer(42)
+    ATT4 = bcast_integer(43)
+    ATT5 = bcast_integer(44)
+    GPU_RUNTIME = bcast_integer(45)
+    NUMBER_OF_SIMULTANEOUS_RUNS = bcast_integer(46)
 
     ! logicals
     TRANSVERSE_ISOTROPY = bcast_logical(1)

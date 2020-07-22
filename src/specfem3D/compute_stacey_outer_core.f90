@@ -76,7 +76,12 @@
 
   if (.not. GPU_MODE) then
     ! on CPU
-!$OMP PARALLEL DEFAULT(SHARED) &
+
+! openmp solver
+!$OMP PARALLEL if (nspec2D_xmin_outer_core > 100 .and. nspec2D_xmax_outer_core > 100 &
+!$OMP .and. nspec2D_ymin_outer_core > 100 .and. nspec2D_ymax_outer_core > 100 &
+!$OMP .and. nspec2D_zmin_outer_core > 100) &
+!$OMP DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec2D,ispec,i,j,k,iglob,sn,weight) &
 !$OMP FIRSTPRIVATE(wgllwgll_xy,wgllwgll_xz,wgllwgll_yz)
 
@@ -111,7 +116,7 @@
             enddo
           enddo
         enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
       endif
     endif
 
@@ -147,7 +152,7 @@
             enddo
           enddo
         enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
       endif
     endif
 
@@ -181,7 +186,7 @@
           enddo
         enddo
       enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
     endif
 
     !   ymax
@@ -214,7 +219,7 @@
           enddo
         enddo
       enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
     endif
 
     ! zmin
@@ -245,7 +250,7 @@
           enddo
         enddo
       enddo
-!$OMP enddo NOWAIT
+!$OMP ENDDO NOWAIT
     endif
 
 !$OMP END PARALLEL
@@ -585,7 +590,7 @@
         ! on CPU
         do ispec2D = 1,nspec2D_xmin_outer_core
 
-          ispec=ibelm_xmin_outer_core(ispec2D)
+          ispec = ibelm_xmin_outer_core(ispec2D)
 
           ! exclude elements that are not on absorbing edges
           if (nkmin_xi_outer_core(1,ispec2D) == 0 .or. njmin_outer_core(1,ispec2D) == 0) cycle
@@ -593,7 +598,7 @@
           i = 1
           do k = nkmin_xi_outer_core(1,ispec2D),NGLLZ
             do j = njmin_outer_core(1,ispec2D),njmax_outer_core(1,ispec2D)
-              iglob=ibool_outer_core(i,j,k,ispec)
+              iglob = ibool_outer_core(i,j,k,ispec)
 
               sn = b_veloc_outer_core(iglob)/vp_outer_core(i,j,k,ispec)
 
@@ -620,15 +625,15 @@
         ! on CPU
         do ispec2D = 1,nspec2D_xmax_outer_core
 
-          ispec=ibelm_xmax_outer_core(ispec2D)
+          ispec = ibelm_xmax_outer_core(ispec2D)
 
           ! exclude elements that are not on absorbing edges
           if (nkmin_xi_outer_core(2,ispec2D) == 0 .or. njmin_outer_core(2,ispec2D) == 0) cycle
 
-          i=NGLLX
-          do k=nkmin_xi_outer_core(2,ispec2D),NGLLZ
-            do j=njmin_outer_core(2,ispec2D),njmax_outer_core(2,ispec2D)
-              iglob=ibool_outer_core(i,j,k,ispec)
+          i = NGLLX
+          do k = nkmin_xi_outer_core(2,ispec2D),NGLLZ
+            do j = njmin_outer_core(2,ispec2D),njmax_outer_core(2,ispec2D)
+              iglob = ibool_outer_core(i,j,k,ispec)
 
               sn = b_veloc_outer_core(iglob)/vp_outer_core(i,j,k,ispec)
 
@@ -653,7 +658,7 @@
       ! on CPU
       do ispec2D = 1,nspec2D_ymin_outer_core
 
-        ispec=ibelm_ymin_outer_core(ispec2D)
+        ispec = ibelm_ymin_outer_core(ispec2D)
 
         ! exclude elements that are not on absorbing edges
         if (nkmin_eta_outer_core(1,ispec2D) == 0 .or. nimin_outer_core(1,ispec2D) == 0) cycle
@@ -661,11 +666,11 @@
         j = 1
         do k = nkmin_eta_outer_core(1,ispec2D),NGLLZ
           do i = nimin_outer_core(1,ispec2D),nimax_outer_core(1,ispec2D)
-            iglob=ibool_outer_core(i,j,k,ispec)
+            iglob = ibool_outer_core(i,j,k,ispec)
 
             sn = b_veloc_outer_core(iglob)/vp_outer_core(i,j,k,ispec)
 
-            weight=jacobian2D_ymin_outer_core(i,k,ispec2D)*wgllwgll_xz(i,k)
+            weight = jacobian2D_ymin_outer_core(i,k,ispec2D)*wgllwgll_xz(i,k)
 
             b_accel_outer_core(iglob) = b_accel_outer_core(iglob) - weight*sn
 
@@ -685,19 +690,19 @@
       ! on CPU
       do ispec2D = 1,nspec2D_ymax_outer_core
 
-        ispec=ibelm_ymax_outer_core(ispec2D)
+        ispec = ibelm_ymax_outer_core(ispec2D)
 
         ! exclude elements that are not on absorbing edges
         if (nkmin_eta_outer_core(2,ispec2D) == 0 .or. nimin_outer_core(2,ispec2D) == 0) cycle
 
-        j=NGLLY
-        do k=nkmin_eta_outer_core(2,ispec2D),NGLLZ
-          do i=nimin_outer_core(2,ispec2D),nimax_outer_core(2,ispec2D)
-            iglob=ibool_outer_core(i,j,k,ispec)
+        j = NGLLY
+        do k = nkmin_eta_outer_core(2,ispec2D),NGLLZ
+          do i = nimin_outer_core(2,ispec2D),nimax_outer_core(2,ispec2D)
+            iglob = ibool_outer_core(i,j,k,ispec)
 
             sn = b_veloc_outer_core(iglob)/vp_outer_core(i,j,k,ispec)
 
-            weight=jacobian2D_ymax_outer_core(i,k,ispec2D)*wgllwgll_xz(i,k)
+            weight = jacobian2D_ymax_outer_core(i,k,ispec2D)*wgllwgll_xz(i,k)
 
             b_accel_outer_core(iglob) = b_accel_outer_core(iglob) - weight*sn
 

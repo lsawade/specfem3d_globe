@@ -33,22 +33,23 @@
 ! modified to use the density and Q attenuation models of Montagner and Kennett (1995).
 ! That modified model is traditionally called AK135-F,
 ! see http://rses.anu.edu.au/seismology/ak135/ak135f.html for more details.
+!
 ! As we do not want to use the 300 m-thick mud layer from that model nor the ocean layer,
 ! above the d120 discontinuity we switch back to the classical AK135 model of Kennett et al. (1995),
 ! i.e., we use AK135-F below and AK135 above.
-
+!
 ! B. L. N. Kennett, E. R. Engdahl and R. Buland,
 ! Constraints on seismic velocities in the Earth from traveltimes,
 ! Geophysical Journal International, volume 122, issue 1, pages 108-124 (1995),
 ! DOI: 10.1111/j.1365-246X.1995.tb03540.x
 !--------------------------------------------------------------------------------------------------
-
+!
 ! J. P. Montagner and B. L. N. Kennett,
 ! How to reconcile body-wave and normal-mode reference Earth models?,
 ! Geophysical Journal International, volume 122, issue 1, pages 229-248 (1995)
-
+!
 !! DK DK values below entirely checked and fixed by Dimitri Komatitsch in December 2012.
-
+!
 !--------------------------------------------------------------------------------------------------
 
   module model_ak135_par
@@ -85,12 +86,12 @@
 
   ! allocates model arrays
   allocate(Mak135_V_radius_ak135(NR_AK135F_NO_MUD), &
-          Mak135_V_density_ak135(NR_AK135F_NO_MUD), &
-          Mak135_V_vp_ak135(NR_AK135F_NO_MUD), &
-          Mak135_V_vs_ak135(NR_AK135F_NO_MUD), &
-          Mak135_V_Qkappa_ak135(NR_AK135F_NO_MUD), &
-          Mak135_V_Qmu_ak135(NR_AK135F_NO_MUD), &
-          stat=ier)
+           Mak135_V_density_ak135(NR_AK135F_NO_MUD), &
+           Mak135_V_vp_ak135(NR_AK135F_NO_MUD), &
+           Mak135_V_vs_ak135(NR_AK135F_NO_MUD), &
+           Mak135_V_Qkappa_ak135(NR_AK135F_NO_MUD), &
+           Mak135_V_Qmu_ak135(NR_AK135F_NO_MUD), &
+           stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating Mak135_V arrays')
 
   ! all processes will define same parameters
@@ -172,10 +173,10 @@
 
 ! non-dimensionalize
 ! time scaling (s^{-1}) is done with scaleval
-  scaleval=dsqrt(PI*GRAV*RHOAV)
-  rho=rho*1000.0d0/RHOAV
-  vp=vp*1000.0d0/(R_EARTH*scaleval)
-  vs=vs*1000.0d0/(R_EARTH*scaleval)
+  scaleval = dsqrt(PI*GRAV*RHOAV)
+  rho = rho*1000.0d0/RHOAV
+  vp = vp*1000.0d0/(R_EARTH*scaleval)
+  vs = vs*1000.0d0/(R_EARTH*scaleval)
 
   end subroutine model_ak135
 

@@ -230,7 +230,7 @@ void gpuCopy_todevice_realw_offset (gpu_realw_mem *d_array_addr_ptr, realw *h_ar
 #ifdef USE_CUDA
   if (run_cuda) {
     // copies values onto GPU
-    print_CUDA_error_if_any(cudaMemcpy((realw*) d_array_addr_ptr->cuda,&h_array[size*(offset-1)],size*sizeof(realw),cudaMemcpyHostToDevice),22003);
+    print_CUDA_error_if_any(cudaMemcpy((realw*) d_array_addr_ptr->cuda,&h_array[size*(offset-1)],size*sizeof(realw),cudaMemcpyHostToDevice),22004);
   }
 #endif
 }
@@ -284,7 +284,7 @@ void gpuCopy_todevice_double (gpu_double_mem *d_array_addr_ptr, double *h_array,
 #ifdef USE_CUDA
   if (run_cuda) {
     // copies values onto GPU
-    print_CUDA_error_if_any(cudaMemcpy((double*) d_array_addr_ptr->cuda,h_array,size*sizeof(double),cudaMemcpyHostToDevice),22003);
+    print_CUDA_error_if_any(cudaMemcpy((double*) d_array_addr_ptr->cuda,h_array,size*sizeof(double),cudaMemcpyHostToDevice),22005);
   }
 #endif
 }
@@ -307,7 +307,7 @@ void gpuCopy_todevice_int (gpu_int_mem *d_array_addr_ptr, int *h_array, size_t s
 #ifdef USE_CUDA
   if (run_cuda) {
     // copies values onto GPU
-    print_CUDA_error_if_any(cudaMemcpy((int*) d_array_addr_ptr->cuda,h_array,size*sizeof(int),cudaMemcpyHostToDevice),22003);
+    print_CUDA_error_if_any(cudaMemcpy((int*) d_array_addr_ptr->cuda,h_array,size*sizeof(int),cudaMemcpyHostToDevice),22006);
   }
 #endif
 }
@@ -348,7 +348,7 @@ void gpuCopy_from_device_realw_offset (gpu_realw_mem *d_array_addr_ptr, realw *h
 #ifdef USE_CUDA
   if (run_cuda) {
     // note: cudaMemcpy implicitly synchronizes all other cuda operations
-    print_CUDA_error_if_any(cudaMemcpy(&h_array[size*(offset-1)],d_array_addr_ptr->cuda, sizeof(realw)*size, cudaMemcpyDeviceToHost),33001);
+    print_CUDA_error_if_any(cudaMemcpy(&h_array[size*(offset-1)],d_array_addr_ptr->cuda, sizeof(realw)*size, cudaMemcpyDeviceToHost),33002);
   }
 #endif
 }
@@ -505,6 +505,7 @@ void gpuInitialize_buffers(Mesh *mp) {
   #define GPU_REALW_BUFFER INIT_DUMMY_BUFFER
   #define GPU_INT_BUFFER INIT_DUMMY_BUFFER
   #define GPU_DOUBLE_BUFFER INIT_DUMMY_BUFFER
+
   #include "gpu_buffer_list.c"
   #undef INIT_DUMMY_BUFFER
 #endif
@@ -515,6 +516,7 @@ void gpuInitialize_buffers(Mesh *mp) {
   #define GPU_REALW_BUFFER INIT_DUMMY_BUFFER
   #define GPU_INT_BUFFER INIT_DUMMY_BUFFER
   #define GPU_DOUBLE_BUFFER INIT_DUMMY_BUFFER
+
   #include "gpu_buffer_list.c"
   #undef INIT_DUMMY_BUFFER
 #endif
@@ -769,7 +771,7 @@ void exit_on_gpu_error (const char *kernel_name) {
 #endif
 
   if (error) {
-    fprintf(stderr,"Error after %s: %s\n", kernel_name, strerr);
+    fprintf(stderr,"GPU Error: after %s: %s\n", kernel_name, strerr);
 
     // outputs error file
     FILE *fp;
@@ -783,7 +785,7 @@ void exit_on_gpu_error (const char *kernel_name) {
     sprintf(filename,"OUTPUT_FILES/error_message_%06d.txt",myrank);
     fp = fopen (filename, "a+");
     if (fp != NULL) {
-      fprintf (fp, "Error after %s: %s\n", kernel_name, strerr);
+      fprintf (fp, "GPU Error: after %s: %s\n", kernel_name, strerr);
       fclose (fp);
     }
 
