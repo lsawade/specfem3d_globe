@@ -219,10 +219,8 @@ void inner_core (int nb_blocks_to_compute, Mesh *mp,
     clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &d_c33store.ocl));
     clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &d_c44store.ocl));
     clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (int), (void *) &mp->gravity));
-    clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_rstore_inner_core.ocl));
-    clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_minus_gravity_table.ocl));
-    clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_minus_deriv_gravity_table.ocl));
-    clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_density_table.ocl));
+    clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_gravity_pre_store_inner_core.ocl));
+    clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_gravity_H_inner_core.ocl));
     clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_wgll_cube.ocl));
     clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (int), (void *) &mp->NSPEC_INNER_CORE_STRAIN_ONLY));
     clCheck (clSetKernelArg (*inner_core_kernel_p, idx++, sizeof (int), (void *) &mp->NSPEC_INNER_CORE));
@@ -298,10 +296,8 @@ void inner_core (int nb_blocks_to_compute, Mesh *mp,
                                                                d_c11store.cuda,d_c12store.cuda,d_c13store.cuda,
                                                                d_c33store.cuda,d_c44store.cuda,
                                                                mp->gravity,
-                                                               mp->d_rstore_inner_core.cuda,
-                                                               mp->d_minus_gravity_table.cuda,
-                                                               mp->d_minus_deriv_gravity_table.cuda,
-                                                               mp->d_density_table.cuda,
+                                                               mp->d_gravity_pre_store_inner_core.cuda,
+                                                               mp->d_gravity_H_inner_core.cuda,
                                                                mp->d_wgll_cube.cuda,
                                                                mp->NSPEC_INNER_CORE_STRAIN_ONLY,
                                                                mp->NSPEC_INNER_CORE);
@@ -390,7 +386,7 @@ void FC_FUNC_ (compute_forces_inner_core_gpu,
         // for idoubling array
         offset_ispec = mp->nspec_outer_inner_core;
         // for strain
-        if (! mp->NSPEC_INNER_CORE_STRAIN_ONLY == 1) {
+        if (! (mp->NSPEC_INNER_CORE_STRAIN_ONLY == 1)) {
           offset_nonpadded_strain = (mp->nspec_outer_inner_core) * NGLL3;
         }
       }

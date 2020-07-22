@@ -31,11 +31,9 @@
 ! prints source time function and spectrum
 
   use constants
-  use shared_input_parameters
+  use shared_parameters
 
-  use specfem_par, only: NSOURCES,Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
-    factor_force_source, &
-    NSTEP,DT,t0,tshift_src,hdur
+  use specfem_par, only: Mxx,Myy,Mzz,Mxy,Mxz,Myz,factor_force_source,t0,tshift_src,hdur
 
   implicit none
 
@@ -61,6 +59,9 @@
   write(IMAIN,*)
   write(IMAIN,*) 'printing the source-time function'
   call flush_IMAIN()
+
+  ! initializes
+  strength = 0.d0
 
   ! source time function
   do isource = 1,NSOURCES
@@ -126,8 +127,8 @@
   enddo ! NSOURCES
 
   ! source spectra
-  write(IMAIN,*)
   write(IMAIN,*) 'printing the source spectrum'
+  write(IMAIN,*)
   call flush_IMAIN()
 
   do isource = 1,NSOURCES

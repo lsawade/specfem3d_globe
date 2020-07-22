@@ -45,7 +45,8 @@
 !   J. Geophys. Res., 120, 4278-4300, https://doi.org/10.1002/2014JB011824.
 !
 ! implementation:
-! Elodie Kendall, 2018 - spherical harmonics model, up to degree 35
+!   Elodie Kendall, Laura Parisi 2018
+!   - spherical harmonics model, up to degree 35
 !                        (routines based on model_s40rts.f90 implementation)
 !
 !                        P-wave velocity perturbations (dvp) taken from P12 of S20RTS/S40RTS by default;
@@ -53,6 +54,10 @@
 !                        mantle model defined between Moho and CMB;
 !                        uses PREM as 1D reference (also for attenuation & eta-parameter)
 !
+!                        3D mantle model perturbations:
+!                          - sgloberani_aniso: uses transversely isotropic model perturbations dvsv and dvsh
+!                          - sgloberani_iso  : uses isotropic model perturbations dvs
+!                        both with respect to transversely isotropic PREM
 !--------------------------------------------------------------------------------------------------
 
   module model_sglobe_par
@@ -90,6 +95,12 @@
   ! local parameters
   integer :: ier
 
+  ! user info
+  if (myrank == 0) then
+    write(IMAIN,*) 'broadcast model: SGLOBE'
+    call flush_IMAIN()
+  endif
+
  ! allocates memory
   allocate(SGLOBE_V_dvsv_a(0:NK_20,0:NS_35,0:NS_35), &
            SGLOBE_V_dvsv_b(0:NK_20,0:NS_35,0:NS_35), &
@@ -126,19 +137,32 @@
 
   use constants
   use model_sglobe_par
-
+  use meshfem3D_models_par, only: THREE_D_MODEL
   implicit none
 
   ! local parameters
   integer :: k,l,m,ier
+  character(len=MAX_STRING_LEN) :: filename
+
   character(len=*), parameter :: SGLOBEv = 'DATA/sglobe/dvsv.dat'
   character(len=*), parameter :: SGLOBEh = 'DATA/sglobe/dvsh.dat'
+  character(len=*), parameter :: SGLOBE_iso = 'DATA/sglobe/dvs_iso.dat'
+
   character(len=*), parameter :: P12 = 'DATA/s20rts/P12.dat'
 
   ! SGLOBE degree 35 S model from Chang at al.
   ! dvsv
-  open(unit=10,file=SGLOBEv,status='old',action='read',iostat=ier)
-  if ( ier /= 0 ) call exit_MPI(0,'error opening file SGLOBE.dat')
+  if (THREE_D_MODEL == THREE_D_MODEL_SGLOBE_ISO) then
+    ! isotropic case
+    ! one could also use the voigt averaging (done in meshfem3D_models.f90) based on the vsv and vsh files,
+    ! we use the provided dv_iso.dat here:
+    filename = SGLOBE_iso
+  else
+    ! transversely isotropic model perturbations dvsv
+    filename = SGLOBEv
+  endif
+  open(unit=10,file=trim(filename),status='old',action='read',iostat=ier)
+  if ( ier /= 0 ) call exit_MPI(0,'error opening file in DATA/sglobe/')
 
   SGLOBE_V_dvsv_a(:,:,:) = 0.d0
   SGLOBE_V_dvsv_b(:,:,:) = 0.d0
@@ -150,8 +174,17 @@
   close(10)
 
   ! dvsh
-  open(unit=10,file=SGLOBEh,status='old',action='read',iostat=ier)
-  if ( ier /= 0 ) call exit_MPI(0,'error opening file SGLOBE.dat')
+  if (THREE_D_MODEL == THREE_D_MODEL_SGLOBE_ISO) then
+    ! isotropic case
+    ! one could also use the voigt averaging (done in meshfem3D_models.f90) based on the vsv and vsh files,
+    ! we use the provided dv_iso.dat here:
+    filename = SGLOBE_iso
+  else
+    ! transversely isotropic model perturbations dvsh
+    filename = SGLOBEh
+  endif
+  open(unit=10,file=trim(filename),status='old',action='read',iostat=ier)
+  if ( ier /= 0 ) call exit_MPI(0,'error opening file in DATA/sglobe')
 
   SGLOBE_V_dvsh_a(:,:,:) = 0.d0
   SGLOBE_V_dvsh_b(:,:,:) = 0.d0
@@ -163,7 +196,8 @@
   close(10)
 
   ! P12 degree 12 P model from Ritsema
-  open(unit=10,file=P12,status='old',action='read',iostat=ier)
+  filename = P12
+  open(unit=10,file=trim(filename),status='old',action='read',iostat=ier)
   if ( ier /= 0 ) call exit_MPI(0,'error opening file P12.dat')
 
   SGLOBE_V_dvp_a(:,:,:) = 0.d0

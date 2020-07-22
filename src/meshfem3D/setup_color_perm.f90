@@ -79,9 +79,9 @@
       perm(:) = 0
 
       call setup_color(nspec,nglob,ibool,perm, &
-                      idomain,is_on_a_slice_edge, &
-                      num_phase_ispec_crust_mantle,phase_ispec_inner_crust_mantle, &
-                      SAVE_MESH_FILES)
+                       idomain,is_on_a_slice_edge, &
+                       num_phase_ispec_crust_mantle,phase_ispec_inner_crust_mantle, &
+                       SAVE_MESH_FILES)
 
       ! checks
       if (minval(perm) /= 1) &
@@ -95,11 +95,11 @@
         write(IMAIN,*) '     mesh permutation:'
       endif
       call setup_permutation(nspec,nglob,ibool, &
-                            idomain,perm, &
-                            num_colors_outer_crust_mantle,num_colors_inner_crust_mantle, &
-                            num_elem_colors_crust_mantle, &
-                            num_phase_ispec_crust_mantle,phase_ispec_inner_crust_mantle, &
-                            SAVE_MESH_FILES)
+                             idomain,perm, &
+                             num_colors_outer_crust_mantle,num_colors_inner_crust_mantle, &
+                             num_elem_colors_crust_mantle, &
+                             num_phase_ispec_crust_mantle,phase_ispec_inner_crust_mantle, &
+                             SAVE_MESH_FILES)
 
       deallocate(perm)
     else
@@ -131,9 +131,9 @@
       perm(:) = 0
 
       call setup_color(nspec,nglob,ibool,perm, &
-                      idomain,is_on_a_slice_edge, &
-                      num_phase_ispec_outer_core,phase_ispec_inner_outer_core, &
-                      SAVE_MESH_FILES)
+                       idomain,is_on_a_slice_edge, &
+                       num_phase_ispec_outer_core,phase_ispec_inner_outer_core, &
+                       SAVE_MESH_FILES)
 
       ! checks
       if (minval(perm) /= 1) &
@@ -147,11 +147,11 @@
         write(IMAIN,*) '     mesh permutation:'
       endif
       call setup_permutation(nspec,nglob,ibool, &
-                            idomain,perm, &
-                            num_colors_outer_outer_core,num_colors_inner_outer_core, &
-                            num_elem_colors_outer_core, &
-                            num_phase_ispec_outer_core,phase_ispec_inner_outer_core, &
-                            SAVE_MESH_FILES)
+                             idomain,perm, &
+                             num_colors_outer_outer_core,num_colors_inner_outer_core, &
+                             num_elem_colors_outer_core, &
+                             num_phase_ispec_outer_core,phase_ispec_inner_outer_core, &
+                             SAVE_MESH_FILES)
 
       deallocate(perm)
     else
@@ -183,9 +183,9 @@
       perm(:) = 0
 
       call setup_color(nspec,nglob,ibool,perm, &
-                      idomain,is_on_a_slice_edge, &
-                      num_phase_ispec_inner_core,phase_ispec_inner_inner_core, &
-                      SAVE_MESH_FILES)
+                       idomain,is_on_a_slice_edge, &
+                       num_phase_ispec_inner_core,phase_ispec_inner_inner_core, &
+                       SAVE_MESH_FILES)
 
       ! checks
       ! inner core contains fictitious elements not counted for
@@ -202,11 +202,11 @@
         write(IMAIN,*) '     mesh permutation:'
       endif
       call setup_permutation(nspec,nglob,ibool, &
-                            idomain,perm, &
-                            num_colors_outer_inner_core,num_colors_inner_inner_core, &
-                            num_elem_colors_inner_core, &
-                            num_phase_ispec_inner_core,phase_ispec_inner_inner_core, &
-                            SAVE_MESH_FILES)
+                             idomain,perm, &
+                             num_colors_outer_inner_core,num_colors_inner_inner_core, &
+                             num_elem_colors_inner_core, &
+                             num_phase_ispec_inner_core,phase_ispec_inner_inner_core, &
+                             SAVE_MESH_FILES)
 
       deallocate(perm)
     else
@@ -224,9 +224,9 @@
 !
 
   subroutine setup_color(nspec,nglob,ibool,perm, &
-                            idomain,is_on_a_slice_edge, &
-                            num_phase_ispec_d,phase_ispec_inner_d, &
-                            SAVE_MESH_FILES)
+                         idomain,is_on_a_slice_edge, &
+                         num_phase_ispec_d,phase_ispec_inner_d, &
+                         SAVE_MESH_FILES)
 
 ! sets up mesh coloring
 
@@ -470,8 +470,6 @@
     endif
   enddo
 
-
-
   ! sets up domain coloring arrays
   select case (idomain)
   case (IREGION_CRUST_MANTLE)
@@ -600,7 +598,7 @@
 
   use meshfem3D_models_par, only: &
     TRANSVERSE_ISOTROPY,HETEROGEN_3D_MANTLE,ANISOTROPIC_3D_MANTLE, &
-    ANISOTROPIC_INNER_CORE,ATTENUATION,SAVE_BOUNDARY_MESH, &
+    ANISOTROPIC_INNER_CORE,ATTENUATION, &
     ATTENUATION_3D,ATTENUATION_1D_WITH_3D_STORAGE
 
   use meshfem3D_par, only: &
@@ -612,7 +610,7 @@
   use regions_mesh_par2, only: &
     xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore, &
     gammaxstore,gammaystore,gammazstore, &
-    rhostore,dvpstore,kappavstore,kappahstore,muvstore,muhstore,eta_anisostore, &
+    rhostore,kappavstore,kappahstore,muvstore,muhstore,eta_anisostore, &
     c11store,c12store,c13store,c14store,c15store,c16store,c22store, &
     c23store,c24store,c25store,c26store,c33store,c34store,c35store, &
     c36store,c44store,c45store,c46store,c55store,c56store,c66store, &
@@ -877,6 +875,8 @@
 
     allocate(temp_array_real(NGLLX,NGLLY,NGLLZ,nspec))
 
+    ! note: muvstore needed for attenuation also for anisotropic 3d mantle
+    call permute_elements_real(muvstore,temp_array_real,perm,nspec)
     if (ANISOTROPIC_3D_MANTLE) then
       call permute_elements_real(c11store,temp_array_real,perm,nspec)
       call permute_elements_real(c11store,temp_array_real,perm,nspec)
@@ -901,8 +901,6 @@
       call permute_elements_real(c56store,temp_array_real,perm,nspec)
       call permute_elements_real(c66store,temp_array_real,perm,nspec)
     else
-      call permute_elements_real(muvstore,temp_array_real,perm,nspec)
-
       if (TRANSVERSE_ISOTROPY) then
         call permute_elements_real(kappahstore,temp_array_real,perm,nspec)
         call permute_elements_real(muhstore,temp_array_real,perm,nspec)
@@ -910,8 +908,9 @@
       endif
     endif
 
+    ! just to be nice and align dvpstore to the permuted mesh
     if (HETEROGEN_3D_MANTLE) then
-      call permute_elements_real(dvpstore,temp_array_real,perm,nspec)
+      call model_heterogen_mantle_permute_dvp(temp_array_real,perm,nspec)
     endif
 
     if (ABSORBING_CONDITIONS .and. NCHUNKS /= 6) then
@@ -980,7 +979,6 @@
 
     ! note: muvstore needed for attenuation also for anisotropic inner core
     call permute_elements_real(muvstore,temp_array_real,perm,nspec)
-
     !  anisotropy in the inner core only
     if (ANISOTROPIC_INNER_CORE) then
       call permute_elements_real(c11store,temp_array_real,perm,nspec)

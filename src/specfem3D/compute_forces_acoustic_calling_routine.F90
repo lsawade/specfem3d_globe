@@ -45,9 +45,14 @@
 
   ! current simulated time
   if (USE_LDDRK) then
-    timeval = real((dble(it-1)*DT+dble(C_LDDRK(istage))*DT-t0)*scale_t_inv, kind=CUSTOM_REAL)
+    ! LDDRK
+    ! note: the LDDRK scheme updates displacement after the stiffness computations and
+    !       after adding boundary/coupling/source terms.
+    !       thus, at each time loop step it, displ(:) is still at (n) and not (n+1) like for the Newmark scheme
+    !       when entering this routine. we therefore at an additional -DT to have the corresponding timing for the source.
+    timeval = real((dble(it-1-1)*DT + dble(C_LDDRK(istage))*DT - t0)*scale_t_inv, kind=CUSTOM_REAL)
   else
-    timeval = real((dble(it-1)*DT-t0)*scale_t_inv, kind=CUSTOM_REAL)
+    timeval = real((dble(it-1)*DT - t0)*scale_t_inv, kind=CUSTOM_REAL)
   endif
 
   ! ****************************************************
@@ -152,6 +157,7 @@
                                      buffer_recv_scalar_outer_core,num_interfaces_outer_core, &
                                      max_nibool_interfaces_oc, &
                                      nibool_interfaces_outer_core,ibool_interfaces_outer_core, &
+                                     my_neighbors_outer_core, &
                                      request_send_scalar_oc,request_recv_scalar_oc)
         else
           ! on GPU
@@ -179,7 +185,6 @@
   enddo ! iphase
 
   ! multiply by the inverse of the mass matrix
-
   if (.not. GPU_MODE) then
     ! on CPU
     call multiply_accel_acoustic(NGLOB_OUTER_CORE,accel_outer_core,rmass_outer_core)
@@ -188,7 +193,6 @@
     ! includes FORWARD_OR_ADJOINT == 1
     call multiply_accel_acoustic_gpu(Mesh_pointer,1)
   endif
-
 
   ! time schemes
   if (USE_LDDRK) then
@@ -250,14 +254,24 @@
 
   ! current simulated time
   if (USE_LDDRK) then
-    b_timeval = real((dble(NSTEP-it_tmp)*DT-dble(C_LDDRK(istage))*DT-t0)*scale_t_inv, kind=CUSTOM_REAL)
+    ! LDDRK
+    ! note: the LDDRK scheme updates displacement after the stiffness computations and
+    !       after adding boundary/coupling/source terms.
+    !       thus, at each time loop step it, displ(:) is still at (n) and not (n+1) like for the Newmark scheme
+    !       when entering this routine. we therefore at an additional -DT to have the corresponding timing for the source.
+    if (UNDO_ATTENUATION) then
+      ! stepping moves forward from snapshot position
+      b_timeval = real((dble(NSTEP-it_tmp-1)*DT + dble(C_LDDRK(istage))*DT - t0)*scale_t_inv, kind=CUSTOM_REAL)
+    else
+      ! stepping backwards
+      b_timeval = real((dble(NSTEP-it_tmp-1)*DT - dble(C_LDDRK(istage))*DT - t0)*scale_t_inv, kind=CUSTOM_REAL)
+    endif
   else
-    b_timeval = real((dble(NSTEP-it_tmp)*DT-t0)*scale_t_inv, kind=CUSTOM_REAL)
+    b_timeval = real((dble(NSTEP-it_tmp)*DT - t0)*scale_t_inv, kind=CUSTOM_REAL)
   endif
 
   !debug
   !if (myrank == 0 ) print *,'compute_forces_acoustic_backward: it = ',it_tmp
-
 
   ! ****************************************************
   !   big loop over all spectral elements in the fluid
@@ -369,6 +383,7 @@
                                    b_buffer_recv_scalar_outer_core,num_interfaces_outer_core, &
                                    max_nibool_interfaces_oc, &
                                    nibool_interfaces_outer_core,ibool_interfaces_outer_core, &
+                                   my_neighbors_outer_core, &
                                    b_request_send_scalar_oc,b_request_recv_scalar_oc)
       else
         ! on GPU
@@ -420,7 +435,7 @@
 !
 
   subroutine compute_forces_outer_core(timeval,deltat,two_omega_earth, &
-                                       NSPEC,NGLOB, &
+                                       NSPEC_ROT,NGLOB, &
                                        A_array_rotation,B_array_rotation, &
                                        A_array_rotation_lddrk,B_array_rotation_lddrk, &
                                        displfluid,accelfluid, &
@@ -436,14 +451,14 @@
 
   implicit none
 
-  integer,intent(in) :: NSPEC,NGLOB
+  integer,intent(in) :: NSPEC_ROT,NGLOB
 
   ! for the Euler scheme for rotation
   real(kind=CUSTOM_REAL),intent(in) :: timeval,deltat,two_omega_earth
 
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC),intent(inout) :: &
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ROT),intent(inout) :: &
     A_array_rotation,B_array_rotation
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC),intent(inout) :: &
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_ROT),intent(inout) :: &
     A_array_rotation_lddrk,B_array_rotation_lddrk
 
   ! displacement and acceleration
@@ -460,7 +475,7 @@
   if (USE_DEVILLE_PRODUCTS_VAL) then
     ! uses Deville et al. (2002) routine
     call compute_forces_outer_core_Dev(timeval,deltat,two_omega_earth, &
-                                       NSPEC,NGLOB, &
+                                       NSPEC_ROT,NGLOB, &
                                        A_array_rotation,B_array_rotation, &
                                        A_array_rotation_lddrk,B_array_rotation_lddrk, &
                                        displfluid,accelfluid, &
@@ -468,7 +483,7 @@
   else
     ! div_displ_outer_core is initialized to zero in the following subroutine.
     call compute_forces_outer_core_noDev(timeval,deltat,two_omega_earth, &
-                                         NSPEC,NGLOB, &
+                                         NSPEC_ROT,NGLOB, &
                                          A_array_rotation,B_array_rotation, &
                                          A_array_rotation_lddrk,B_array_rotation_lddrk, &
                                          displfluid,accelfluid, &

@@ -20,47 +20,72 @@ env:
 
   matrix:
     # for test cases, we use
-    #   TEST    - flags used for configuration
-    #   TESTCOV - determines whether or not (0/1) code coverage flags are used
-    #   CUDA    - flag for compilation with CUDA
+    #   TESTID       - identification number for test
+    #   TESTDIR      - test directory id
+    #   TESTFLAGS    - flags used for configuration
+    #   TESTCOV      - determines whether or not (0/1) code coverage flags are used
+    #   CUDA         - flag for compilation with CUDA
     #   CUDA_VERSION - specifies CUDA toolkit version
 
     # code coverage: using coverage flags
-    - TESTMAKE=1 TESTCOV=1 TEST="" CUDA=false
+    - TESTID=1 TESTDIR=1 TESTCOV=1 TESTFLAGS="" CUDA=false
 
     # code coverage: vectorization & openmp, using coverage flags
-    - TESTMAKE=2 TESTCOV=1 TEST="--enable-vectorization" CUDA=false
+    - TESTID=2 TESTDIR=1 TESTCOV=1 TESTFLAGS="--enable-vectorization" CUDA=false
 
     # default test (with > make tests)
-    - TESTMAKE=0 TESTCOV=0 TEST="" CUDA=false
+    - TESTID=3 TESTDIR=0 TESTCOV=0 TESTFLAGS="" CUDA=false
 
     # regional example w/ default configuration
-    - TESTMAKE=1 TESTCOV=0 TEST="" CUDA=false
+    - TESTID=4 TESTDIR=1 TESTCOV=0 TESTFLAGS="" CUDA=false
 
     # regional example w/ vectorization
-    - TESTMAKE=1 TESTCOV=0 TEST="--enable-vectorization" CUDA=false
+    - TESTID=5 TESTDIR=1 TESTCOV=0 TESTFLAGS="--enable-vectorization" CUDA=false
 
     # regional example w/ vectorization & openmp
-    - TESTMAKE=1 TESTCOV=0 TEST="--enable-vectorization --enable-openmp" CUDA=false
+    - TESTID=6 TESTDIR=1 TESTCOV=0 TESTFLAGS="--enable-vectorization --enable-openmp" CUDA=false
 
     # regional example with debug bounds checking
-    - TESTMAKE=2 TESTCOV=0 TEST="--enable-debug" CUDA=false
+    - TESTID=7 TESTDIR=1 TESTCOV=0 TESTFLAGS="--enable-debug" CUDA=false
 
     # regional example with NGLL = 6
-    - TESTMAKE=3 TESTCOV=0 TEST="" CUDA=false
+    - TESTID=8 TESTDIR=1 TESTCOV=0 TESTFLAGS="" CUDA=false
 
     # globe_small example
-    - TESTMAKE=4 TESTCOV=0 TEST="--enable-vectorization" CUDA=false
+    - TESTID=9 TESTDIR=2 TESTCOV=0 TESTFLAGS="--enable-vectorization" CUDA=false
 
     # globe_small example with openmp
-    - TESTMAKE=4 TESTCOV=0 TEST="--enable-vectorization --enable-openmp" CUDA=false
+    - TESTID=10 TESTDIR=2 TESTCOV=0 TESTFLAGS="--enable-vectorization --enable-openmp" CUDA=false
 
     # point force example
-    - TESTMAKE=5 TESTCOV=0 TEST="" CUDA=false
+    - TESTID=11 TESTDIR=3 TESTCOV=0 TESTFLAGS="" CUDA=false
 
     # regular kernel example
-    - TESTMAKE=6 TESTCOV=0 TEST="--enable-vectorization" CUDA=false
+    - TESTID=12 TESTDIR=4 TESTCOV=0 TESTFLAGS="--enable-vectorization" CUDA=false
 
+    # global_sglobe
+    #- TESTID=13 TESTDIR=5 TESTCOV=0 TESTFLAGS="--enable-vectorization" CUDA=false
+
+    # global_full_sphericalharmonic_model
+    #- TESTID=14 TESTDIR=6 TESTCOV=0 TESTFLAGS="--enable-vectorization" CUDA=false
+
+    # regional s40rts compilation w/ CUDA
+    - TESTID=15 TESTDIR=7 TESTCOV=0 TESTFLAGS="--with-cuda=cuda5" CUDA=true CUDA_VERSION=6.5-14
+
+    # regional s40rts compilation w/ OpenCL (provided from CUDA library)
+    - TESTID=16 TESTDIR=7 TESTCOV=0 TESTFLAGS="--with-opencl" CUDA=true CUDA_VERSION=6.5-14 OPENCL=true
+
+    # regional_small_adjoint - pure adjoint example
+    #- TESTID=17 TESTDIR=8 TESTCOV=0 TESTFLAGS="" CUDA=false
+
+    # regional mars
+    - TESTID=18 TESTDIR=9 TESTCOV=0 TESTFLAGS="" CUDA=false
+
+    # regional moon
+    - TESTID=19 TESTDIR=10 TESTCOV=0 TESTFLAGS="" CUDA=false
+
+    # regional LDDRK
+    - TESTID=20 TESTDIR=11 TESTCOV=0 TESTFLAGS="--enable-vectorization" CUDA=false
 
 before_install:
   # informations on git
@@ -78,7 +103,11 @@ before_install:
   #- test -n $CC && unset CC
 
   # updates repository
-  - sudo apt-get update
+  - |
+    travis_retry sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B05F25D762E3157
+    travis_retry sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 78BD65473CB3BD13
+    travis_retry sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 762E3157
+    travis_retry sudo apt-get update
 
 
 install:

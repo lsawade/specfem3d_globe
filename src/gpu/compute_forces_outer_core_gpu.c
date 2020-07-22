@@ -140,9 +140,7 @@ void outer_core (int nb_blocks_to_compute, Mesh *mp,
     clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_wgllwgll_xz.ocl));
     clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_wgllwgll_yz.ocl));
     clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (int), (void *) &mp->gravity));
-    clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_rstore_outer_core.ocl));
-    clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_d_ln_density_dr_table.ocl));
-    clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_minus_rho_g_over_kappa_fluid.ocl));
+    clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_gravity_pre_store_outer_core.ocl));
     clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (cl_mem), (void *) &mp->d_wgll_cube.ocl));
     clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (int), (void *) &mp->rotation));
     clCheck (clSetKernelArg (*outer_core_kernel_p, idx++, sizeof (realw), (void *) &timeval));
@@ -203,9 +201,7 @@ void outer_core (int nb_blocks_to_compute, Mesh *mp,
                                                                mp->d_hprimewgll_xx.cuda,
                                                                mp->d_wgllwgll_xy.cuda,mp->d_wgllwgll_xz.cuda,mp->d_wgllwgll_yz.cuda,
                                                                mp->gravity,
-                                                               mp->d_rstore_outer_core.cuda,
-                                                               mp->d_d_ln_density_dr_table.cuda,
-                                                               mp->d_minus_rho_g_over_kappa_fluid.cuda,
+                                                               mp->d_gravity_pre_store_outer_core.cuda,
                                                                mp->d_wgll_cube.cuda,
                                                                mp->rotation,
                                                                timeval,
@@ -287,9 +283,7 @@ void FC_FUNC_ (compute_forces_outer_core_gpu,
         offset_nonpadded = mp->nspec_outer_outer_core * NGLL3;
       }
     } else {
-
       // poor element count, only use 1 color per inner/outer run
-
       if (*iphase == 1) {
         // outer elements
         nb_colors = 1;
@@ -321,6 +315,10 @@ void FC_FUNC_ (compute_forces_outer_core_gpu,
         nb_blocks_to_compute = num_elements;
       }
 
+      // debug
+      //printf("debug: compute_forces_outer_core_gpu - iphase %d color %d out of %d, nspec elements %d, offset %d, offset_nonpadded % d, blocks %d\n",
+      //       *iphase,icolor,nb_colors,mp->NSPEC_OUTER_CORE,offset,offset_nonpadded,nb_blocks_to_compute);
+
       INITIALIZE_OFFSET();
 
       //create cl_mem object _buffer + _ + _offset
@@ -338,6 +336,12 @@ void FC_FUNC_ (compute_forces_outer_core_gpu,
       INIT_OFFSET(d_B_array_rotation, offset_nonpadded);
       INIT_OFFSET(d_b_A_array_rotation, offset_nonpadded);
       INIT_OFFSET(d_b_B_array_rotation, offset_nonpadded);
+
+      // debug
+      //gpu_int_mem my_buffer = mp->d_ibool_outer_core;
+      //my_buffer.cuda = my_buffer.cuda + offset_nonpadded;
+      //printf("debug: d_ibool_outer_core %p offset_buffer %p my_buffer %p \n",
+      //       (void *) mp->d_ibool_outer_core.cuda, (void *) d_ibool_outer_core_offset_nonpadded.cuda, (void*) my_buffer.cuda);
 
       outer_core (nb_blocks_to_compute, mp,
                   *iphase,
