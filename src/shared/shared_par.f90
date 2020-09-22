@@ -75,6 +75,9 @@
   ! sources
   logical :: USE_FORCE_POINT_SOURCE
   logical :: USE_RICKER_TIME_FUNCTION,PRINT_SOURCE_TIME_FUNCTION
+  logical :: USE_SOURCE_DERIVATIVE
+  integer :: USE_SOURCE_DERIVATIVE_DIRECTION
+
 
   ! checkpointing/restart
   integer :: NUMBER_OF_RUNS,NUMBER_OF_THIS_RUN

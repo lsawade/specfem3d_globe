@@ -13,10 +13,10 @@ SAVE_FORWARD                    = .false.   # save last frame of forward simulat
 NCHUNKS                         = 1
 
 # angular width of the first chunk (not used if full sphere with six chunks)
-ANGULAR_WIDTH_XI_IN_DEGREES     = 20.d0   # angular size of a chunk
-ANGULAR_WIDTH_ETA_IN_DEGREES    = 20.d0
-CENTER_LATITUDE_IN_DEGREES      = 40.d0
-CENTER_LONGITUDE_IN_DEGREES     = 25.d0
+ANGULAR_WIDTH_XI_IN_DEGREES     = 60.d0   # angular size of a chunk
+ANGULAR_WIDTH_ETA_IN_DEGREES    = 60.d0
+CENTER_LATITUDE_IN_DEGREES      = 90.d0
+CENTER_LONGITUDE_IN_DEGREES     = 0.d0
 GAMMA_ROTATION_AZIMUTH          = 0.d0
 
 # number of elements at the surface along the two sides of the first chunk
@@ -25,8 +25,8 @@ NEX_XI                          = 64
 NEX_ETA                         = 64
 
 # number of MPI processors along the two sides of the first chunk
-NPROC_XI                        = 2
-NPROC_ETA                       = 2
+NPROC_XI                        = 1
+NPROC_ETA                       = 1
 
 #-----------------------------------------------------------
 #
@@ -77,12 +77,12 @@ ATTENUATION                     = .true.
 ABSORBING_CONDITIONS            = .true.
 
 # record length in minutes
-RECORD_LENGTH_IN_MINUTES        = 2.5d0
+RECORD_LENGTH_IN_MINUTES        = 20.0d0
 
 # to undo attenuation for sensitivity kernel calculations or forward runs with SAVE_FORWARD
 # use one (and only one) of the two flags below. UNDO_ATTENUATION is much better (it is exact)
 # but requires a significant amount of disk space for temporary storage.
-PARTIAL_PHYS_DISPERSION_ONLY    = .true.
+PARTIAL_PHYS_DISPERSION_ONLY    = .false.
 UNDO_ATTENUATION                = .false.
 # How much memory (in GB) is installed on your machine per CPU core (only used for UNDO_ATTENUATION, can be ignored otherwise)
 #         (or per GPU card or per INTEL MIC Phi board)
@@ -189,6 +189,11 @@ NTSTEP_BETWEEN_OUTPUT_INFO      = 500
 #
 #-----------------------------------------------------------
 
+# Compute derivate of the force/or the moment tensor 
+# with respect to ["depth", "latitude", "longitude"] -- [1,2,3]
+USE_SOURCE_DERIVATIVE = .false.
+USE_SOURCE_DERIVATIVE_DIRECTION = 1
+
 # interval in time steps for temporary writing of seismograms
 NTSTEP_BETWEEN_OUTPUT_SEISMOS   = 5000000
 NTSTEP_BETWEEN_READ_ADJSRC      = 1000
@@ -217,9 +222,9 @@ SAVE_SEISMOGRAMS_STRAIN         = .false.
 SAVE_SEISMOGRAMS_IN_ADJOINT_RUN = .false.
 
 # output format for the seismograms (one can use either or all of the three formats)
-OUTPUT_SEISMOS_ASCII_TEXT       = .true.
+OUTPUT_SEISMOS_ASCII_TEXT       = .false.
 OUTPUT_SEISMOS_SAC_ALPHANUM     = .false.
-OUTPUT_SEISMOS_SAC_BINARY       = .false.
+OUTPUT_SEISMOS_SAC_BINARY       = .true.
 OUTPUT_SEISMOS_ASDF             = .false.
 
 # rotate seismograms to Radial-Transverse-Z or use default North-East-Z reference frame
@@ -331,12 +336,12 @@ BROADCAST_SAME_MESH_AND_MODEL   = .false.
 #-----------------------------------------------------------
 
 # set to true to use GPUs
-GPU_MODE                        = .false.
+GPU_MODE                        = .True.
 # Only used if GPU_MODE = .true. :
 GPU_RUNTIME                     = 1
 # 2 (OpenCL), 1 (Cuda) ou 0 (Compile-time -- does not work if configured with --with-cuda *AND* --with-opencl)
 GPU_PLATFORM                    = NVIDIA
-GPU_DEVICE                      = Tesla
+GPU_DEVICE                      = *
 
 # set to true to use the ADIOS library for I/Os
 ADIOS_ENABLED                   = .false.

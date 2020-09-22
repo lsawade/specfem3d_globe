@@ -34,10 +34,10 @@
 
   ! local parameters
   ! broadcast parameter arrays
-  integer, parameter :: nparam_i = 47
+  integer, parameter :: nparam_i = 48
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 67
+  integer, parameter :: nparam_l = 68
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 38
@@ -75,7 +75,8 @@
             NOISE_TOMOGRAPHY, &
             ATT1,ATT2,ATT3,ATT4,ATT5, &
             GPU_RUNTIME,NUMBER_OF_SIMULTANEOUS_RUNS, &
-            MODEL_GLL_TYPE,USER_NSTEP /)
+            MODEL_GLL_TYPE,USER_NSTEP, &
+            USE_SOURCE_DERIVATIVE_DIRECTION /)
 
     bcast_logical = (/ &
             TRANSVERSE_ISOTROPY,ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE, &
@@ -104,7 +105,8 @@
             ADIOS_FOR_MPI_ARRAYS,ADIOS_FOR_ARRAYS_SOLVER, &
             ADIOS_FOR_SOLVER_MESHFILES,ADIOS_FOR_AVS_DX, &
             ADIOS_FOR_KERNELS,ADIOS_FOR_MODELS,ADIOS_FOR_UNDO_ATTENUATION, &
-            CEM_REQUEST,CEM_ACCEPT,BROADCAST_SAME_MESH_AND_MODEL,MODEL_GLL /)
+            CEM_REQUEST,CEM_ACCEPT,BROADCAST_SAME_MESH_AND_MODEL,MODEL_GLL, &
+            USE_SOURCE_DERIVATIVE /)
 
     bcast_double_precision = (/ &
             DT, &
@@ -240,6 +242,7 @@
     NUMBER_OF_SIMULTANEOUS_RUNS = bcast_integer(45)
     MODEL_GLL_TYPE  = bcast_integer(46)
     USER_NSTEP = bcast_integer(47)
+    USE_SOURCE_DERIVATIVE_DIRECTION = bcast_integer(48)
 
     ! logicals
     TRANSVERSE_ISOTROPY = bcast_logical(1)
@@ -309,6 +312,7 @@
     CEM_ACCEPT = bcast_logical(65)
     BROADCAST_SAME_MESH_AND_MODEL = bcast_logical(66)
     MODEL_GLL = bcast_logical(67)
+    USE_SOURCE_DERIVATIVE = bcast_logical(68)
 
     ! double precisions
     DT = bcast_double_precision(1)

@@ -135,6 +135,69 @@
 !=======================================================================
 !
 
+!=======================================================================
+! 
+! Subroutine to compute the second derivative of the lagrange polynomials
+! This is used in the computation of the moment derivative source
+! 
+!-----------------------------------------------------------------------
+! 
+! This is simply the 2nd order derivative of the lagrange polynomial 
+! 
+!-----------------------------------------------------------------------
+
+double precision function lagrange_2prime(xi, NGLL, xigll, h2prime)
+
+  ! Input
+  double precision,intent(in) :: xi
+  integer,intent(in) :: NGLL
+  double precision,dimension(NGLL),intent(in) :: xigll
+
+  ! Output
+  double precision,dimension(NGLL),intent(out) :: h2prime
+
+  ! Local Parameters
+  double precision :: sum_l, sum_m
+  double precision :: fac1, fac2
+  double precision :: num, den, prod
+
+  integer :: i, k, l, m
+
+  do i = 1, NGLL
+    sum_l = 0.0d0
+    do l = 1, NGLL
+      if (l /= i) then
+        fac1 = 1.0d0 
+        fac1 = fac1 / (xigll(i)-xigll(l))
+        sum_m = 0.0d0
+        do m = 1, NGLL
+          if ((m /= i) .and. (m /= l)) then
+            fac2 = 1.0d0
+            fac2 = fac2 / (xigll(i)-xigll(m))
+            num = 1.0d0
+            den = 1.0d0
+            do k = 1, NGLL
+              if ((k /= i) .and. (k /= l) .and. (k /= m)) then
+                num = num * (xi - xigll(k))
+                den = den * (xigll(i)-xigll(k))
+              endif
+            enddo
+            prod = num / den
+            sum_m = sum_m + (fac2 * prod)
+          endif
+        enddo  
+        sum_l = sum_l + (fac1 * sum_m)
+      endif
+    enddo
+    h2prime(i) = sum_l;
+  enddo
+
+  
+
+end function lagrange_2prime
+
+!=======================================================================
+
 !! routines not used yet, but for reference....
 
 !  double precision function hgll(I,Z,ZGLL,NZ)

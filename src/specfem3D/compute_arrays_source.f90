@@ -141,6 +141,244 @@
 
 !================================================================
 
+  subroutine compute_arrays_source_derivative(sourcearray, &
+                                   xi_source,eta_source,gamma_source, &
+                                   Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
+                                   xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz, &
+                                   xigll,yigll,zigll, &
+                                   direction, theta, phi, depth)
+
+  use constants
+  implicit none
+
+  real(kind=CUSTOM_REAL), dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearray
+
+  double precision :: xi_source,eta_source,gamma_source
+  double precision :: Mxx,Myy,Mzz,Mxy,Mxz,Myz
+
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: xix,xiy,xiz,etax,etay,etaz, &
+        gammax,gammay,gammaz
+
+  ! Gauss-Lobatto-Legendre points of integration and weights
+  double precision, dimension(NGLLX) :: xigll
+  double precision, dimension(NGLLY) :: yigll
+  double precision, dimension(NGLLZ) :: zigll
+
+  ! local parameters
+  double precision :: xixd,xiyd,xizd,etaxd,etayd,etazd,gammaxd,gammayd,gammazd
+
+  ! source arrays
+  double precision, dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearrayd
+  double precision, dimension(NGLLX) :: hxis,hpxis,hppxis
+  double precision, dimension(NGLLY) :: hetas,hpetas,hppetas
+  double precision, dimension(NGLLZ) :: hgammas,hpgammas,hppgammas
+
+  double precision :: hlagrange
+  double precision :: dxis_dx, detas_dx, dgammas_dx
+  double precision :: dxis_dy, detas_dy, dgammas_dy
+  double precision :: dxis_dz, detas_dz, dgammas_dz
+  double precision :: d2src_dxi2, d2src_deta2, d2src_dgamma2
+  double precision :: d2src_dxideta
+  double precision :: d2src_dxidgamma
+  double precision :: d2src_detadgamma
+  double precision :: d2src_dx2, d2src_dy2, d2src_dz2 
+  double precision :: d2src_dxy, d2src_dxz, d2src_dyz
+  double precision :: fx, fxx, fy, fyy, fz, fzz
+  double precision :: fyx, fzx, fxy, fzy, fxz, fyz
+  double precision :: fac_x, fac_y, fac_z
+  double precision :: theta, phi, depth
+  double precision :: sint, cost, sinp, cosp
+  double precision :: grr_inv, gtt_inv, gpp_inv
+
+  integer :: k,l,m
+  integer :: direction
+
+! compute Lagrange polynomials at the source location
+! the source does not necessarily correspond to a Gauss-Lobatto point
+  call lagrange_any(xi_source,NGLLX,xigll,hxis,hpxis)
+  call lagrange_any(eta_source,NGLLY,yigll,hetas,hpetas)
+  call lagrange_any(gamma_source,NGLLZ,zigll,hgammas,hpgammas)
+  call lagrange_2prime(xi_source,NGLLX,xigll,hppxis)
+  call lagrange_2prime(eta_source,NGLLY,yigll,hppetas)
+  call lagrange_2prime(gamma_source,NGLLZ,zigll,hppgammas)
+
+  sourcearrayd(:,:,:,:) = sourcearray(:,:,:,:)
+
+  dxis_dx = ZERO
+  dxis_dy = ZERO
+  dxis_dz = ZERO
+  detas_dx = ZERO
+  detas_dy = ZERO
+  detas_dz = ZERO
+  dgammas_dx = ZERO
+  dgammas_dy = ZERO
+  dgammas_dz = ZERO
+
+  do m = 1,NGLLZ
+     do l = 1,NGLLY
+        do k = 1,NGLLX
+
+           xixd    = dble(xix(k,l,m))
+           xiyd    = dble(xiy(k,l,m))
+           xizd    = dble(xiz(k,l,m))
+           etaxd   = dble(etax(k,l,m))
+           etayd   = dble(etay(k,l,m))
+           etazd   = dble(etaz(k,l,m))
+           gammaxd = dble(gammax(k,l,m))
+           gammayd = dble(gammay(k,l,m))
+           gammazd = dble(gammaz(k,l,m))
+
+           hlagrange = hxis(k) * hetas(l) * hgammas(m)
+
+           dxis_dx = dxis_dx + hlagrange * xixd
+           dxis_dy = dxis_dy + hlagrange * xiyd
+           dxis_dz = dxis_dz + hlagrange * xizd
+
+           detas_dx = detas_dx + hlagrange * etaxd
+           detas_dy = detas_dy + hlagrange * etayd
+           detas_dz = detas_dz + hlagrange * etazd
+
+           dgammas_dx = dgammas_dx + hlagrange * gammaxd
+           dgammas_dy = dgammas_dy + hlagrange * gammayd
+           dgammas_dz = dgammas_dz + hlagrange * gammazd
+
+       enddo
+     enddo
+  enddo
+
+  do m = 1,NGLLZ
+    do l = 1,NGLLY
+      do k = 1,NGLLX
+
+        ! Natural derivative of source location
+        d2src_dxi2 = hppxis(k) * hetas(l) * hgammas(m) 
+        d2src_deta2 = hxis(k) * hppetas(l) * hgammas(m) 
+        d2src_dgamma2 = hxis(k) * hetas(l) * hppgammas(m) 
+        d2src_dxideta = hpxis(k) * hpetas(l) * hgammas(m)
+        d2src_dxidgamma = hpxis(k) * hetas(l) * hpgammas(m) 
+        d2src_detadgamma = hxis(k) * hpetas(l) * hpgammas(m)
+
+        ! Real derivatives
+        d2src_dx2 = d2src_dxi2 * dxis_dx * dxis_dx + &
+                    d2src_deta2 * detas_dx * detas_dx + &
+                    d2src_dgamma2 * dgammas_dx * dgammas_dx + &
+                    2.d0 * d2src_dxideta * detas_dx * dxis_dx + &
+                    2.d0 * d2src_dxidgamma * dgammas_dx * dxis_dx + &
+                    2.d0 * d2src_detadgamma * dgammas_dx * detas_dx
+        d2src_dy2 = d2src_dxi2 * dxis_dy * dxis_dy + &
+                    d2src_deta2 * detas_dy * detas_dy + &
+                    d2src_dgamma2 * dgammas_dy * dgammas_dy + &
+                    2.d0 * d2src_dxideta * detas_dy * dxis_dy + &
+                    2.d0 * d2src_dxidgamma * dgammas_dy * dxis_dy + &
+                    2.d0 * d2src_detadgamma * dgammas_dy * detas_dy
+        d2src_dz2 = d2src_dxi2 * dxis_dz * dxis_dz + &
+                    d2src_deta2 * detas_dz * detas_dz + &
+                    d2src_dgamma2 * dgammas_dz * dgammas_dz + &
+                    2.d0 * d2src_dxideta * detas_dz * dxis_dz + &
+                    2.d0 * d2src_dxidgamma * dgammas_dz * dxis_dz + &
+                    2.d0 * d2src_detadgamma * dgammas_dz * detas_dz
+        d2src_dxy = d2src_dxi2 * dxis_dx * dxis_dy + &
+                    d2src_deta2 * detas_dx * detas_dy + &
+                    d2src_dgamma2 * dgammas_dx * dgammas_dy + &
+                    d2src_dxideta * detas_dy * dxis_dx + &
+                    d2src_dxideta * detas_dx * dxis_dy + &
+                    d2src_dxidgamma * dgammas_dy * dxis_dx + &
+                    d2src_dxidgamma * dgammas_dx * dxis_dy + &
+                    d2src_detadgamma * dgammas_dy * detas_dx + &
+                    d2src_detadgamma * dgammas_dx * detas_dy
+        d2src_dxz = d2src_dxi2 * dxis_dx * dxis_dz + &
+                    d2src_deta2 * detas_dx * detas_dz + &
+                    d2src_dgamma2 * dgammas_dx * dgammas_dz + &
+                    d2src_dxideta * detas_dz * dxis_dx + &
+                    d2src_dxideta * detas_dx * dxis_dz + &
+                    d2src_dxidgamma * dgammas_dz * dxis_dx + &
+                    d2src_dxidgamma * dgammas_dx * dxis_dz + &
+                    d2src_detadgamma * dgammas_dz * detas_dx + &
+                    d2src_detadgamma * dgammas_dx * detas_dz
+        d2src_dyz = d2src_dxi2 * dxis_dy * dxis_dz + &
+                    d2src_deta2 * detas_dy * detas_dz + &
+                    d2src_dgamma2 * dgammas_dy * dgammas_dz + &
+                    d2src_dxideta * detas_dz * dxis_dy + &
+                    d2src_dxideta * detas_dy * dxis_dz + &
+                    d2src_dxidgamma * dgammas_dz * dxis_dy + &
+                    d2src_dxidgamma * dgammas_dy * dxis_dz + &
+                    d2src_detadgamma * dgammas_dz * detas_dy + &
+                    d2src_detadgamma * dgammas_dy * detas_dz
+        
+
+        
+        ! With respect to x
+        fxx = (Mxx * d2src_dx2 + Mxy * d2src_dxy + Mxz * d2src_dxz)
+        fyx = (Mxy * d2src_dx2 + Myy * d2src_dxy + Myz * d2src_dxz)
+        fzx = (Mxz * d2src_dx2 + Myz * d2src_dxy + Mzz * d2src_dxz)
+          
+        ! With respect to y
+        fxy = (Mxx * d2src_dxy + Mxy * d2src_dy2 + Mxz * d2src_dyz)
+        fyy = (Mxy * d2src_dxy + Myy * d2src_dy2 + Myz * d2src_dyz)
+        fzy = (Mxz * d2src_dxy + Myz * d2src_dy2 + Mzz * d2src_dyz)
+
+        ! With respect to z
+        fxz = (Mxx * d2src_dxz + Mxy * d2src_dyz + Mxz * d2src_dz2)
+        fyz = (Mxy * d2src_dxz + Myy * d2src_dyz + Myz * d2src_dz2)
+        fzz = (Mxz * d2src_dxz + Myz * d2src_dyz + Mzz * d2src_dz2)
+
+        ! Compute rotation factors
+        ! note cos(theta) = sin(90 - theta)
+        ! This is important since we want the derivative with respect to 
+        ! the latitude
+        if (m == 1 .AND. l == 1 .AND. k == 1) then
+            print *, 'depth: ', depth
+            print *, 'phi:   ', phi
+            print *, 'theta: ', theta
+        endif
+
+        !dthetadlambda = 
+
+        sint = sin(theta)
+        cost = cos(theta)
+        sinp = sin(phi)
+        cosp = cos(phi)
+        grr_inv = ONE
+        gtt_inv = ONE   
+        gpp_inv = ONE / sint
+        if (direction == 1) then
+            fac_x = -1.d0 * sint * cosp
+            fac_y = -1.d0 * sint * sinp
+            fac_z = -1.d0 * cost
+        else if (direction == 2) then
+            fac_x = -1.d0 * cost * cosp / depth
+            fac_y = -1.d0 * cost * sinp / depth
+            fac_z =  1.d0 * sint / depth
+        else if (direction == 3) then
+            fac_x = -1.d0 * sint * sinp / depth
+            fac_y = sint * cosp  / depth
+            fac_z = 0.d0 / depth
+        else 
+            stop "Wrong direction. Should 1 for depth, 2 for lat, 3 for lon."
+        endif
+        
+        ! Rotate
+        
+        fx = ONE / EARTH_R_KM * (fxx * fac_x + fxy * fac_y + fxz * fac_z)
+        fy = ONE / EARTH_R_KM * (fyx * fac_x + fyy * fac_y + fyz * fac_z)
+        fz = ONE / EARTH_R_KM * (fzx * fac_x + fzy * fac_y + fzz * fac_z)
+
+        ! Add to sourcearray
+        sourcearrayd(1,k,l,m) = sourcearrayd(1,k,l,m) + fx
+        sourcearrayd(2,k,l,m) = sourcearrayd(2,k,l,m) + fy
+        sourcearrayd(3,k,l,m) = sourcearrayd(3,k,l,m) + fz
+
+      enddo
+    enddo
+  enddo
+
+  ! distinguish between single and double precision for reals
+  sourcearray(:,:,:,:) = real(sourcearrayd(:,:,:,:), kind=CUSTOM_REAL)
+
+  end subroutine compute_arrays_source_derivative
+
+!================================================================
+
   subroutine compute_arrays_source_adjoint(myrank, adj_source_file, &
                                            nu,source_adjoint, &
                                            NSTEP_BLOCK,iadjsrc,it_sub_adj,NSTEP_SUB_ADJ, &

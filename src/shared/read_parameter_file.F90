@@ -190,6 +190,12 @@
   call read_value_logical(USE_FORCE_POINT_SOURCE, 'USE_FORCE_POINT_SOURCE', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_FORCE_POINT_SOURCE'
 
+  ! Check whether the moment tensor derivate source is to be computed
+  call read_value_logical(USE_SOURCE_DERIVATIVE, 'USE_SOURCE_DERIVATIVE', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE'
+  call read_value_integer(USE_SOURCE_DERIVATIVE_DIRECTION, 'USE_SOURCE_DERIVATIVE_DIRECTION', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE_DIRECTION'
+
   ! option to save strain seismograms
   call read_value_logical(SAVE_SEISMOGRAMS_STRAIN, 'SAVE_SEISMOGRAMS_STRAIN', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: SAVE_SEISMOGRAMS_STRAIN'

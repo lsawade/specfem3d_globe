@@ -91,6 +91,7 @@
               accel_crust_mantle(2,iglob) = accel_crust_mantle(2,iglob) + sourcearrays(2,i,j,k,isource)*stf_used
 !$OMP ATOMIC
               accel_crust_mantle(3,iglob) = accel_crust_mantle(3,iglob) + sourcearrays(3,i,j,k,isource)*stf_used
+
             enddo
           enddo
         enddo

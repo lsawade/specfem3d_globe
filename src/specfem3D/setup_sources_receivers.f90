@@ -28,7 +28,7 @@
   subroutine setup_sources_receivers()
 
   use specfem_par, only: myrank,IMAIN,NSOURCES,NSTEP, &
-    theta_source,phi_source, &
+    theta_source,phi_source,depth_source, &
     TOPOGRAPHY,ibathy_topo, &
     USE_DISTANCE_CRITERION,xyz_midpoints,xadj,adjncy
 
@@ -65,7 +65,7 @@
   call synchronize_all()
 
   ! frees arrays
-  deallocate(theta_source,phi_source)
+  deallocate(theta_source,phi_source,depth_source)
 
   ! topography array no more needed
   if (TOPOGRAPHY) then
@@ -677,7 +677,8 @@
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating source arrays')
 
   allocate(theta_source(NSOURCES), &
-           phi_source(NSOURCES),stat=ier)
+           phi_source(NSOURCES), &
+           depth_source(NSOURCES),stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating source arrays')
 
   allocate(nu_source(NDIM,NDIM,NSOURCES),stat=ier)
@@ -1442,6 +1443,7 @@
   double precision, dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearrayd
 
   double precision :: xi,eta,gamma
+  double precision :: phi, theta, depth
   double precision :: hlagrange
   double precision :: norm
 
@@ -1469,6 +1471,11 @@
       eta = eta_source(isource)
       gamma = gamma_source(isource)
 
+      ! gets source location in terms of theta and phi
+      phi = phi_source(isource)
+      theta = theta_source(isource)
+      depth = depth_source(isource)
+      
 !      ! pre-computes source contribution on GLL points
 !      call compute_arrays_source(sourcearray,xi,eta,gamma, &
 !                          Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource),Mxz(isource),Myz(isource), &
@@ -1552,7 +1559,26 @@
 
       else ! use of CMTSOLUTION files
 
-        call compute_arrays_source(sourcearray,xi,eta,gamma, &
+        if (USE_SOURCE_DERIVATIVE) then
+          call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
+                          Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
+                          Mxz(isource),Myz(isource), &
+                          xix_crust_mantle(:,:,:,ispec), &
+                          xiy_crust_mantle(:,:,:,ispec), &
+                          xiz_crust_mantle(:,:,:,ispec), &
+                          etax_crust_mantle(:,:,:,ispec), &
+                          etay_crust_mantle(:,:,:,ispec), &
+                          etaz_crust_mantle(:,:,:,ispec), &
+                          gammax_crust_mantle(:,:,:,ispec), &
+                          gammay_crust_mantle(:,:,:,ispec), &
+                          gammaz_crust_mantle(:,:,:,ispec), &
+                          xigll,yigll,zigll, &
+                          USE_SOURCE_DERIVATIVE_DIRECTION, &
+                          theta, phi, depth)
+
+        else
+
+          call compute_arrays_source(sourcearray,xi,eta,gamma, &
                           Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
                           Mxz(isource),Myz(isource), &
                           xix_crust_mantle(:,:,:,ispec), &
@@ -1565,6 +1591,8 @@
                           gammay_crust_mantle(:,:,:,ispec), &
                           gammaz_crust_mantle(:,:,:,ispec), &
                           xigll,yigll,zigll)
+        
+        endif
 
       endif
 
@@ -1573,7 +1601,7 @@
 
     endif
   enddo
-
+  
   end subroutine setup_sources_receivers_srcarr
 
 !
