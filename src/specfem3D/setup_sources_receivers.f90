@@ -1475,6 +1475,11 @@
       phi = phi_source(isource)
       theta = theta_source(isource)
       depth = depth_source(isource)
+
+      print *, 'depth_source: ', depth_source
+      print *, 'phi_source: ', phi_source
+      print *, 'theta_source: ', theta_source
+      
       
 !      ! pre-computes source contribution on GLL points
 !      call compute_arrays_source(sourcearray,xi,eta,gamma, &
@@ -1559,8 +1564,13 @@
 
       else ! use of CMTSOLUTION files
 
-        if (USE_SOURCE_DERIVATIVE) then
-          call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
+         if (USE_SOURCE_DERIVATIVE) then
+
+         
+            print *, 'depth: ', depth
+            print *, 'phi: ', phi
+            print *, 'theta: ', theta
+            call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
                           Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
                           Mxz(isource),Myz(isource), &
                           xix_crust_mantle(:,:,:,ispec), &

@@ -327,13 +327,12 @@
         ! This is important since we want the derivative with respect to 
         ! the latitude
         if (m == 1 .AND. l == 1 .AND. k == 1) then
-            print *, 'depth: ', depth
-            print *, 'phi:   ', phi
-            print *, 'theta: ', theta
+             print *, 'depth: ', depth
+             print *, 'phi:   ', phi
+             print *, 'theta: ', theta
         endif
-
         !dthetadlambda = 
-
+        ! thetaprime = 
         sint = sin(theta)
         cost = cos(theta)
         sinp = sin(phi)
@@ -342,26 +341,25 @@
         gtt_inv = ONE   
         gpp_inv = ONE / sint
         if (direction == 1) then
-            fac_x = -1.d0 * sint * cosp
-            fac_y = -1.d0 * sint * sinp
-            fac_z = -1.d0 * cost
+            fac_x = -1.d0 * sint * cosp / EARTH_R_KM
+            fac_y = -1.d0 * sint * sinp / EARTH_R_KM
+            fac_z = -1.d0 * cost / EARTH_R_KM
         else if (direction == 2) then
-            fac_x = -1.d0 * cost * cosp / depth
-            fac_y = -1.d0 * cost * sinp / depth
-            fac_z =  1.d0 * sint / depth
+            fac_x = -1.d0 * cost * cosp * depth * DEGREES_TO_RADIANS
+            fac_y = -1.d0 * cost * sinp * depth * DEGREES_TO_RADIANS
+            fac_z =  1.d0 * sint * depth * DEGREES_TO_RADIANS
         else if (direction == 3) then
-            fac_x = -1.d0 * sint * sinp / depth
-            fac_y = sint * cosp  / depth
-            fac_z = 0.d0 / depth
+            fac_x = -1.d0 * sint * sinp * depth * DEGREES_TO_RADIANS
+            fac_y = sint * cosp  * depth * DEGREES_TO_RADIANS
+            fac_z = 0.d0 * depth * DEGREES_TO_RADIANS
         else 
             stop "Wrong direction. Should 1 for depth, 2 for lat, 3 for lon."
         endif
         
         ! Rotate
-        
-        fx = ONE / EARTH_R_KM * (fxx * fac_x + fxy * fac_y + fxz * fac_z)
-        fy = ONE / EARTH_R_KM * (fyx * fac_x + fyy * fac_y + fyz * fac_z)
-        fz = ONE / EARTH_R_KM * (fzx * fac_x + fzy * fac_y + fzz * fac_z)
+        fx = (fxx * fac_x + fxy * fac_y + fxz * fac_z)
+        fy = (fyx * fac_x + fyy * fac_y + fyz * fac_z)
+        fz = (fzx * fac_x + fzy * fac_y + fzz * fac_z)
 
         ! Add to sourcearray
         sourcearrayd(1,k,l,m) = sourcearrayd(1,k,l,m) + fx
