@@ -39,13 +39,8 @@
   implicit none
 
   ! local parameters
-  integer :: ier
+  !integer :: ier
   real :: free_mb,used_mb,total_mb
-  ! dummy CUSTOM_REAL variables to convert from double precision
-  real(kind=CUSTOM_REAL),dimension(:),allocatable:: &
-    cr_d_ln_density_dr_table,cr_minus_rho_g_over_kappa_fluid, &
-    cr_minus_gravity_table,cr_minus_deriv_gravity_table, &
-    cr_density_table
   logical :: USE_3D_ATTENUATION_ARRAYS
   real(kind=CUSTOM_REAL) :: dummy
 
@@ -73,11 +68,9 @@
   call prepare_constants_device(Mesh_pointer,myrank,NGLLX, &
                                 hprime_xx,hprimewgll_xx, &
                                 wgllwgll_xy,wgllwgll_xz,wgllwgll_yz, &
-                                NSOURCES, nsources_local, &
-                                sourcearrays, &
+                                NSOURCES, nsources_local, sourcearrays, &
                                 islice_selected_source,ispec_selected_source, &
-                                nrec, nrec_local, nadj_rec_local, &
-                                number_receiver_global, &
+                                nrec, nrec_local, number_receiver_global, &
                                 islice_selected_rec,ispec_selected_rec, &
                                 NSPEC_CRUST_MANTLE,NGLOB_CRUST_MANTLE, &
                                 NSPEC_CRUST_MANTLE_STRAIN_ONLY, &
@@ -93,13 +86,24 @@
                                 PARTIAL_PHYS_DISPERSION_ONLY,USE_3D_ATTENUATION_ARRAYS, &
                                 COMPUTE_AND_STORE_STRAIN, &
                                 ANISOTROPIC_3D_MANTLE_VAL,ANISOTROPIC_INNER_CORE_VAL, &
-                                SAVE_BOUNDARY_MESH, &
+                                SAVE_KERNELS_OC, &
+                                SAVE_KERNELS_IC, &
+                                SAVE_KERNELS_BOUNDARY, &
                                 USE_MESH_COLORING_GPU, &
                                 ANISOTROPIC_KL,APPROXIMATE_HESS_KL, &
-                                deltat,b_deltat, &
+                                deltat, &
                                 GPU_ASYNC_COPY, &
-                                hxir_store,hetar_store,hgammar_store,nu)
+                                hxir_store,hetar_store,hgammar_store,nu_rec, &
+                                SAVE_SEISMOGRAMS_STRAIN)
+
+  if (SIMULATION_TYPE == 2 .or. SIMULATION_TYPE == 3) then
+    ! adjoint/kernel fields
+    call prepare_constants_adjoint_device(Mesh_pointer,b_deltat, &
+                                          nadj_rec_local,number_adjsources_global, &
+                                          hxir_adjstore,hetar_adjstore,hgammar_adjstore)
+  endif
   call synchronize_all()
+
 
   ! prepares rotation arrays
   if (ROTATION_VAL) then
@@ -136,37 +140,17 @@
   endif
   call synchronize_all()
 
-  allocate(cr_d_ln_density_dr_table(NRAD_GRAVITY), &
-           cr_minus_rho_g_over_kappa_fluid(NRAD_GRAVITY), &
-           cr_minus_gravity_table(NRAD_GRAVITY), &
-           cr_minus_deriv_gravity_table(NRAD_GRAVITY), &
-           cr_density_table(NRAD_GRAVITY), &
-           stat=ier)
-  if (ier /= 0 ) stop 'Error allocating cr_minus_rho_g_over_kappa_fluid, etc...'
-
-  ! d_ln_density_dr_table needed for no gravity case
-  cr_d_ln_density_dr_table(:) = real(d_ln_density_dr_table(:), kind=CUSTOM_REAL)
-  ! these are needed for gravity cases only
-  cr_minus_rho_g_over_kappa_fluid(:) = real(minus_rho_g_over_kappa_fluid(:), kind=CUSTOM_REAL)
-  cr_minus_gravity_table(:) = real(minus_gravity_table(:), kind=CUSTOM_REAL)
-  cr_minus_deriv_gravity_table(:) = real(minus_deriv_gravity_table(:), kind=CUSTOM_REAL)
-  cr_density_table(:) = real(density_table(:), kind=CUSTOM_REAL)
-
-  ! prepares on GPU
+  ! gravity uses pre-calculated arrays
   call prepare_fields_gravity_device(Mesh_pointer, &
-                                     cr_d_ln_density_dr_table, &
-                                     cr_minus_rho_g_over_kappa_fluid, &
-                                     cr_minus_gravity_table, &
-                                     cr_minus_deriv_gravity_table, &
-                                     cr_density_table, &
+                                     gravity_pre_store_outer_core, &
+                                     gravity_pre_store_crust_mantle, &
+                                     gravity_pre_store_inner_core, &
+                                     gravity_H_crust_mantle, &
+                                     gravity_H_inner_core, &
                                      wgll_cube, &
-                                     NRAD_GRAVITY, &
                                      minus_g_icb,minus_g_cmb, &
                                      RHO_BOTTOM_OC,RHO_TOP_OC)
 
-  deallocate(cr_d_ln_density_dr_table,cr_minus_rho_g_over_kappa_fluid, &
-             cr_minus_gravity_table,cr_minus_deriv_gravity_table, &
-             cr_density_table)
   call synchronize_all()
 
   ! prepares attenuation arrays
@@ -337,9 +321,9 @@
     call synchronize_all()
 
     call prepare_oceans_device(Mesh_pointer,npoin_oceans, &
-                              ibool_ocean_load, &
-                              rmass_ocean_load_selected, &
-                              normal_ocean_load)
+                               ibool_ocean_load, &
+                               rmass_ocean_load_selected, &
+                               normal_ocean_load)
   endif
   call synchronize_all()
 
@@ -605,12 +589,17 @@
     endif
 
     ! gravity
+    ! d_gravity_pre_store_outer_core
+    memory_size = memory_size + NDIM * NGLOB_OUTER_CORE * dble(CUSTOM_REAL)
     if (GRAVITY_VAL) then
-      ! d_minus_rho_g_over_kappa_fluid,..
-      memory_size = memory_size + 4.d0 * NRAD_GRAVITY * dble(CUSTOM_REAL)
-    else
-      ! d_d_ln_density_dr_table
-      memory_size = memory_size + NRAD_GRAVITY * dble(CUSTOM_REAL)
+      ! d_gravity_pre_store_crust_mantle
+      memory_size = memory_size + NDIM * NGLOB_CRUST_MANTLE * dble(CUSTOM_REAL)
+      ! d_gravity_pre_store_inner_core
+      memory_size = memory_size + NDIM * NGLOB_INNER_CORE * dble(CUSTOM_REAL)
+      ! d_gravity_H_crust_mantle
+      memory_size = memory_size + 6 * NGLOB_CRUST_MANTLE * dble(CUSTOM_REAL)
+      ! d_gravity_H_inner_core
+      memory_size = memory_size + 6 * NGLOB_INNER_CORE * dble(CUSTOM_REAL)
     endif
 
     ! attenuation
@@ -731,10 +720,6 @@
       ! padded c11,..
       memory_size = memory_size + 5.d0 * NGLL3_PADDED * NSPEC_INNER_CORE * dble(CUSTOM_REAL)
     endif
-    ! rstore
-    if (GRAVITY_VAL) then
-      memory_size = memory_size + 3.d0 * NGLOB_INNER_CORE * dble(CUSTOM_REAL)
-    endif
     ! d_phase_ispec_inner_crust_mantle
     memory_size = memory_size + 2 * num_phase_ispec_crust_mantle * dble(SIZE_INTEGER)
     ! d_displ,..
@@ -759,8 +744,6 @@
     memory_size = memory_size + NGLL3_PADDED * NSPEC_OUTER_CORE * dble(CUSTOM_REAL)
     ! ibool
     memory_size = memory_size + NGLL3 * NSPEC_OUTER_CORE * dble(SIZE_INTEGER)
-    ! d_rstore_outer_core,..
-    memory_size = memory_size + 3.d0 * NGLOB_OUTER_CORE * dble(CUSTOM_REAL)
     ! d_phase_ispec_inner_outer_core
     memory_size = memory_size + 2.d0 * num_phase_ispec_outer_core * dble(SIZE_INTEGER)
     ! d_displ_outer,..
@@ -774,7 +757,7 @@
     ! user output
     if (myrank == 0) then
       write(IMAIN,*)
-      write(IMAIN,*) "  minimum memory requested     : ",memory_size / 1024. / 1024.,"MB per process"
+      write(IMAIN,*) "  minimum memory requested     : ",sngl(memory_size / 1024.d0 / 1024.d0),"MB per process"
       write(IMAIN,*)
       call flush_IMAIN()
     endif

@@ -10,13 +10,13 @@ NOISE_TOMOGRAPHY                = 0   # flag of noise tomography, three steps (1
 SAVE_FORWARD                    = .false.   # save last frame of forward simulation or not
 
 # number of chunks (1,2,3 or 6)
-NCHUNKS                         = 1
+NCHUNKS                         = 6
 
 # angular width of the first chunk (not used if full sphere with six chunks)
-ANGULAR_WIDTH_XI_IN_DEGREES     = 20.d0   # angular size of a chunk
-ANGULAR_WIDTH_ETA_IN_DEGREES    = 20.d0
-CENTER_LATITUDE_IN_DEGREES      = 40.d0
-CENTER_LONGITUDE_IN_DEGREES     = 25.d0
+ANGULAR_WIDTH_XI_IN_DEGREES     = 60.d0   # angular size of a chunk
+ANGULAR_WIDTH_ETA_IN_DEGREES    = 60.d0
+CENTER_LATITUDE_IN_DEGREES      = 50.d0
+CENTER_LONGITUDE_IN_DEGREES     = 15.d0
 GAMMA_ROTATION_AZIMUTH          = 0.d0
 
 # number of elements at the surface along the two sides of the first chunk
@@ -25,8 +25,8 @@ NEX_XI                          = 64
 NEX_ETA                         = 64
 
 # number of MPI processors along the two sides of the first chunk
-NPROC_XI                        = 2
-NPROC_ETA                       = 2
+NPROC_XI                        = 1
+NPROC_ETA                       = 1
 
 #-----------------------------------------------------------
 #
@@ -48,6 +48,12 @@ NPROC_ETA                       = 2
 # 3D crustal models:
 # crust1.0, crust2.0, EPcrust, EuCRUST, crustmaps, crustSH
 #
+# Mars models:
+# 1D_Sohl, 1D_Sohl_3D_crust, 1D_case65TAY, 1D_case65TAY_3D_crust
+#
+# Moon models:
+# vpremoon
+#
 # 3D models with 3D crust: append "_**crustname**" to the mantle model name
 #                          to take a 3D crustal model (by default crust2.0 is taken for 3D mantle models)
 #                          e.g. s20rts_crust1.0, s362ani_crustmaps, full_sh_crustSH, sglobe_EPcrust, etc.
@@ -57,7 +63,7 @@ NPROC_ETA                       = 2
 #                          associated reference model rather than the default 3D crustal model
 #                          e.g. s20rts_1Dcrust, s362ani_1Dcrust, etc.
 #
-MODEL                           = 1D_isotropic_prem
+MODEL                           = s362ani
 
 # parameters describing the Earth model
 OCEANS                          = .true.
@@ -68,15 +74,15 @@ ROTATION                        = .true.
 ATTENUATION                     = .true.
 
 # absorbing boundary conditions for a regional simulation
-ABSORBING_CONDITIONS            = .true.
+ABSORBING_CONDITIONS            = .false.
 
 # record length in minutes
-RECORD_LENGTH_IN_MINUTES        = 2.5d0
+RECORD_LENGTH_IN_MINUTES        = 60.0d0
 
 # to undo attenuation for sensitivity kernel calculations or forward runs with SAVE_FORWARD
 # use one (and only one) of the two flags below. UNDO_ATTENUATION is much better (it is exact)
 # but requires a significant amount of disk space for temporary storage.
-PARTIAL_PHYS_DISPERSION_ONLY    = .true.
+PARTIAL_PHYS_DISPERSION_ONLY    = .false.
 UNDO_ATTENUATION                = .false.
 # How much memory (in GB) is installed on your machine per CPU core (only used for UNDO_ATTENUATION, can be ignored otherwise)
 #         (or per GPU card or per INTEL MIC Phi board)
@@ -142,7 +148,7 @@ RATIO_BY_WHICH_TO_INCREASE_IT   = 1.5d0
 #MOVIE_COARSE does not work with create_movie_AVS_DX
 MOVIE_SURFACE                   = .false.
 MOVIE_VOLUME                    = .false.
-MOVIE_COARSE                    = .true.
+MOVIE_COARSE                    = .false.
 NTSTEP_BETWEEN_FRAMES           = 50
 HDUR_MOVIE                      = 0.d0
 
@@ -183,6 +189,11 @@ NTSTEP_BETWEEN_OUTPUT_INFO      = 500
 #
 #-----------------------------------------------------------
 
+# Compute derivate of the force/or the moment tensor 
+# with respect to ["depth", "latitude", "longitude"] -- [1,2,3]
+USE_SOURCE_DERIVATIVE = .true.
+USE_SOURCE_DERIVATIVE_DIRECTION = 1
+
 # interval in time steps for temporary writing of seismograms
 NTSTEP_BETWEEN_OUTPUT_SEISMOS   = 5000000
 NTSTEP_BETWEEN_READ_ADJSRC      = 1000
@@ -211,16 +222,16 @@ SAVE_SEISMOGRAMS_STRAIN         = .false.
 SAVE_SEISMOGRAMS_IN_ADJOINT_RUN = .false.
 
 # output format for the seismograms (one can use either or all of the three formats)
-OUTPUT_SEISMOS_ASCII_TEXT       = .true.
+OUTPUT_SEISMOS_ASCII_TEXT       = .false.
 OUTPUT_SEISMOS_SAC_ALPHANUM     = .false.
-OUTPUT_SEISMOS_SAC_BINARY       = .false.
+OUTPUT_SEISMOS_SAC_BINARY       = .true.
 OUTPUT_SEISMOS_ASDF             = .false.
 
 # rotate seismograms to Radial-Transverse-Z or use default North-East-Z reference frame
 ROTATE_SEISMOGRAMS_RT           = .false.
 
 # decide if master process writes all the seismograms or if all processes do it in parallel
-WRITE_SEISMOGRAMS_BY_MASTER     = .false.
+WRITE_SEISMOGRAMS_BY_MASTER     = .true.
 
 # save all seismograms in one large combined file instead of one file per seismogram
 # to avoid overloading shared non-local file systems such as LUSTRE or GPFS for instance
@@ -251,6 +262,11 @@ ANISOTROPIC_KL                  = .false.
 # rather than fully anisotropic kernels when ANISOTROPIC_KL above is set to .true.
 # means to save radial anisotropic kernels, i.e., sensitivity kernels for beta_v, beta_h, etc.
 SAVE_TRANSVERSE_KL_ONLY         = .false.
+
+# output only the kernels used for the current azimuthally anisotropic inversions of surface waves,
+# i.e., bulk_c, bulk_betav, bulk_betah, eta, Gc_prime, Gs_prime and rho
+# (Gc' & Gs' which are the normalized Gc & Gs kernels by isotropic \rho\beta of the 1D reference model)
+SAVE_AZIMUTHAL_ANISO_KL_ONLY    = .false.
 
 # output approximate Hessian in crust mantle region.
 # means to save the preconditioning for gradients, they are cross correlations between forward and adjoint accelerations.
@@ -320,12 +336,12 @@ BROADCAST_SAME_MESH_AND_MODEL   = .false.
 #-----------------------------------------------------------
 
 # set to true to use GPUs
-GPU_MODE                        = .false.
+GPU_MODE                        = .True.
 # Only used if GPU_MODE = .true. :
 GPU_RUNTIME                     = 1
 # 2 (OpenCL), 1 (Cuda) ou 0 (Compile-time -- does not work if configured with --with-cuda *AND* --with-opencl)
 GPU_PLATFORM                    = NVIDIA
-GPU_DEVICE                      = Tesla
+GPU_DEVICE                      = *
 
 # set to true to use the ADIOS library for I/Os
 ADIOS_ENABLED                   = .false.

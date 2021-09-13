@@ -135,150 +135,218 @@
 !=======================================================================
 !
 
-  double precision function hgll(I,Z,ZGLL,NZ)
+!=======================================================================
+! 
+! Subroutine to compute the second derivative of the lagrange polynomials
+! This is used in the computation of the moment derivative source
+! 
+!-----------------------------------------------------------------------
+! 
+! This is simply the 2nd order derivative of the lagrange polynomial 
+! 
+!-----------------------------------------------------------------------
 
-!-------------------------------------------------------------
+double precision function lagrange_2prime(xi, NGLL, xigll, h2prime)
+
+  ! Input
+  double precision,intent(in) :: xi
+  integer,intent(in) :: NGLL
+  double precision,dimension(NGLL),intent(in) :: xigll
+
+  ! Output
+  double precision,dimension(NGLL),intent(out) :: h2prime
+
+  ! Local Parameters
+  double precision :: sum_l, sum_m
+  double precision :: fac1, fac2
+  double precision :: num, den, prod
+
+  integer :: i, k, l, m
+
+  do i = 1, NGLL
+    sum_l = 0.0d0
+    do l = 1, NGLL
+      if (l /= i) then
+        fac1 = 1.0d0 
+        fac1 = fac1 / (xigll(i)-xigll(l))
+        sum_m = 0.0d0
+        do m = 1, NGLL
+          if ((m /= i) .and. (m /= l)) then
+            fac2 = 1.0d0
+            fac2 = fac2 / (xigll(i)-xigll(m))
+            num = 1.0d0
+            den = 1.0d0
+            do k = 1, NGLL
+              if ((k /= i) .and. (k /= l) .and. (k /= m)) then
+                num = num * (xi - xigll(k))
+                den = den * (xigll(i)-xigll(k))
+              endif
+            enddo
+            prod = num / den
+            sum_m = sum_m + (fac2 * prod)
+          endif
+        enddo  
+        sum_l = sum_l + (fac1 * sum_m)
+      endif
+    enddo
+    h2prime(i) = sum_l;
+  enddo
+
+  
+
+end function lagrange_2prime
+
+!=======================================================================
+
+!! routines not used yet, but for reference....
+
+!  double precision function hgll(I,Z,ZGLL,NZ)
 !
-!  Compute the value of the Lagrangian interpolant L through
-!  the NZ Gauss-Lobatto Legendre points ZGLL at point Z
-!  See Nissen-Meyer et al., 2007, A two-dimensional spectral-element method for computing
-!  spherical-earth seismograms - I. Moment-tensor source, Geophysical Journal International, p. 1087 eq. (A19)
-!  !! Warning !! There is a minus sign missing in that paper (-1.d0)**(N+1)*(1.d0-Z)*PNDLEG(Z,N) / ALFAN
+!!-------------------------------------------------------------
+!!
+!!  Compute the value of the Lagrangian interpolant L through
+!!  the NZ Gauss-Lobatto Legendre points ZGLL at point Z
+!!
+!!  See Nissen-Meyer et al., 2007, A two-dimensional spectral-element method for computing
+!!  spherical-earth seismograms - I. Moment-tensor source, Geophysical Journal International, p. 1087 eq. (A19)
+!!  !! Warning !! There is a minus sign missing in that paper (-1.d0)**(N+1)*(1.d0-Z)*PNDLEG(Z,N) / ALFAN
+!!
+!!-------------------------------------------------------------
 !
-!-------------------------------------------------------------
-
-  use constants, only: TINYVAL
-
-  implicit none
-
-  integer i,nz
-  double precision z
-  double precision ZGLL(0:nz-1)
-
-  integer n
-  double precision EPS,DZ,ALFAN
-  double precision, external :: PNLEG,PNDLEG
-
-  EPS = TINYVAL
-  DZ = Z - ZGLL(I)
-  if (abs(DZ) < EPS) then
-   HGLL = 1.d0
-   return
-  endif
-  N = NZ - 1
-  ALFAN = dble(N)*(dble(N)+1.d0)
-  if (I == 0) then
-    HGLL = (-1.d0)**(N+1)*(1.d0-Z)*PNDLEG(Z,N) / ALFAN
-  else if (I == N) then
-    HGLL = (1.d0+Z)*PNDLEG(Z,N) / ALFAN
-  else
-    HGLL = - (1.d0-Z*Z)*PNDLEG(Z,N)/ (ALFAN*PNLEG(ZGLL(I),N)*(Z-ZGLL(I)))
-  endif
-
-  end function hgll
-
+!  use constants, only: TINYVAL
 !
-!=====================================================================
+!  implicit none
 !
-
-  double precision function hglj(I,Z,ZGLJ,NZ)
-
-!-------------------------------------------------------------
+!  integer i,nz
+!  double precision z
+!  double precision ZGLL(0:nz-1)
 !
-!  Compute the value of the Lagrangian interpolant L through
-!  the NZ Gauss-Lobatto Jacobi points ZGLJ at point Z
-! See Nissen-Meyer et al., 2007, A two-dimensional spectral-element method for computing
-! spherical-earth seismograms - I. Moment-tensor source, Geophysical Journal International, p. 1088 eq. (A26)
+!  integer n
+!  double precision EPS,DZ,ALFAN
+!  double precision, external :: PNLEG,PNDLEG
 !
-!-------------------------------------------------------------
-
-  use constants, only: TINYVAL
-
-  implicit none
-
-  integer i,nz
-  double precision z
-  double precision ZGLJ(0:nz-1)
-
-  integer n
-  double precision EPS,DZ,ALFAN1,ALFAN2
-  double precision, external :: PNGLJ,PNDGLJ
-
-  EPS = TINYVAL
-  DZ = Z - ZGLJ(I)
-  if (abs(DZ) < EPS) then
-   HGLJ = 1.d0
-   return
-  endif
-  N = NZ - 1
-  ALFAN1 = dble(N)+1.d0
-  ALFAN2 = dble(N)*(dble(N)+2.d0)
-  if (I == 0) then
-    HGLJ = 2.d0*(-1.d0)**N*(Z-1.0d0)*PNDGLJ(Z,N) / (ALFAN1*ALFAN2)
-  else if (I == N) then
-    HGLJ = (1.d0+Z)*PNDGLJ(Z,N) / ALFAN2
-  else
-    HGLJ = - (1.d0-Z*Z)*PNDGLJ(Z,N) / (ALFAN2*PNGLJ(ZGLJ(I),N)*(Z-ZGLJ(I)))
-  endif
-
-  end function hglj
-
+!  EPS = TINYVAL
+!  DZ = Z - ZGLL(I)
+!  if (abs(DZ) < EPS) then
+!   HGLL = 1.d0
+!   return
+!  endif
+!  N = NZ - 1
+!  ALFAN = dble(N)*(dble(N)+1.d0)
+!  if (I == 0) then
+!    HGLL = (-1.d0)**(N+1)*(1.d0-Z)*PNDLEG(Z,N) / ALFAN
+!  else if (I == N) then
+!    HGLL = (1.d0+Z)*PNDLEG(Z,N) / ALFAN
+!  else
+!    HGLL = - (1.d0-Z*Z)*PNDLEG(Z,N)/ (ALFAN*PNLEG(ZGLL(I),N)*(Z-ZGLL(I)))
+!  endif
 !
-!=====================================================================
+!  end function hgll
 !
-
-
-! subroutine to compute the derivative of the interpolants of the GLJ
-! quadrature at the GLJ points at any given GLJ point
-
-  double precision function poly_deriv_GLJ(I,j,ZGLJ,NZ)
-
-!------------------------------------------------------------------------
+!!
+!!=====================================================================
+!!
 !
-!  Compute the value of the derivative of the I-th
-!  polynomial interpolant of the GLJ quadrature through the
-!  NZ Gauss-Lobatto-Jacobi (0,1) points ZGLJ at point ZGLJ(j)
-! See Nissen-Meyer et al., 2007, A two-dimensional spectral-element method for computing
-! spherical-earth seismograms - I. Moment-tensor source, Geophysical Journal International, p. 1088 eq. (A27)
-!  WARNING: there is an error at line 7 of their equation
-!  \partial_{\xi}\overline{l}_{i}(\overline{\xi}_{I})=\dfrac{1}{\overline{P}_{N}(\overline{\xi}_{i})(1-\overline{\xi}_{i})}
+!  double precision function hglj(I,Z,ZGLJ,NZ)
 !
-!------------------------------------------------------------------------
-
-  implicit none
-
-  integer i,j,nz
-  double precision zglj(0:nz-1)
-
-  integer degpoly
-
-  double precision, external :: pnglj
-
-  degpoly = nz - 1
-
-  if (i == 0 .and. j == 0) then ! Case 1
-    poly_deriv_GLJ = -dble(degpoly)*(dble(degpoly)+2.d0)/6.d0
-  else if (i == 0 .and. 0 < j .and. j < degpoly) then ! Case 2
-    poly_deriv_GLJ = 2.d0*(-1)**degpoly*pnglj(zglj(j),degpoly)/((1.d0+zglj(j))*(dble(degpoly)+1.d0))
-  else if (i == 0 .and. j == degpoly) then ! Case 3
-    poly_deriv_GLJ = (-1)**degpoly/(dble(degpoly)+1.d0)
-  else if (0 < i .and. i < degpoly .and. j == 0) then ! Case 4
-    poly_deriv_GLJ = (-1)**(degpoly+1)*(dble(degpoly)+1.d0)/(2.d0*pnglj(zglj(i),degpoly)*(1.d0+zglj(i)))
-  else if (0 < i .and. i < degpoly .and. 0 < j .and. j < degpoly .and. i /= j) then ! Case 5
-    poly_deriv_GLJ = 1.d0/(zglj(j)-zglj(i))*pnglj(zglj(j),degpoly)/pnglj(zglj(i),degpoly)
-  else if (0 < i .and. i < degpoly .and. i == j) then  ! Case 6
-    poly_deriv_GLJ = -1.d0/(2.d0*(1.d0+zglj(i)))
-  else if (0 < i .and. i < degpoly .and. j == degpoly) then ! Case 7
-    poly_deriv_GLJ = 1.d0/(pnglj(zglj(i),degpoly)*(1.d0-zglj(i)))
-  else if (i == degpoly .and. j == 0) then ! Case 8
-    poly_deriv_GLJ = (-1)**(degpoly+1)*(dble(degpoly)+1.d0)/4.d0
-  else if (i == degpoly .and. 0 < j .and. j < degpoly) then ! Case 9
-    poly_deriv_GLJ = -1.d0/(1.d0-zglj(j))*pnglj(zglj(j),degpoly)
-  else if (i == degpoly .and. j == degpoly) then ! Case 10
-    poly_deriv_GLJ = (dble(degpoly)*(dble(degpoly)+2.d0)-1.d0)/4.d0
-  else
-    stop 'Problem in poly_deriv_GLJ: in a perfect world this would NEVER appear'
-  endif
-
-  end function poly_deriv_GLJ
+!!-------------------------------------------------------------
+!!
+!!  Compute the value of the Lagrangian interpolant L through
+!!  the NZ Gauss-Lobatto Jacobi points ZGLJ at point Z
+!!
+!! See Nissen-Meyer et al., 2007, A two-dimensional spectral-element method for computing
+!! spherical-earth seismograms - I. Moment-tensor source, Geophysical Journal International, p. 1088 eq. (A26)
+!!
+!!-------------------------------------------------------------
+!
+!  use constants, only: TINYVAL
+!
+!  implicit none
+!
+!  integer i,nz
+!  double precision z
+!  double precision ZGLJ(0:nz-1)
+!
+!  integer n
+!  double precision EPS,DZ,ALFAN1,ALFAN2
+!  double precision, external :: PNGLJ,PNDGLJ
+!
+!  EPS = TINYVAL
+!  DZ = Z - ZGLJ(I)
+!  if (abs(DZ) < EPS) then
+!   HGLJ = 1.d0
+!   return
+!  endif
+!  N = NZ - 1
+!  ALFAN1 = dble(N)+1.d0
+!  ALFAN2 = dble(N)*(dble(N)+2.d0)
+!  if (I == 0) then
+!    HGLJ = 2.d0*(-1.d0)**N*(Z-1.0d0)*PNDGLJ(Z,N) / (ALFAN1*ALFAN2)
+!  else if (I == N) then
+!    HGLJ = (1.d0+Z)*PNDGLJ(Z,N) / ALFAN2
+!  else
+!    HGLJ = - (1.d0-Z*Z)*PNDGLJ(Z,N) / (ALFAN2*PNGLJ(ZGLJ(I),N)*(Z-ZGLJ(I)))
+!  endif
+!
+!  end function hglj
+!
+!!
+!!=====================================================================
+!!
+!
+!
+!! subroutine to compute the derivative of the interpolants of the GLJ
+!! quadrature at the GLJ points at any given GLJ point
+!
+!  double precision function poly_deriv_GLJ(I,j,ZGLJ,NZ)
+!
+!!------------------------------------------------------------------------
+!!
+!!  Compute the value of the derivative of the I-th
+!!  polynomial interpolant of the GLJ quadrature through the
+!!  NZ Gauss-Lobatto-Jacobi (0,1) points ZGLJ at point ZGLJ(j)
+!!
+!! See Nissen-Meyer et al., 2007, A two-dimensional spectral-element method for computing
+!! spherical-earth seismograms - I. Moment-tensor source, Geophysical Journal International, p. 1088 eq. (A27)
+!!  WARNING: there is an error at line 7 of their equation
+!!  \partial_{\xi}\overline{l}_{i}(\overline{\xi}_{I})=\dfrac{1}{\overline{P}_{N}(\overline{\xi}_{i})(1-\overline{\xi}_{i})}
+!!
+!!------------------------------------------------------------------------
+!
+!  implicit none
+!
+!  integer i,j,nz
+!  double precision zglj(0:nz-1)
+!
+!  integer degpoly
+!
+!  double precision, external :: pnglj
+!
+!  degpoly = nz - 1
+!
+!  if (i == 0 .and. j == 0) then ! Case 1
+!    poly_deriv_GLJ = -dble(degpoly)*(dble(degpoly)+2.d0)/6.d0
+!  else if (i == 0 .and. 0 < j .and. j < degpoly) then ! Case 2
+!    poly_deriv_GLJ = 2.d0*(-1)**degpoly*pnglj(zglj(j),degpoly)/((1.d0+zglj(j))*(dble(degpoly)+1.d0))
+!  else if (i == 0 .and. j == degpoly) then ! Case 3
+!    poly_deriv_GLJ = (-1)**degpoly/(dble(degpoly)+1.d0)
+!  else if (0 < i .and. i < degpoly .and. j == 0) then ! Case 4
+!    poly_deriv_GLJ = (-1)**(degpoly+1)*(dble(degpoly)+1.d0)/(2.d0*pnglj(zglj(i),degpoly)*(1.d0+zglj(i)))
+!  else if (0 < i .and. i < degpoly .and. 0 < j .and. j < degpoly .and. i /= j) then ! Case 5
+!    poly_deriv_GLJ = 1.d0/(zglj(j)-zglj(i))*pnglj(zglj(j),degpoly)/pnglj(zglj(i),degpoly)
+!  else if (0 < i .and. i < degpoly .and. i == j) then  ! Case 6
+!    poly_deriv_GLJ = -1.d0/(2.d0*(1.d0+zglj(i)))
+!  else if (0 < i .and. i < degpoly .and. j == degpoly) then ! Case 7
+!    poly_deriv_GLJ = 1.d0/(pnglj(zglj(i),degpoly)*(1.d0-zglj(i)))
+!  else if (i == degpoly .and. j == 0) then ! Case 8
+!    poly_deriv_GLJ = (-1)**(degpoly+1)*(dble(degpoly)+1.d0)/4.d0
+!  else if (i == degpoly .and. 0 < j .and. j < degpoly) then ! Case 9
+!    poly_deriv_GLJ = -1.d0/(1.d0-zglj(j))*pnglj(zglj(j),degpoly)
+!  else if (i == degpoly .and. j == degpoly) then ! Case 10
+!    poly_deriv_GLJ = (dble(degpoly)*(dble(degpoly)+2.d0)-1.d0)/4.d0
+!  else
+!    stop 'Problem in poly_deriv_GLJ: in a perfect world this would NEVER appear'
+!  endif
+!
+!  end function poly_deriv_GLJ
 
