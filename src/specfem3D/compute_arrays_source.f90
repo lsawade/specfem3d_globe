@@ -381,7 +381,8 @@
     xi_source,eta_source,gamma_source, &
     Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
     xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz, &
-    xigll,yigll,zigll)
+    xigll,yigll,zigll, &
+    direction, theta, phi, depth)
 
   use constants
 
