@@ -436,6 +436,7 @@
   double precision :: grr_inv, gtt_inv, gpp_inv
 
   integer :: k,l,m, n, o ,p
+  integer :: direction
 
   ! compute Lagrange polynomials at the source location
   ! the source does not necessarily correspond to a Gauss-Lobatto point
