@@ -37,7 +37,7 @@
   integer, parameter :: nparam_i = 48
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 68
+  integer, parameter :: nparam_l = 69
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 38
@@ -314,7 +314,7 @@
     BROADCAST_SAME_MESH_AND_MODEL = bcast_logical(66)
     MODEL_GLL = bcast_logical(67)
     USE_SOURCE_DERIVATIVE = bcast_logical(68)
-    USE_SOURCE_DERIVATIVE_TYPE1 = bcast_logical(68)
+    USE_SOURCE_DERIVATIVE_TYPE1 = bcast_logical(69)
 
     ! double precisions
     DT = bcast_double_precision(1)
