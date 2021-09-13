@@ -546,21 +546,21 @@
         dzs_dgamma = ZERO
 
         do n = 1,NGLLX
-          dxs_dxsi += grad(1, n, l, m) * dlagx(n,k)
-          dys_dxsi += grad(2, n, l, m) * dlagx(n,k)
-          dzs_dxsi += grad(3, n, l, m) * dlagx(n,k)
+          dxs_dxsi = dxs_dxsi + grad(1, n, l, m) * dlagx(n,k)
+          dys_dxsi = dys_dxsi + grad(2, n, l, m) * dlagx(n,k)
+          dzs_dxsi = dzs_dxsi + grad(3, n, l, m) * dlagx(n,k)
         enddo
 
         do o = 1,NGLLY
-          dxs_deta += grad(1, k, o, m) * dlagy(o,l)
-          dys_deta += grad(2, k, o, m) * dlagy(o,l)
-          dzs_deta += grad(3, k, o, m) * dlagy(o,l)
+          dxs_deta = dxs_deta + grad(1, k, o, m) * dlagy(o,l)
+          dys_deta = dys_deta + grad(2, k, o, m) * dlagy(o,l)
+          dzs_deta = dzs_deta + grad(3, k, o, m) * dlagy(o,l)
         enddo
 
         do p = 1,NGLLZ
-          dxs_dgamma += grad(1, k, l, p) * dlagz(p,m)
-          dys_dgamma += grad(2, k, l, p) * dlagz(p,m)
-          dzs_dgamma += grad(3, k, l, p) * dlagz(p,m)
+          dxs_dgamma = dxs_dgamma + grad(1, k, l, p) * dlagz(p,m)
+          dys_dgamma = dys_dgamma + grad(2, k, l, p) * dlagz(p,m)
+          dzs_dgamma = dzs_dgamma + grad(3, k, l, p) * dlagz(p,m)
         enddo
 
         ! Compute full expressions at gll node (multiply with Jacobian)
