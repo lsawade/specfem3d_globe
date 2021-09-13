@@ -427,10 +427,15 @@
   double precision :: dys_dxsi, dys_deta, dys_dgamma
   double precision :: dzs_dxsi, dzs_deta, dzs_dgamma
   double precision :: d2src_dx2, d2src_dy2, d2src_dz2 
-  double precision :: d2src_dxy, d2src_dxz, d2src_dyz
+  double precision :: d2src_dxy, d2src_dxz, d2src_dyz  
+  double precision :: fx, fxx, fy, fyy, fz, fzz
+  double precision :: fyx, fzx, fxy, fzy, fxz, fyz
+  double precision :: fac_x, fac_y, fac_z
+  double precision :: theta, phi, depth
+  double precision :: sint, cost, sinp, cosp
+  double precision :: grr_inv, gtt_inv, gpp_inv
 
-
-  integer :: k,l,m
+  integer :: k,l,m, n, o ,p
 
   ! compute Lagrange polynomials at the source location
   ! the source does not necessarily correspond to a Gauss-Lobatto point
