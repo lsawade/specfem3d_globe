@@ -436,7 +436,7 @@
   double precision :: sint, cost, sinp, cosp
   double precision :: grr_inv, gtt_inv, gpp_inv
 
-  integer :: k,l,m, n, o ,p
+  integer :: k,l,m, n, o, p, j
   integer :: direction
 
   ! compute Lagrange polynomials at the source location
@@ -447,15 +447,27 @@
 
   ! Compute the derivatives of the lagrange polynomials at the GLL points
   do k = 1,NGLLX
-    call lagrange_any(xigll(k),NGLLX,xigll,lagx(k,:),dlagx(k,:))
+     call lagrange_any(xigll(k),NGLLX,xigll,lagx(k,:),dlagx(k,:))
+     print *, "dx ", k
+     do j = 1,NGLLX
+        print *, dlagx(k,j)
+      enddo
   enddo
 
   do l = 1,NGLLY
-    call lagrange_any(yigll(l),NGLLX,yigll,lagy(l,:),dlagy(l,:))
+     call lagrange_any(yigll(l),NGLLX,yigll,lagy(l,:),dlagy(l,:))
+     print *, "dy ", l
+     do j = 1,NGLLX
+        print *, dlagy(l,j)
+      enddo
   enddo
   
   do m = 1,NGLLZ
-    call lagrange_any(zigll(m),NGLLX,zigll,lagz(m,:),dlagz(m,:))
+     call lagrange_any(zigll(m),NGLLX,zigll,lagz(m,:),dlagz(m,:))
+     print *, "dz ", m
+     do j = 1,NGLLX
+        print *, dlagz(m,j)
+      enddo
   enddo
   
   
@@ -514,14 +526,19 @@
         dsrc_dz = (hpxis(k)*dxis_dz)*hetas(l)*hgammas(m) + hxis(k)*(hpetas(l)*detas_dz)*hgammas(m) + &
                                         hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dz)
 
-        ! Up till here these are the same steps as computing the moment 
+        ! Up until here these are the same steps as computing the moment 
         ! source. But instead of using the moment tensor here now, we save  
         ! the gradient with respect to the source at all gll locations, so that 
         ! this gradient can be numerically differentiated again.
-        grad(1,k,l,m) = grad(1,k,l,m) + dsrc_dx
-        grad(2,k,l,m) = grad(2,k,l,m) + dsrc_dy
-        grad(3,k,l,m) = grad(3,k,l,m) + dsrc_dz
+        grad(1,k,l,m) = dsrc_dx
+        grad(2,k,l,m) = dsrc_dy
+        grad(3,k,l,m) = dsrc_dz
 
+        print *, "Gradient", k, l, m
+        print *, grad(1,k,l,m)
+        print *, grad(2,k,l,m)
+        print *, grad(3,k,l,m)
+        
       enddo
     enddo
   enddo
@@ -553,25 +570,37 @@
         enddo
 
         do o = 1,NGLLY
-          dxs_deta = dxs_deta + grad(1, k, o, m) * dlagy(o,l)
-          dys_deta = dys_deta + grad(2, k, o, m) * dlagy(o,l)
-          dzs_deta = dzs_deta + grad(3, k, o, m) * dlagy(o,l)
+          dxs_deta = dxs_deta + grad(1, k, o, m) * dlagy(l,o)
+          dys_deta = dys_deta + grad(2, k, o, m) * dlagy(l,o)
+          dzs_deta = dzs_deta + grad(3, k, o, m) * dlagy(l,o)
         enddo
 
         do p = 1,NGLLZ
-          dxs_dgamma = dxs_dgamma + grad(1, k, l, p) * dlagz(p,m)
-          dys_dgamma = dys_dgamma + grad(2, k, l, p) * dlagz(p,m)
-          dzs_dgamma = dzs_dgamma + grad(3, k, l, p) * dlagz(p,m)
+          dxs_dgamma = dxs_dgamma + grad(1, k, l, p) * dlagz(m,p)
+          dys_dgamma = dys_dgamma + grad(2, k, l, p) * dlagz(m,p)
+          dzs_dgamma = dzs_dgamma + grad(3, k, l, p) * dlagz(m,p)
         enddo
 
-        ! Compute full expressions at gll node (multiply with Jacobian)
-        d2src_dx2 = dxs_dxsi * xix(k,l,m) + dxs_deta * etax(k,l,m) + dxs_dgamma * gammax(k,l,m)
-        d2src_dy2 = dys_dxsi * xiy(k,l,m) + dys_deta * etay(k,l,m) + dys_dgamma * gammay(k,l,m)
-        d2src_dz2 = dzs_dxsi * xiz(k,l,m) + dzs_deta * etaz(k,l,m) + dzs_dgamma * gammaz(k,l,m)
-        d2src_dxy = dxs_dxsi * xiy(k,l,m) + dxs_deta * etay(k,l,m) + dxs_dgamma * gammay(k,l,m)
-        d2src_dxz = dxs_dxsi * xiz(k,l,m) + dxs_deta * etaz(k,l,m) + dxs_dgamma * gammaz(k,l,m)
-        d2src_dyz = dys_dxsi * xiz(k,l,m) + dys_deta * etaz(k,l,m) + dys_dgamma * gammaz(k,l,m)
+        if (m == 1 .AND. l == 1 .AND. k == 1) then
+           print *, 'Local derivative'
+           print *, 'x: ', dxs_dxsi, dxs_deta, dxs_dgamma
+           print *, 'y: ', dys_dxsi, dys_deta, dys_dgamma
+           print *, 'z: ', dzs_dxsi, dzs_deta, dzs_dgamma
+        endif
         
+        ! Compute full expressions at gll node (multiply with Jacobian)
+        d2src_dx2 = dxs_dxsi * dble(xix(k,l,m)) + dxs_deta * dble(etax(k,l,m)) + dxs_dgamma * dble(gammax(k,l,m))
+        d2src_dy2 = dys_dxsi * dble(xiy(k,l,m)) + dys_deta * dble(etay(k,l,m)) + dys_dgamma * dble(gammay(k,l,m))
+        d2src_dz2 = dzs_dxsi * dble(xiz(k,l,m)) + dzs_deta * dble(etaz(k,l,m)) + dzs_dgamma * dble(gammaz(k,l,m))
+        d2src_dxy = dxs_dxsi * dble(xiy(k,l,m)) + dxs_deta * dble(etay(k,l,m)) + dxs_dgamma * dble(gammay(k,l,m))
+        d2src_dxz = dxs_dxsi * dble(xiz(k,l,m)) + dxs_deta * dble(etaz(k,l,m)) + dxs_dgamma * dble(gammaz(k,l,m))
+        d2src_dyz = dys_dxsi * dble(xiz(k,l,m)) + dys_deta * dble(etaz(k,l,m)) + dys_dgamma * dble(gammaz(k,l,m))
+
+        if (m == 1 .AND. l == 1 .AND. k == 1) then
+           print *, 'der with respect to x'
+           print *, d2src_dx2, d2src_dy2, d2src_dz2
+           print *, d2src_dxy, d2src_dxz, d2src_dyz
+        endif
         
         ! With respect to x
         fxx = (Mxx * d2src_dx2 + Mxy * d2src_dxy + Mxz * d2src_dxz)
