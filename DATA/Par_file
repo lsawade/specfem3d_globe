@@ -192,6 +192,7 @@ NTSTEP_BETWEEN_OUTPUT_INFO      = 500
 # Compute derivate of the force/or the moment tensor 
 # with respect to ["depth", "latitude", "longitude"] -- [1,2,3]
 USE_SOURCE_DERIVATIVE = .true.
+USE_SOURCE_DERIVATIVE_TYPE1 = .true.
 USE_SOURCE_DERIVATIVE_DIRECTION = 1
 
 # interval in time steps for temporary writing of seismograms

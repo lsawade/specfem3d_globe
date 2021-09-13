@@ -1570,7 +1570,9 @@
             print *, 'depth: ', depth
             print *, 'phi: ', phi
             print *, 'theta: ', theta
-            call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
+
+            if (USE_SOURCE_DERIVATIVE_TYPE1) then
+                call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
                           Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
                           Mxz(isource),Myz(isource), &
                           xix_crust_mantle(:,:,:,ispec), &
@@ -1585,7 +1587,23 @@
                           xigll,yigll,zigll, &
                           USE_SOURCE_DERIVATIVE_DIRECTION, &
                           theta, phi, depth)
-
+            else
+                call compute_arrays_source_derivative2(sourcearray,xi,eta,gamma, &
+                          Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
+                          Mxz(isource),Myz(isource), &
+                          xix_crust_mantle(:,:,:,ispec), &
+                          xiy_crust_mantle(:,:,:,ispec), &
+                          xiz_crust_mantle(:,:,:,ispec), &
+                          etax_crust_mantle(:,:,:,ispec), &
+                          etay_crust_mantle(:,:,:,ispec), &
+                          etaz_crust_mantle(:,:,:,ispec), &
+                          gammax_crust_mantle(:,:,:,ispec), &
+                          gammay_crust_mantle(:,:,:,ispec), &
+                          gammaz_crust_mantle(:,:,:,ispec), &
+                          xigll,yigll,zigll, &
+                          USE_SOURCE_DERIVATIVE_DIRECTION, &
+                          theta, phi, depth)
+            endif
         else
 
           call compute_arrays_source(sourcearray,xi,eta,gamma, &

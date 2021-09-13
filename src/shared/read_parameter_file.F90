@@ -193,6 +193,8 @@
   ! Check whether the moment tensor derivate source is to be computed
   call read_value_logical(USE_SOURCE_DERIVATIVE, 'USE_SOURCE_DERIVATIVE', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE'
+  call read_value_logical(USE_SOURCE_DERIVATIVE, 'USE_SOURCE_DERIVATIVE_TYPE1', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE_TYPE1'
   call read_value_integer(USE_SOURCE_DERIVATIVE_DIRECTION, 'USE_SOURCE_DERIVATIVE_DIRECTION', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE_DIRECTION'
 

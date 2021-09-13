@@ -106,7 +106,8 @@
             ADIOS_FOR_SOLVER_MESHFILES,ADIOS_FOR_AVS_DX, &
             ADIOS_FOR_KERNELS,ADIOS_FOR_MODELS,ADIOS_FOR_UNDO_ATTENUATION, &
             CEM_REQUEST,CEM_ACCEPT,BROADCAST_SAME_MESH_AND_MODEL,MODEL_GLL, &
-            USE_SOURCE_DERIVATIVE /)
+            USE_SOURCE_DERIVATIVE, &
+            USE_SOURCE_DERIVATIVE_TYPE1 /)
 
     bcast_double_precision = (/ &
             DT, &
@@ -313,6 +314,7 @@
     BROADCAST_SAME_MESH_AND_MODEL = bcast_logical(66)
     MODEL_GLL = bcast_logical(67)
     USE_SOURCE_DERIVATIVE = bcast_logical(68)
+    USE_SOURCE_DERIVATIVE_TYPE1 = bcast_logical(68)
 
     ! double precisions
     DT = bcast_double_precision(1)
