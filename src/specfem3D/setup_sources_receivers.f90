@@ -1567,11 +1567,9 @@
          if (USE_SOURCE_DERIVATIVE) then
 
          
-            print *, 'depth: ', depth
-            print *, 'phi: ', phi
-            print *, 'theta: ', theta
-
             if (USE_SOURCE_DERIVATIVE_TYPE1) then
+
+                print *, '2nd Order derivative'
                 call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
                           Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
                           Mxz(isource),Myz(isource), &
@@ -1588,6 +1586,7 @@
                           USE_SOURCE_DERIVATIVE_DIRECTION, &
                           theta, phi, depth)
             else
+                print *, 'Double differentiation'
                 call compute_arrays_source_derivative2(sourcearray,xi,eta,gamma, &
                           Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
                           Mxz(isource),Myz(isource), &
