@@ -1474,12 +1474,7 @@
       ! gets source location in terms of theta and phi
       phi = phi_source(isource)
       theta = theta_source(isource)
-      depth = depth_source(isource)
-
-      print *, 'depth_source: ', depth_source
-      print *, 'phi_source: ', phi_source
-      print *, 'theta_source: ', theta_source
-      
+      depth = depth_source(isource)    
       
 !      ! pre-computes source contribution on GLL points
 !      call compute_arrays_source(sourcearray,xi,eta,gamma, &

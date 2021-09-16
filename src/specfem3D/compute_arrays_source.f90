@@ -297,11 +297,6 @@
         grad(1,k,l,m) = dsrc_dx
         grad(2,k,l,m) = dsrc_dy
         grad(3,k,l,m) = dsrc_dz
-
-        ! print *, "Gradient", k, l, m
-        ! print *, grad(1,k,l,m)
-        ! print *, grad(2,k,l,m)
-        ! print *, grad(3,k,l,m)
         
       enddo
     enddo
@@ -345,12 +340,6 @@
           dzs_dgamma = dzs_dgamma + grad(3, k, l, p) * dlagz(p,m)
         enddo
 
-        if (m == 1 .AND. l == 1 .AND. k == 1) then
-           ! print *, 'Local derivative'
-           ! print *, 'x: ', dxs_dxsi, dxs_deta, dxs_dgamma
-           ! print *, 'y: ', dys_dxsi, dys_deta, dys_dgamma
-           ! print *, 'z: ', dzs_dxsi, dzs_deta, dzs_dgamma
-        endif
         
         ! Compute full expressions at gll node (multiply with Jacobian)
         d2src_dx2 = dxs_dxsi * dble(xix(k,l,m)) + dxs_deta * dble(etax(k,l,m)) + dxs_dgamma * dble(gammax(k,l,m))
@@ -359,11 +348,6 @@
         d2src_dxy = dxs_dxsi * dble(xiy(k,l,m)) + dxs_deta * dble(etay(k,l,m)) + dxs_dgamma * dble(gammay(k,l,m))
         d2src_dxz = dxs_dxsi * dble(xiz(k,l,m)) + dxs_deta * dble(etaz(k,l,m)) + dxs_dgamma * dble(gammaz(k,l,m))
         d2src_dyz = dys_dxsi * dble(xiz(k,l,m)) + dys_deta * dble(etaz(k,l,m)) + dys_dgamma * dble(gammaz(k,l,m))
-
-        if (m == 3 .AND. l == 3 .AND. k == 3) then
-           print *, "Hessian"
-           print *, d2src_dx2, d2src_dy2, d2src_dz2, d2src_dxy, d2src_dxz, d2src_dyz
-        endif
         
         ! With respect to x
         fxx = (Mxx * d2src_dx2 + Mxy * d2src_dxy + Mxz * d2src_dxz)
