@@ -176,9 +176,9 @@
   double precision, dimension(NGLLZ) :: hgammas,hpgammas
 
   ! GLL derivative arrays
-  double precision, dimension(NGLLX, NGLLX) :: lagx, dlagx
-  double precision, dimension(NGLLY, NGLLY) :: lagy, dlagy
-  double precision, dimension(NGLLZ, NGLLZ) :: lagz, dlagz
+  double precision, dimension(NGLLX, NGLLX) :: dlagx
+  double precision, dimension(NGLLY, NGLLY) :: dlagy
+  double precision, dimension(NGLLZ, NGLLZ) :: dlagz
 
   ! grad array 
   double precision, dimension(3, NGLLX, NGLLY, NGLLZ) :: grad
@@ -201,7 +201,7 @@
   double precision :: sint, cost, sinp, cosp
   double precision :: grr_inv, gtt_inv, gpp_inv
 
-  integer :: k,l,m, n, o, p, j
+  integer :: k,l,m, n, o, p
   integer :: i1, i2, k1, k2, j1, j2
   integer :: direction
 
