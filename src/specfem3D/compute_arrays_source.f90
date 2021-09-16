@@ -152,6 +152,7 @@
 
   implicit none
 
+  double precision, external :: lagrange_deriv_GLL
   real(kind=CUSTOM_REAL), dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearray
 
   double precision :: xi_source,eta_source,gamma_source
@@ -200,7 +201,8 @@
   double precision :: sint, cost, sinp, cosp
   double precision :: grr_inv, gtt_inv, gpp_inv
 
-  integer :: k,l,m, n, o ,p
+  integer :: k,l,m, n, o, p, j
+  integer :: i1, i2, k1, k2, j1, j2
   integer :: direction
 
   ! compute Lagrange polynomials at the source location
@@ -209,19 +211,27 @@
   call lagrange_any(eta_source,NGLLY,yigll,hetas,hpetas)
   call lagrange_any(gamma_source,NGLLZ,zigll,hgammas,hpgammas)
 
-  ! Compute the derivatives of the lagrange polynomials at the GLL points
-  do k = 1,NGLLX
-    call lagrange_any(xigll(k),NGLLX,xigll,lagx(k,:),dlagx(k,:))
+  ! calculate derivatives of the Lagrange polynomials
+  ! and precalculate some products in double precision
+  ! hprime(i,j) = h'_j(xigll_i) by definition of the derivation matrix
+  do i1 = 1,NGLLX
+    do i2 = 1,NGLLX
+      dlagx(i2,i1) = real(lagrange_deriv_GLL(i1-1,i2-1,xigll,NGLLX), kind=CUSTOM_REAL)
+    enddo
   enddo
 
-  do l = 1,NGLLY
-    call lagrange_any(yigll(l),NGLLX,yigll,lagy(l,:),dlagy(l,:))
+  do j1 = 1,NGLLY
+    do j2 = 1,NGLLY
+      dlagy(j2,j1) = real(lagrange_deriv_GLL(j1-1,j2-1,yigll,NGLLY), kind=CUSTOM_REAL)
+    enddo
   enddo
-  
-  do m = 1,NGLLZ
-    call lagrange_any(zigll(m),NGLLX,zigll,lagz(m,:),dlagz(m,:))
+
+  do k1 = 1,NGLLZ
+    do k2 = 1,NGLLZ
+      dlagz(k2,k1) = real(lagrange_deriv_GLL(k1-1,k2-1,zigll,NGLLZ), kind=CUSTOM_REAL)
+    enddo
   enddo
-  
+
   
   dxis_dx = ZERO
   dxis_dy = ZERO
@@ -267,6 +277,8 @@
 
   ! Differentiate with respect to source location
   sourcearrayd(:,:,:,:) = ZERO
+  grad(:,:,:,:) = ZERO
+
   do m = 1,NGLLZ
     do l = 1,NGLLY
       do k = 1,NGLLX
@@ -278,14 +290,19 @@
         dsrc_dz = (hpxis(k)*dxis_dz)*hetas(l)*hgammas(m) + hxis(k)*(hpetas(l)*detas_dz)*hgammas(m) + &
                                         hxis(k)*hetas(l)*(hpgammas(m)*dgammas_dz)
 
-        ! Up till here these are the same steps as computing the moment 
+        ! Up until here these are the same steps as computing the moment 
         ! source. But instead of using the moment tensor here now, we save  
         ! the gradient with respect to the source at all gll locations, so that 
         ! this gradient can be numerically differentiated again.
-        grad(1,k,l,m) = grad(1,k,l,m) + dsrc_dx
-        grad(2,k,l,m) = grad(2,k,l,m) + dsrc_dy
-        grad(3,k,l,m) = grad(3,k,l,m) + dsrc_dz
+        grad(1,k,l,m) = dsrc_dx
+        grad(2,k,l,m) = dsrc_dy
+        grad(3,k,l,m) = dsrc_dz
 
+        ! print *, "Gradient", k, l, m
+        ! print *, grad(1,k,l,m)
+        ! print *, grad(2,k,l,m)
+        ! print *, grad(3,k,l,m)
+        
       enddo
     enddo
   enddo
@@ -328,14 +345,25 @@
           dzs_dgamma = dzs_dgamma + grad(3, k, l, p) * dlagz(p,m)
         enddo
 
-        ! Compute full expressions at gll node (multiply with Jacobian)
-        d2src_dx2 = dxs_dxsi * xix(k,l,m) + dxs_deta * etax(k,l,m) + dxs_dgamma * gammax(k,l,m)
-        d2src_dy2 = dys_dxsi * xiy(k,l,m) + dys_deta * etay(k,l,m) + dys_dgamma * gammay(k,l,m)
-        d2src_dz2 = dzs_dxsi * xiz(k,l,m) + dzs_deta * etaz(k,l,m) + dzs_dgamma * gammaz(k,l,m)
-        d2src_dxy = dxs_dxsi * xiy(k,l,m) + dxs_deta * etay(k,l,m) + dxs_dgamma * gammay(k,l,m)
-        d2src_dxz = dxs_dxsi * xiz(k,l,m) + dxs_deta * etaz(k,l,m) + dxs_dgamma * gammaz(k,l,m)
-        d2src_dyz = dys_dxsi * xiz(k,l,m) + dys_deta * etaz(k,l,m) + dys_dgamma * gammaz(k,l,m)
+        if (m == 1 .AND. l == 1 .AND. k == 1) then
+           ! print *, 'Local derivative'
+           ! print *, 'x: ', dxs_dxsi, dxs_deta, dxs_dgamma
+           ! print *, 'y: ', dys_dxsi, dys_deta, dys_dgamma
+           ! print *, 'z: ', dzs_dxsi, dzs_deta, dzs_dgamma
+        endif
         
+        ! Compute full expressions at gll node (multiply with Jacobian)
+        d2src_dx2 = dxs_dxsi * dble(xix(k,l,m)) + dxs_deta * dble(etax(k,l,m)) + dxs_dgamma * dble(gammax(k,l,m))
+        d2src_dy2 = dys_dxsi * dble(xiy(k,l,m)) + dys_deta * dble(etay(k,l,m)) + dys_dgamma * dble(gammay(k,l,m))
+        d2src_dz2 = dzs_dxsi * dble(xiz(k,l,m)) + dzs_deta * dble(etaz(k,l,m)) + dzs_dgamma * dble(gammaz(k,l,m))
+        d2src_dxy = dxs_dxsi * dble(xiy(k,l,m)) + dxs_deta * dble(etay(k,l,m)) + dxs_dgamma * dble(gammay(k,l,m))
+        d2src_dxz = dxs_dxsi * dble(xiz(k,l,m)) + dxs_deta * dble(etaz(k,l,m)) + dxs_dgamma * dble(gammaz(k,l,m))
+        d2src_dyz = dys_dxsi * dble(xiz(k,l,m)) + dys_deta * dble(etaz(k,l,m)) + dys_dgamma * dble(gammaz(k,l,m))
+
+        if (m == 3 .AND. l == 3 .AND. k == 3) then
+           print *, "Hessian"
+           print *, d2src_dx2, d2src_dy2, d2src_dz2, d2src_dxy, d2src_dxz, d2src_dyz
+        endif
         
         ! With respect to x
         fxx = (Mxx * d2src_dx2 + Mxy * d2src_dxy + Mxz * d2src_dxz)
