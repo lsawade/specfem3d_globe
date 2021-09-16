@@ -21,12 +21,12 @@ GAMMA_ROTATION_AZIMUTH          = 0.d0
 
 # number of elements at the surface along the two sides of the first chunk
 # (must be multiple of 16 and 8 * multiple of NPROC below)
-NEX_XI                          = 64
-NEX_ETA                         = 64
+NEX_XI                          = 128
+NEX_ETA                         = 128
 
 # number of MPI processors along the two sides of the first chunk
-NPROC_XI                        = 1
-NPROC_ETA                       = 1
+NPROC_XI                        = 2
+NPROC_ETA                       = 2
 
 #-----------------------------------------------------------
 #
@@ -62,8 +62,8 @@ NPROC_ETA                       = 1
 #                          to take the 1D crustal model from the
 #                          associated reference model rather than the default 3D crustal model
 #                          e.g. s20rts_1Dcrust, s362ani_1Dcrust, etc.
-
-MODEL                           = 1D_isotropic_prem
+#
+MODEL                           = GLL
 
 # parameters describing the Earth model
 OCEANS                          = .true.
@@ -77,7 +77,7 @@ ATTENUATION                     = .true.
 ABSORBING_CONDITIONS            = .false.
 
 # record length in minutes
-RECORD_LENGTH_IN_MINUTES        = 60.0d0
+RECORD_LENGTH_IN_MINUTES        = 200.0d0
 
 # to undo attenuation for sensitivity kernel calculations or forward runs with SAVE_FORWARD
 # use one (and only one) of the two flags below. UNDO_ATTENUATION is much better (it is exact)
@@ -330,8 +330,7 @@ NUMBER_OF_SIMULTANEOUS_RUNS     = 1
 # Thus, always set this option to .true. if the mesh and the model are the same for all simultaneous runs.
 # In that case there is no need to duplicate the mesh and model file database (the content of the DATABASES_MPI
 # directories) in each of the run0001, run0002,... directories, it is sufficient to have one in run0001
-# and the code will broadcast it to the others)
-BROADCAST_SAME_MESH_AND_MODEL   = .false.
+# and the code will broadcast it to the others)ROADCAST_SAME_MESH_AND_MODEL   = .false.
 
 #-----------------------------------------------------------
 
@@ -344,7 +343,7 @@ GPU_PLATFORM                    = NVIDIA
 GPU_DEVICE                      = *
 
 # set to true to use the ADIOS library for I/Os
-ADIOS_ENABLED                   = .false.
+ADIOS_ENABLED                   = .true.
 ADIOS_FOR_FORWARD_ARRAYS        = .true.
 ADIOS_FOR_MPI_ARRAYS            = .true.
 ADIOS_FOR_ARRAYS_SOLVER         = .true.
