@@ -37,7 +37,7 @@
   integer, parameter :: nparam_i = 48
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 69
+  integer, parameter :: nparam_l = 68
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 38
@@ -106,8 +106,7 @@
             ADIOS_FOR_SOLVER_MESHFILES,ADIOS_FOR_AVS_DX, &
             ADIOS_FOR_KERNELS,ADIOS_FOR_MODELS,ADIOS_FOR_UNDO_ATTENUATION, &
             CEM_REQUEST,CEM_ACCEPT,BROADCAST_SAME_MESH_AND_MODEL,MODEL_GLL, &
-            USE_SOURCE_DERIVATIVE, &
-            USE_SOURCE_DERIVATIVE_TYPE1 /)
+            USE_SOURCE_DERIVATIVE /)
 
     bcast_double_precision = (/ &
             DT, &
@@ -314,7 +313,6 @@
     BROADCAST_SAME_MESH_AND_MODEL = bcast_logical(66)
     MODEL_GLL = bcast_logical(67)
     USE_SOURCE_DERIVATIVE = bcast_logical(68)
-    USE_SOURCE_DERIVATIVE_TYPE1 = bcast_logical(69)
 
     ! double precisions
     DT = bcast_double_precision(1)
