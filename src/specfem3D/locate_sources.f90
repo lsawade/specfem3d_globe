@@ -696,7 +696,10 @@
   call bcast_all_dp(eta_source,NSOURCES)
   call bcast_all_dp(gamma_source,NSOURCES)
   call bcast_all_dp(depth_source,NSOURCES)
+  call bcast_all_dp(phi_source,NSOURCES)
+  call bcast_all_dp(theta_source,NSOURCES)
 
+  
   ! Broadcast magnitude and scalar moment to all processers
   call bcast_all_singledp(M0)
   call bcast_all_singledp(Mw)

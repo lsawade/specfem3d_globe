@@ -1474,7 +1474,7 @@
       ! gets source location in terms of theta and phi
       phi = phi_source(isource)
       theta = theta_source(isource)
-      depth = depth_source(isource)
+      depth = depth_source(isource)    
       
 !      ! pre-computes source contribution on GLL points
 !      call compute_arrays_source(sourcearray,xi,eta,gamma, &
@@ -1559,23 +1559,24 @@
 
       else ! use of CMTSOLUTION files
 
-        if (USE_SOURCE_DERIVATIVE) then
-          call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
-                          Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
-                          Mxz(isource),Myz(isource), &
-                          xix_crust_mantle(:,:,:,ispec), &
-                          xiy_crust_mantle(:,:,:,ispec), &
-                          xiz_crust_mantle(:,:,:,ispec), &
-                          etax_crust_mantle(:,:,:,ispec), &
-                          etay_crust_mantle(:,:,:,ispec), &
-                          etaz_crust_mantle(:,:,:,ispec), &
-                          gammax_crust_mantle(:,:,:,ispec), &
-                          gammay_crust_mantle(:,:,:,ispec), &
-                          gammaz_crust_mantle(:,:,:,ispec), &
-                          xigll,yigll,zigll, &
-                          USE_SOURCE_DERIVATIVE_DIRECTION, &
-                          theta, phi, depth)
+         if (USE_SOURCE_DERIVATIVE) then
 
+            call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
+                        Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
+                        Mxz(isource),Myz(isource), &
+                        xix_crust_mantle(:,:,:,ispec), &
+                        xiy_crust_mantle(:,:,:,ispec), &
+                        xiz_crust_mantle(:,:,:,ispec), &
+                        etax_crust_mantle(:,:,:,ispec), &
+                        etay_crust_mantle(:,:,:,ispec), &
+                        etaz_crust_mantle(:,:,:,ispec), &
+                        gammax_crust_mantle(:,:,:,ispec), &
+                        gammay_crust_mantle(:,:,:,ispec), &
+                        gammaz_crust_mantle(:,:,:,ispec), &
+                        xigll,yigll,zigll, &
+                        USE_SOURCE_DERIVATIVE_DIRECTION, &
+                        theta, phi, depth)
+            
         else
 
           call compute_arrays_source(sourcearray,xi,eta,gamma, &
