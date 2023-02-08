@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -29,12 +29,12 @@
 
 program smooth_laplacian_sem
 
+  use constants, only: myrank
+
   use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ,NDIM,IIN,IOUT, &
-       GAUSSALPHA,GAUSSBETA,MAX_STRING_LEN,GRAV,PI,TINYVAL,myrank
+       GAUSSALPHA,GAUSSBETA,MAX_STRING_LEN,GRAV,PI,TINYVAL
 
-  use shared_parameters, only: R_PLANET_KM
-
-  use meshfem3D_models_par, only: CRUSTAL
+  use shared_parameters, only: R_PLANET_KM,CRUSTAL
 
   use postprocess_par, only: &
        NCHUNKS_VAL,NPROC_XI_VAL,NPROC_ETA_VAL,NPROCTOT_VAL, &
@@ -132,6 +132,7 @@ program smooth_laplacian_sem
 
   double precision, external :: lagrange_deriv_GLL
 
+  ! local copies of mesh parameters
   integer :: NPROC_XI
   integer :: NPROC_ETA
   integer :: NCHUNKS
@@ -239,11 +240,6 @@ program smooth_laplacian_sem
   ! reads in Par_file and sets compute parameters
   call read_compute_parameters()
 
-  topo_dir = trim(LOCAL_PATH)//'/'
-
-  ! checks if basin code or global code: global code uses nchunks /= 0
-  if (NCHUNKS == 0) stop 'Error nchunks'
-
   ! reads mesh parameters
   if (myrank == 0) then
     ! reads mesh_parameters.bin file from LOCAL_PATH
@@ -251,6 +247,8 @@ program smooth_laplacian_sem
   endif
   ! broadcast parameters to all processes
   call bcast_mesh_parameters()
+
+  topo_dir = trim(LOCAL_PATH)//'/'
 
   ! user output
   if (myrank == 0) then
@@ -278,9 +276,13 @@ program smooth_laplacian_sem
   NPROC_XI  = NPROC_XI_VAL
   NPROC_ETA = NPROC_ETA_VAL
   NCHUNKS   = NCHUNKS_VAL
+
   !takes region 1 kernels
   NSPEC_AB = NSPEC_CRUST_MANTLE
   NGLOB_AB = NGLOB_CRUST_MANTLE
+
+  ! checks if basin code or global code: global code uses nchunks /= 0
+  if (NCHUNKS == 0) stop 'Error NCHUNKS'
 
   ! user output
   if (myrank == 0) then

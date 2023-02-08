@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -46,7 +46,7 @@
     hdur,Mxx,Myy,Mzz,Mxy,Mxz,Myz,Mw,M0, &
     xi_source,eta_source,gamma_source,nu_source, &
     islice_selected_source,ispec_selected_source, &
-    tshift_src,theta_source,phi_source,source_final_distance_max
+    tshift_src,theta_source,phi_source,depth_source,source_final_distance_max
 
   ! forces
   use specfem_par, only: &
@@ -343,6 +343,9 @@
 
       ! subtracts source depth (given in m)
       r_target = r0 - depth/R_PLANET
+
+      ! Populate the source depth in normalized coordinates
+      depth_source(isource) = r_target
 
       ! compute the Cartesian position of the source
       x_target = r_target*sint*cosp
@@ -720,7 +723,11 @@
   call bcast_all_dp(xi_source,NSOURCES)
   call bcast_all_dp(eta_source,NSOURCES)
   call bcast_all_dp(gamma_source,NSOURCES)
+  call bcast_all_dp(depth_source,NSOURCES)
+  call bcast_all_dp(phi_source,NSOURCES)
+  call bcast_all_dp(theta_source,NSOURCES)
 
+  
   ! Broadcast magnitude and scalar moment to all processers
   call bcast_all_singledp(M0)
   call bcast_all_singledp(Mw)

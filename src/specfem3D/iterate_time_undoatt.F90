@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -231,6 +231,9 @@
       b_noise_surface_movie_buffer(:,:,:,:,:) = 0.0_CUSTOM_REAL
     endif
   endif
+
+  ! shift execution of simultaneous events to avoid a high peak bandwidth for snapshots file I/O
+  if (NUMBER_OF_SIMULTANEOUS_RUNS > 1) call prepare_simultaneous_event_execution_shift_undoatt()
 
   ! synchronize all processes to make sure everybody is ready to start time loop
   call synchronize_all()
@@ -494,7 +497,7 @@
   ! only the displacement needs to be stored in memory buffers in order to compute the sensitivity kernels,
   ! not the memory variables R_ij, because the sensitivity kernel calculations only involve the displacement
   ! and the strain, not the stress, and the strain can be recomputed on the fly by computing the gradient
-  ! of the displacement read back from the memory buffers (see also https://github.com/geodynamics/specfem3d_globe/issues/194)
+  ! of the displacement read back from the memory buffers (see also https://github.com/SPECFEM/specfem3d_globe/issues/194)
             b_displ_cm_store_buffer(:,:,it_of_buffer) = b_displ_crust_mantle(:,:)
             b_displ_oc_store_buffer(:,it_of_buffer) = b_displ_outer_core(:)
             b_accel_oc_store_buffer(:,it_of_buffer) = b_accel_outer_core(:)
@@ -541,7 +544,7 @@
   ! only the displacement needs to be stored in memory buffers in order to compute the sensitivity kernels,
   ! not the memory variables R_ij, because the sensitivity kernel calculations only involve the displacement
   ! and the strain, not the stress, and the strain can be recomputed on the fly by computing the gradient
-  ! of the displacement read back from the memory buffers (see also https://github.com/geodynamics/specfem3d_globe/issues/194)
+  ! of the displacement read back from the memory buffers (see also https://github.com/SPECFEM/specfem3d_globe/issues/194)
             b_displ_crust_mantle(:,:) = b_displ_cm_store_buffer(:,:,it_of_buffer)
             b_displ_outer_core(:) = b_displ_oc_store_buffer(:,it_of_buffer)
             b_accel_outer_core(:) = b_accel_oc_store_buffer(:,it_of_buffer)

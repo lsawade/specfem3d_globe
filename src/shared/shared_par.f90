@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -77,7 +77,10 @@
 
   ! sources
   logical :: USE_FORCE_POINT_SOURCE
+  logical :: USE_SOURCE_DERIVATIVE
+  integer :: USE_SOURCE_DERIVATIVE_DIRECTION
   logical :: USE_MONOCHROMATIC_CMT_SOURCE,PRINT_SOURCE_TIME_FUNCTION
+
 
   ! checkpointing/restart
   integer :: NUMBER_OF_RUNS,NUMBER_OF_THIS_RUN
@@ -177,7 +180,9 @@
   ! for regional cutoff meshes (REGIONAL_MESH_CUTOFF must be .true. in Par_file)
   ! this will create a local mesh, i.e., doesn't honor Moho/R80/R220, but creates a crust & mantle mesh
   ! separated at the fictitious moho depth (at 40 or 35 km), down to the REGIONAL_MESH_CUTOFF value.
-  ! Additionally, this local mesh can have up to 5 doubling layers, with the doubling layer index specified by the NZ_DOUBLING_* values.
+  !
+  ! Additionally, this local mesh can have up to 5 doubling layers;
+  ! with the doubling layer index specified by the NZ_DOUBLING_* values.
   !
   ! flag to switch on local mesh
   logical :: USE_LOCAL_MESH = .false.
@@ -195,6 +200,15 @@
   integer :: NZ_DOUBLING_3 = 0
   integer :: NZ_DOUBLING_4 = 0
   integer :: NZ_DOUBLING_5 = 0
+
+  ! (optional) scattering perturbations
+  logical :: ADD_SCATTERING_PERTURBATIONS = .false.
+  double precision :: SCATTERING_STRENGTH = 0.d0
+  double precision :: SCATTERING_CORRELATION = 1.d0
+
+  ! (optional) simultaneous run execution shifts
+  logical :: SHIFT_SIMULTANEOUS_RUNS = .false.
+  double precision :: FILESYSTEM_IO_BANDWIDTH = 0.d0
 
   end module shared_input_parameters
 
@@ -235,6 +249,8 @@
 
   ! shortest minimum period resolved by mesh (empirical formula)
   double precision :: T_min_period
+  ! shortest wavelength resolved by mesh (empirical; in km/s)
+  double precision :: estimated_min_wavelength
 
   ! number of sources given in CMTSOLUTION file
   integer :: NSOURCES
@@ -283,10 +299,11 @@
   logical :: ATTENUATION_GLL
   logical :: INCLUDE_CENTRAL_CUBE,INFLATE_CENTRAL_CUBE
 
+  ! this is used in UTILS/estimate_best_values_runs.f90 only, to estimate memory use
   logical :: EMULATE_ONLY = .false.
 
-! honor PREM Moho or not
-! doing so drastically reduces the stability condition and therefore the time step
+  ! honor PREM Moho or not
+  ! doing so drastically reduces the stability condition and therefore the time step
   logical :: HONOR_1D_SPHERICAL_MOHO,CASE_3D
 
   ! this for all the regions

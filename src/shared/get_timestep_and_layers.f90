@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -801,6 +801,10 @@
         ! reduces time step size for SGLOBE-rani crustal model
         if (REFERENCE_CRUSTAL_MODEL == ICRUST_SGLOBECRUST) &
           DT = DT*(1.d0 - 0.4d0)
+        ! reduces time step size for SPiRaL crustal model
+        ! (this is only needed for meshes with NEX < 144 due to critical element shapes in the crust)
+        if (REFERENCE_CRUSTAL_MODEL == ICRUST_SPIRAL .and. NEX_MAX < 144) &
+          DT = DT*(1.d0 - 0.4d0)
       endif
     endif
 
@@ -942,7 +946,7 @@
 
   use constants, only: NGLLX,PI,NPTS_PER_WAVELENGTH,REFERENCE_MODEL_CASE65TAY
 
-  use shared_parameters, only: T_min_period, &
+  use shared_parameters, only: T_min_period,estimated_min_wavelength, &
     ANGULAR_WIDTH_XI_IN_DEGREES,ANGULAR_WIDTH_ETA_IN_DEGREES, &
     NEX_XI,NEX_ETA, &
     PLANET_TYPE,IPLANET_EARTH,IPLANET_MARS,IPLANET_MOON,R_PLANET, &
@@ -1028,9 +1032,8 @@
   case default
     ! avoiding exit_MPI(), since we also call this routine in create_header_file
     ! which can be compiled without MPI - using stop instead
-    !call exit_MPI(myrank,'Invalid planet, auto_attenuation_periods() not implemented yet')
-    print *,'Invalid planet, auto_attenuation_periods() not implemented yet'
-    stop 'Invalid planet, auto_attenuation_periods() not implemented yet'
+    print *,'Invalid planet in get_minimum_period_estimate() not implemented yet'
+    stop 'Invalid planet in get_minimum_period_estimate() not implemented yet'
   end select
 
   ! number of elements along one side of a chunk
@@ -1070,5 +1073,8 @@
 
   ! estimated minimum period resolved
   T_min_period = tmp
+
+  ! estimated minimum wavelength
+  estimated_min_wavelength = T_min_period * S_VELOCITY_MIN
 
   end subroutine get_minimum_period_estimate

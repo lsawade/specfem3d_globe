@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -34,10 +34,10 @@
 
   ! local parameters
   ! broadcast parameter arrays
-  integer, parameter :: nparam_i = 50
+  integer, parameter :: nparam_i = 51
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 74
+  integer, parameter :: nparam_l = 75
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 42
@@ -77,6 +77,7 @@
             GPU_RUNTIME,NUMBER_OF_SIMULTANEOUS_RUNS, &
             MODEL_GLL_TYPE,USER_NSTEP, &
             NSTEP_STEADY_STATE,NTSTEP_BETWEEN_OUTPUT_SAMPLE, &
+            USE_SOURCE_DERIVATIVE_DIRECTION, &
             NUMBER_OF_BUFFER_ELEMENTS /)
 
     bcast_logical = (/ &
@@ -110,6 +111,7 @@
             USE_MONOCHROMATIC_CMT_SOURCE, ABSORB_USING_GLOBAL_SPONGE, &
             OUTPUT_SEISMOS_3D_ARRAY, &
             REGIONAL_MESH_CUTOFF,REGIONAL_MESH_ADD_2ND_DOUBLING, &
+            USE_SOURCE_DERIVATIVE, &
             SAVE_GREEN_FUNCTIONS, &
             USE_BUFFER_ELEMENTS /)
 
@@ -205,8 +207,19 @@
   call bcast_all_singlei(NZ_DOUBLING_4)
   call bcast_all_singlei(NZ_DOUBLING_5)
 
+  ! (optional) scattering perturbations
+  call bcast_all_singlel(ADD_SCATTERING_PERTURBATIONS)
+  call bcast_all_singledp(SCATTERING_STRENGTH)
+  call bcast_all_singledp(SCATTERING_CORRELATION)
+
+  ! (optional) simultaneous run execution shifts
+  call bcast_all_singlel(SHIFT_SIMULTANEOUS_RUNS)
+  call bcast_all_singledp(FILESYSTEM_IO_BANDWIDTH)
+
   ! empirical minimum period resolved estimation
   call bcast_all_singledp(T_min_period)
+  ! empirical minimum wavelength resolved estimation
+  call bcast_all_singledp(estimated_min_wavelength)
 
   ! non-main processes set their parameters
   if (myrank /= 0) then
@@ -262,7 +275,8 @@
     USER_NSTEP = bcast_integer(47)
     NSTEP_STEADY_STATE = bcast_integer(48)
     NTSTEP_BETWEEN_OUTPUT_SAMPLE = bcast_integer(49)
-    NUMBER_OF_BUFFER_ELEMENTS = bcast_integer(50)
+    USE_SOURCE_DERIVATIVE_DIRECTION = bcast_integer(50)
+    NUMBER_OF_BUFFER_ELEMENTS = bcast_integer(51)
 
     ! logicals
     TRANSVERSE_ISOTROPY = bcast_logical(1)
@@ -337,8 +351,9 @@
     OUTPUT_SEISMOS_3D_ARRAY = bcast_logical(70)
     REGIONAL_MESH_CUTOFF = bcast_logical(71)
     REGIONAL_MESH_ADD_2ND_DOUBLING = bcast_logical(72)
-    SAVE_GREEN_FUNCTIONS = bcast_logical(73)
-    USE_BUFFER_ELEMENTS = bcast_logical(74)
+    USE_SOURCE_DERIVATIVE = bcast_logical(73)
+    SAVE_GREEN_FUNCTIONS = bcast_logical(74)
+    USE_BUFFER_ELEMENTS = bcast_logical(75)
 
     ! double precisions
     DT = bcast_double_precision(1)

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -149,6 +149,8 @@
 ! file. The header section is stored on the first 30 cards. This is followed
 ! by one or two data sections. The data is in 5G15.7 format.
 !----------------------------------------------------------------------
+!
+! SAC header file format: https://ds.iris.edu/files/sac-manual/manual/file_format.html
 
   ! define certain default values
 

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -31,7 +31,7 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  module meshfem3D_models_par
+  module meshfem_models_par
 
 !---
 !
@@ -59,7 +59,7 @@
     ICRUST_CRUST1,ICRUST_CRUST2, &
     ICRUST_CRUSTMAPS,ICRUST_EPCRUST,ICRUST_CRUST_SH, &
     ICRUST_EUCRUST,ICRUST_SGLOBECRUST,ICRUST_BKMNS_GLAD, &
-    ICRUST_SPIRAL
+    ICRUST_SPIRAL,ICRUST_SH_MARS
 
   ! 3D models
   use constants, only: &
@@ -70,6 +70,7 @@
     THREE_D_MODEL_ANISO_MANTLE,THREE_D_MODEL_GLL, &
     THREE_D_MODEL_BKMNS_GLAD, &
     THREE_D_MODEL_SPIRAL,THREE_D_MODEL_HETEROGEN_PREM, &
+    THREE_D_MODEL_SH_MARS, &
     THREE_D_MODEL_INNER_CORE_ISHII
 
   use shared_input_parameters, only: &
@@ -96,7 +97,7 @@
   double precision,dimension(NR_DENSITY) :: rspl,ellipicity_spline,ellipicity_spline2
   integer :: nspl
 
-  end module meshfem3D_models_par
+  end module meshfem_models_par
 
 
 !
@@ -104,7 +105,7 @@
 !
 
 
-  module meshfem3D_par
+  module meshfem_par
 
 ! main parameter module for specfem simulations
 
@@ -217,7 +218,7 @@
   ! number of global GLL points (in current region)
   integer :: nglob
 
-  end module meshfem3D_par
+  end module meshfem_par
 
 !
 !-------------------------------------------------------------------------------------------------

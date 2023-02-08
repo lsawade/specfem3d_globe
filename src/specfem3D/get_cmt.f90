@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -332,9 +332,7 @@
   if (NOISE_TOMOGRAPHY /= 0) hdur(:) = 0.d0
 
   ! If we're using external stf, don't worry about hdur.
-  if (EXTERNAL_SOURCE_TIME_FUNCTION) then
-    hdur(:) = 0.d0
-  endif
+  if (EXTERNAL_SOURCE_TIME_FUNCTION) hdur(:) = 0.d0
 
   ! Sets tshift_src to zero to initiate the simulation!
   if (NSOURCES == 1) then

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -65,10 +65,11 @@
 
 program smooth_sem_globe
 
+  use constants, only: myrank
+
   use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ,NGLLCUBE,NDIM,IIN,IOUT, &
     GAUSSALPHA,GAUSSBETA,PI,TWO_PI,MAX_STRING_LEN,DEGREES_TO_RADIANS, &
-    USE_QUADRATURE_RULE_FOR_SMOOTHING,USE_VECTOR_DISTANCE_FOR_SMOOTHING, &
-    myrank
+    USE_QUADRATURE_RULE_FOR_SMOOTHING,USE_VECTOR_DISTANCE_FOR_SMOOTHING
 
   use shared_parameters, only: R_PLANET_KM
 
@@ -136,6 +137,7 @@ program smooth_sem_globe
   real(kind=CUSTOM_REAL) :: max_new, min_new
   real(kind=CUSTOM_REAL) :: max_old_all, max_new_all, min_old_all, min_new_all
 
+  ! local copies of mesh parameters
   integer :: NPROC_XI
   integer :: NPROC_ETA
   integer :: NCHUNKS
@@ -159,6 +161,8 @@ program smooth_sem_globe
   character(len=MAX_STRING_LEN) :: kernel_names_comma_delimited
   character(len=MAX_STRING_LEN) :: kernel_name, topo_dir
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
+  character(len=MAX_STRING_LEN) :: kernel_output_name
+  character(len=MAX_STRING_LEN),dimension(:),allocatable :: kernel_output_names
   character(len=MAX_STRING_LEN) :: input_file, solver_file
   character(len=MAX_STRING_LEN) :: varname
 #else
@@ -205,7 +209,7 @@ program smooth_sem_globe
   ! ADIOS
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
   integer(kind=8) :: group_size_inc,local_dim
-  logical :: is_kernel
+  logical :: is_kernel = .false.
 #endif
 
 #ifdef FORCE_VECTORIZATION
@@ -284,6 +288,11 @@ program smooth_sem_globe
   kernel_names(:) = ''
   min_old(:) = 0._CUSTOM_REAL
   max_old(:) = 0._CUSTOM_REAL
+#ifdef USE_ADIOS_INSTEAD_OF_MESH
+  allocate(kernel_output_names(MAX_KERNEL_NAMES), stat=ier)
+  if (ier /= 0) stop 'Error allocating kernel_output_names array'
+  kernel_output_names(:) = ''
+#endif
 
   ! parse command line arguments
   do i = 1, NARGS
@@ -335,11 +344,6 @@ program smooth_sem_globe
   ! reads in Par_file and sets compute parameters
   call read_compute_parameters()
 
-  topo_dir = trim(LOCAL_PATH)//'/'
-
-  ! checks if basin code or global code: global code uses nchunks /= 0
-  if (NCHUNKS == 0) stop 'Error nchunks'
-
   ! reads mesh parameters
   if (myrank == 0) then
     ! reads mesh_parameters.bin file from LOCAL_PATH
@@ -347,6 +351,8 @@ program smooth_sem_globe
   endif
   ! broadcast parameters to all processes
   call bcast_mesh_parameters()
+
+  topo_dir = trim(LOCAL_PATH)//'/'
 
   ! user output
   if (myrank == 0) then
@@ -378,6 +384,9 @@ program smooth_sem_globe
   !takes region 1 kernels
   NSPEC_AB = NSPEC_CRUST_MANTLE
   NGLOB_AB = NGLOB_CRUST_MANTLE
+
+  ! checks if basin code or global code: global code uses nchunks /= 0
+  if (NCHUNKS == 0) stop 'Error NCHUNKS'
 
   ! estimates mesh element size
   ! note: this estimation is for global meshes valid only
@@ -1014,6 +1023,7 @@ program smooth_sem_globe
         print *, '  data: ADIOS using array name = ',trim(varname)
         print *
       endif
+      kernel_output_names(iker) = varname
       ! reads kernel values
       call read_adios_array(myadios_val_file, myadios_val_group, iproc, nspec, trim(varname), kernel(:,:,:,:,iker))
 #else
@@ -1295,10 +1305,10 @@ program smooth_sem_globe
   call define_adios_scalar(myadios_val_group, group_size_inc, '', trim(reg_name)//"nglob", nglob)
   do iker = 1,nker
     ! name
-    kernel_name = kernel_names(iker)
+    kernel_output_name = kernel_output_names(iker)
     local_dim = NGLLX * NGLLY * NGLLZ * nspec
-    call define_adios_global_array1D(myadios_val_group, group_size_inc, local_dim, trim(reg_name), &
-                                     trim(kernel_name), kernel_smooth(:, :, :, :, iker))
+    call define_adios_global_array1D(myadios_val_group, group_size_inc, local_dim, '', &
+                                     trim(kernel_output_name), kernel_smooth(:, :, :, :, iker))
   enddo
   ! opens output files
   call open_file_adios_write(myadios_val_file, myadios_val_group, trim(output_file), "ValWriter")
@@ -1320,9 +1330,10 @@ program smooth_sem_globe
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
     ! ADIOS
     ! smoothed kernel values
+    kernel_output_name = kernel_output_names(iker)
     local_dim = NGLLX * NGLLY * NGLLZ * nspec
     call write_adios_global_1d_array(myadios_val_file, myadios_val_group, myrank, sizeprocs_adios, local_dim, &
-                                     trim(reg_name) // trim(kernel_name), kernel_smooth(:,:,:,:,iker))
+                                     trim(kernel_output_name), kernel_smooth(:,:,:,:,iker))
 #else
     ! smoothed kernel file name
     write(output_file,'(a,i6.6,a)') trim(output_dir)//'/proc', myrank, trim(reg_name)//trim(kernel_name)//'_smooth.bin'

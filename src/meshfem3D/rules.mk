@@ -1,7 +1,7 @@
 #=====================================================================
 #
-#          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-#          --------------------------------------------------
+#                       S p e c f e m 3 D  G l o b e
+#                       ----------------------------
 #
 #     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 #                        Princeton University, USA
@@ -111,9 +111,11 @@ meshfem3D_MESHER_OBJECTS = \
 	$O/model_s20rts.check.o \
 	$O/model_s40rts.check.o \
 	$O/model_s362ani.check.o \
+	$O/model_scattering.check.o \
 	$O/model_sea99_s.check.o \
 	$O/model_sglobe.check.o \
 	$O/model_sglobecrust.check.o \
+	$O/model_sh_mars.check.o \
 	$O/model_spiral.check.o \
 	$O/moho_stretching.check.o \
 	$O/save_arrays_solver.check.o \
@@ -138,8 +140,8 @@ meshfem3D_MODULES = \
 	$(FC_MODDIR)/mpi_interfaces_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/gapp2_mantle_model_constants.$(FC_MODEXT) \
 	$(FC_MODDIR)/manager_adios.$(FC_MODEXT) \
-	$(FC_MODDIR)/meshfem3d_models_par.$(FC_MODEXT) \
-	$(FC_MODDIR)/meshfem3d_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/meshfem_models_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/meshfem_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/mpi_crust_mantle_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/mpi_inner_core_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/mpi_outer_core_par.$(FC_MODEXT) \
@@ -151,6 +153,7 @@ meshfem3D_MODULES = \
 	$(FC_MODDIR)/model_attenuation_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_bkmns_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_case65tay_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_sh_mars_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_ccrem_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_crust_1_0_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_crust_2_0_par.$(FC_MODEXT) \
@@ -167,6 +170,7 @@ meshfem3D_MODULES = \
 	$(FC_MODDIR)/model_s20rts_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_s362ani_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_s40rts_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_scattering_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sea1d_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sea99_s_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sglobe_par.$(FC_MODEXT) \
@@ -194,6 +198,7 @@ meshfem3D_SHARED_OBJECTS = \
 	$O/define_all_layers.shared.o \
 	$O/euler_angles.shared.o \
 	$O/exit_mpi.shared.o \
+	$O/fft.shared.o \
 	$O/flush_system.shared.o \
 	$O/get_all_eight_slices.shared.o \
 	$O/get_global.shared.o \

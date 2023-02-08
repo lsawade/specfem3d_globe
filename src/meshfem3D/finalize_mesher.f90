@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -27,8 +27,8 @@
 
   subroutine finalize_mesher()
 
-  use meshfem3D_par
-  use meshfem3D_models_par
+  use meshfem_par
+  use meshfem_models_par
 
   use manager_adios
 

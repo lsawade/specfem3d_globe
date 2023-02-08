@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -288,7 +288,7 @@ module specfem_par
   double precision, dimension(:), allocatable :: Mxx,Myy,Mzz,Mxy,Mxz,Myz
   double precision, dimension(:), allocatable :: xi_source,eta_source,gamma_source
   double precision, dimension(:), allocatable :: tshift_src,hdur,hdur_Gaussian
-  double precision, dimension(:), allocatable :: theta_source,phi_source
+  double precision, dimension(:), allocatable :: theta_source,phi_source,depth_source
 
   double precision :: Mrr,Mtt,Mpp,Mrt,Mrp,Mtp,Mw,M0
   double precision :: t0
@@ -296,7 +296,7 @@ module specfem_par
   double precision :: source_final_distance_max
 
   ! External source time function.
-  double precision, dimension(:), allocatable :: stfArray_external
+  double precision, dimension(:), allocatable :: user_source_time_function
 
   ! parameters for a force source located exactly at a grid point
   integer, dimension(:), allocatable :: force_stf

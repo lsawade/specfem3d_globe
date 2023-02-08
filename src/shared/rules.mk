@@ -1,7 +1,7 @@
 #=====================================================================
 #
-#          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-#          --------------------------------------------------
+#                       S p e c f e m 3 D  G l o b e
+#                       ----------------------------
 #
 #     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 #                        Princeton University, USA
@@ -49,6 +49,7 @@ shared_OBJECTS = \
 	$O/define_all_layers.shared.o \
 	$O/euler_angles.shared.o \
 	$O/exit_mpi.shared.o \
+	$O/fft.shared.o \
 	$O/flush_system.shared.o \
 	$O/get_all_eight_slices.shared.o \
 	$O/get_global.shared.o \

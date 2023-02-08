@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -56,6 +56,8 @@
 
 
   program interpolate_model
+
+  use constants, only: myrank
 
   use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ, &
     GAUSSALPHA,GAUSSBETA, &
@@ -190,8 +192,8 @@
   integer(kind=8) :: group_size_inc
 #endif
 
-  ! MPI parameters
-  integer :: sizeprocs,myrank
+  ! MPI processes
+  integer :: sizeprocs
 
   ! nodes search
   integer :: inodes
@@ -214,7 +216,6 @@
   call init_mpi()
   call world_size(sizeprocs)
   call world_rank(myrank)
-
 
   ! checks program arguments
   if (myrank == 0) then

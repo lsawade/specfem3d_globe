@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -61,7 +61,10 @@
   filename = trim(LOCAL_PATH) // "/mesh_parameters.bin"
 
   open(unit=IIN,file=trim(filename),status='old',action='read',form='unformatted',iostat=ier)
-  if (ier /= 0 ) stop 'Error opening mesh_parameters.bin'
+  if (ier /= 0 ) then
+    print *,'Error opening file: ',trim(filename)
+    stop 'Error opening mesh_parameters.bin'
+  endif
 
   ! same values from mesher as would have been saved by save_header_file.F90
 

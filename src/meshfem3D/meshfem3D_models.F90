@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -29,8 +29,8 @@
 
 ! preparing model parameter coefficients on all processes
 
-  use shared_parameters, only: LOCAL_PATH,SAVE_MESH_FILES
-  use meshfem3D_models_par
+  use shared_parameters, only: LOCAL_PATH,SAVE_MESH_FILES,ADD_SCATTERING_PERTURBATIONS
+  use meshfem_models_par
 
   implicit none
 
@@ -86,8 +86,10 @@
       ! (including their 1D-crustal profiles)
       call model_attenuation_setup(REFERENCE_1D_MODEL,CRUSTAL)
     endif
-
   endif
+
+  ! sets up scattering perturbations
+  if (ADD_SCATTERING_PERTURBATIONS) call model_scattering_broadcast()
 
   end subroutine meshfem3D_models_broadcast
 
@@ -101,7 +103,7 @@
 
 ! preparing model parameter coefficients on all processes for reference models
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -150,7 +152,7 @@
 ! preparing model parameter coefficients on all processes for mantle models
 
   use constants, only: myrank,IMAIN
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -231,6 +233,10 @@
         !chris modif checker 02/20/21
         call model_heterogen_mntl_broadcast()
 
+      case (THREE_D_MODEL_SH_MARS)
+        ! Mars spherical harmonics model
+        call model_SH_mars_broadcast()
+
       case default
         call exit_MPI(myrank,'3D model not defined')
 
@@ -268,7 +274,7 @@
 
   use constants, only: myrank,IMAIN
   use shared_parameters, only: SAVE_MESH_FILES
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -328,6 +334,10 @@
       ! anisotropic crust from SPiRaL
       call model_crust_spiral_broadcast()
 
+    case (ICRUST_SH_MARS)
+      ! Mars SH model (defines both crust & mantle)
+      call model_SH_mars_broadcast()
+
     case default
       stop 'crustal model type not defined'
 
@@ -359,7 +369,7 @@
 ! routine returns: rho,vpv,vph,vsv,vsh,eta_aniso,Qkappa,Qmu
 
   use shared_parameters, only: REGIONAL_MESH_CUTOFF
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -382,6 +392,16 @@
     ! check if mesh doubling flags and layering are consistent
     check_doubling_flag = .true.
   endif
+
+  vpv = ZERO
+  vph = ZERO
+  vsv = ZERO
+  vsh = ZERO
+  eta_aniso = ONE
+  rho = ZERO
+
+  Qmu = ZERO
+  Qkappa = ZERO
 
 !---
 !
@@ -596,7 +616,7 @@
                                             c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
                                             ispec,i,j,k)
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -867,6 +887,7 @@
           ! SPiRaL v1.4 anisotropic model
           lat = (PI/2.0d0-theta)*180.0d0/PI
           lon = phi*180.0d0/PI
+          ! input: lat in range [-90,90]; lon in range [-180,180]
           if (lon > 180.0d0) lon = lon - 360.0d0
           call model_mantle_spiral(r_used,lat,lon,vpv,vph,vsv,vsh,eta_aniso,rho, &
                                    c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
@@ -881,6 +902,11 @@
           vsv = dvs
           vsh = dvs
           rho = drho
+
+        case (THREE_D_MODEL_SH_MARS)
+          ! Mars model expansion on spherical harmonics
+          r_used = r  ! takes actual position (between CMB and surface)
+          call model_SH_mars_crustmantle(r_used,theta,phi,vpv,vph,vsv,vsh,eta_aniso,rho)
 
         case default
           print *,'Error: do not recognize value for THREE_D_MODEL ',THREE_D_MODEL
@@ -1147,7 +1173,7 @@
 
 ! returns velocities and density for points in 3D crustal region
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -1188,8 +1214,12 @@
 ! ADD YOUR MODEL HERE
 !
 !---
+
+  ! initializes
   found_crust = .false.
   moho_only = .false.
+  moho = 0.d0
+  sediment = 0.d0
 
   ! crustal model can vary for different 3-D models
   select case (THREE_D_MODEL)
@@ -1306,7 +1336,7 @@
 
 ! returns velocity/density for default crust
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -1327,40 +1357,31 @@
   logical :: found_crust_area,point_in_area
 
   ! initializes
-  if (moho_only) then
-    ! moho depth
-    moho = 0.d0
+  vpvc = 0.d0
+  vphc = 0.d0
+  vsvc = 0.d0
+  vshc = 0.d0
 
-    ! sediment depth
-    sediment = 0.d0
-  else
-    vpvc = 0.d0
-    vphc = 0.d0
-    vsvc = 0.d0
-    vshc = 0.d0
+  vpc = 0.d0
+  vsc = 0.d0
+  rhoc = 0.d0
 
-    vpc = 0.d0
-    vsc = 0.d0
-    rhoc = 0.d0
+  ! isotropic by default
+  etac = 1.d0
 
-    ! isotropic by default
-    etac = 1.d0
+  ! anisotropy
+  c11c = 0.d0; c12c = 0.d0; c13c = 0.d0
+  c14c = 0.d0; c15c = 0.d0; c16c = 0.d0
+  c22c = 0.d0; c23c = 0.d0; c24c = 0.d0
+  c25c = 0.d0; c26c = 0.d0; c33c = 0.d0
+  c34c = 0.d0; c35c = 0.d0; c36c = 0.d0
+  c44c = 0.d0; c45c = 0.d0; c46c = 0.d0
+  c55c = 0.d0; c56c = 0.d0; c66c = 0.d0
 
-    ! anisotropy
-    c11c = 0.d0; c12c = 0.d0; c13c = 0.d0
-    c14c = 0.d0; c15c = 0.d0; c16c = 0.d0
-    c22c = 0.d0; c23c = 0.d0; c24c = 0.d0
-    c25c = 0.d0; c26c = 0.d0; c33c = 0.d0
-    c34c = 0.d0; c35c = 0.d0; c36c = 0.d0
-    c44c = 0.d0; c45c = 0.d0; c46c = 0.d0
-    c55c = 0.d0; c56c = 0.d0; c66c = 0.d0
-
-    ! moho depth
-    moho = 0.d0
-
-    ! sediment depth
-    sediment = 0.d0
-  endif
+  ! moho depth
+  moho = 0.d0
+  ! sediment depth
+  sediment = 0.d0
 
   ! flag to indicate if position inside crust
   found_crust = .false.
@@ -1474,6 +1495,16 @@
                               c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c, &
                               found_crust,elem_in_crust,moho_only)
 
+    case (ICRUST_SH_MARS)
+      ! Mars model expansion on spherical harmonics
+      ! SH mars model defines velocities in both crust & mantle
+      call model_SH_mars_crust(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
+      if (moho_only) return
+      vpvc = vpc
+      vphc = vpc
+      vsvc = vsc
+      vshc = vsc
+
     case default
       stop 'crustal model type not defined'
 
@@ -1497,7 +1528,7 @@
 
   use constants, only: N_SLS,SPONGE_MIN_Q,SPONGE_WIDTH_IN_DEGREES
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   use model_prem_par, only: PREM_RMOHO
 
@@ -1644,7 +1675,7 @@
 
 ! overwrites values with updated model values (from iteration step) here, given at all GLL points
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -1828,7 +1859,7 @@
 
   use constants, only: PI,MAX_STRING_LEN,IMAIN,myrank
   use shared_parameters, only: LOCAL_PATH,RESOLUTION_TOPO_FILE,R_PLANET_KM
-  use meshfem3D_models_par, only: ibathy_topo
+  use meshfem_models_par, only: ibathy_topo
 
   implicit none
 

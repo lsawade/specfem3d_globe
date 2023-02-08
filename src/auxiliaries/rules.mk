@@ -1,7 +1,7 @@
 #=====================================================================
 #
-#          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-#          --------------------------------------------------
+#                       S p e c f e m 3 D  G l o b e
+#                       ----------------------------
 #
 #     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 #                        Princeton University, USA
@@ -605,9 +605,11 @@ xwrite_profile_OBJECTS += \
 	$O/model_s20rts.check.o \
 	$O/model_s40rts.check.o \
 	$O/model_s362ani.check.o \
+	$O/model_scattering.check.o \
 	$O/model_sea99_s.check.o \
 	$O/model_sglobe.check.o \
 	$O/model_sglobecrust.check.o \
+	$O/model_sh_mars.check.o \
 	$O/model_spiral.check.o \
 	$(EMPTY_MACRO)
 
@@ -622,6 +624,7 @@ xwrite_profile_SHARED_OBJECTS = \
 	$O/create_name_database.shared.o \
 	$O/define_all_layers.shared.o \
 	$O/exit_mpi.shared.o \
+	$O/fft.shared.o \
 	$O/flush_system.shared.o \
 	$O/get_all_eight_slices.shared.o \
 	$O/get_global.shared.o \

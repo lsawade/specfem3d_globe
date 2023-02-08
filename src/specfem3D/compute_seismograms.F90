@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -156,7 +156,7 @@
         eps_m_l_s(NDIM), stf_deltat, Kp_deltat, Hp_deltat
   integer :: iglob,irec_local,irec,ispec
 
-  double precision, external :: comp_source_time_function
+  double precision, external :: get_stf_viscoelastic
 
   ! element strain
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: eps_trace_over_3_loc
@@ -282,9 +282,11 @@
                             etax_crust_mantle(1,1,1,ispec),etay_crust_mantle(1,1,1,ispec),etaz_crust_mantle(1,1,1,ispec), &
                             gammax_crust_mantle(1,1,1,ispec),gammay_crust_mantle(1,1,1,ispec),gammaz_crust_mantle(1,1,1,ispec))
 
+    ! reverse time
     timeval = dble(NSTEP-it)*DT-t0-tshift_src(irec)
 
-    stf = comp_source_time_function(timeval,hdur_Gaussian(irec))
+    ! gets source-time function value
+    stf = get_stf_viscoelastic(timeval,irec,it)
 
     stf_deltat = stf * deltat
 

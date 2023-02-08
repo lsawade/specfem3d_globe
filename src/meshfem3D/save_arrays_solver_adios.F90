@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -54,11 +54,11 @@
 
   use shared_parameters, only: ATT_F_C_SOURCE
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     OCEANS,TRANSVERSE_ISOTROPY,ANISOTROPIC_3D_MANTLE, &
     ANISOTROPIC_INNER_CORE,ATTENUATION
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     NCHUNKS,ABSORBING_CONDITIONS,LOCAL_PATH, &
     ROTATION,EXACT_MASS_MATRIX_FOR_ROTATION, &
     nspec,nglob,iregion_code
@@ -1045,10 +1045,10 @@
 
   use constants
 
-  use meshfem3d_par, only: &
+  use meshfem_par, only: &
     myrank, LOCAL_PATH
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     HONOR_1D_SPHERICAL_MOHO
     !SAVE_BOUNDARY_MESH,HONOR_1D_SPHERICAL_MOHO,SUPPRESS_CRUSTAL_MESH
 

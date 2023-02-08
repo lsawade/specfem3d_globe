@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -28,7 +28,7 @@
   subroutine create_meshes()
 
   use shared_parameters, only: T_min_period,ATTENUATION
-  use meshfem3D_par
+  use meshfem_par
   use regions_mesh_par2, only: NSPEC2D_MOHO,NSPEC2D_400,NSPEC2D_670,NSPEC2D_CMB,NSPEC2D_ICB
 
   implicit none

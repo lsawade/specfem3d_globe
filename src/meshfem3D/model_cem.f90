@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -70,7 +70,7 @@ end module cem_par
   use constants, only: myrank
   use cem_par
   use netcdf
-  use meshfem3D_models_par, only: CEM_ACCEPT
+  use meshfem_models_par, only: CEM_ACCEPT
 
   integer              :: wSize
 
@@ -124,7 +124,7 @@ end module cem_par
   use cem_par
   use constants
 
-  use meshfem3D_par, only: ibool
+  use meshfem_par, only: ibool
 
   implicit none
 
@@ -288,7 +288,7 @@ end module cem_par
   use constants
   use cem_par
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     nspec, nglob, &
     ibool,xstore,ystore,zstore
 

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -28,10 +28,11 @@
 
 module postprocess_par
 
+  use constants, only: myrank
+
   use constants, only: CUSTOM_REAL,MAX_STRING_LEN, &
     NGLLX,NGLLY,NGLLZ,IIN,IOUT, &
-    FOUR_THIRDS,GAUSSALPHA,GAUSSBETA, &
-    myrank
+    FOUR_THIRDS,GAUSSALPHA,GAUSSBETA
 
   use shared_parameters, only: LOCAL_PATH,R_PLANET_KM
 

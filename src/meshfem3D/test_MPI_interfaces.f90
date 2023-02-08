@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -32,7 +32,7 @@
                                  ibool_interfaces)
 
   use constants
-  use meshfem3D_par, only: NPROCTOT,myrank
+  use meshfem_par, only: NPROCTOT,myrank
   use MPI_crust_mantle_par, only: NGLOB_CRUST_MANTLE
   use MPI_outer_core_par, only: NGLOB_OUTER_CORE
   use MPI_inner_core_par, only: NGLOB_INNER_CORE
@@ -241,7 +241,7 @@
 
   subroutine test_MPI_cm()
 
-  use meshfem3D_par, only: NPROCTOT,myrank
+  use meshfem_par, only: NPROCTOT,myrank
 
   use MPI_interfaces_par
   use MPI_crust_mantle_par
@@ -358,7 +358,7 @@
 
   subroutine test_MPI_oc()
 
-  use meshfem3D_par, only: NPROCTOT,myrank
+  use meshfem_par, only: NPROCTOT,myrank
 
   use MPI_interfaces_par
   use MPI_outer_core_par
@@ -468,7 +468,7 @@
 
   subroutine test_MPI_ic()
 
-  use meshfem3D_par, only: NPROCTOT,myrank
+  use meshfem_par, only: NPROCTOT,myrank
 
   use MPI_interfaces_par
   use MPI_inner_core_par

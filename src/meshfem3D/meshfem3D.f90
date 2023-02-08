@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -204,7 +204,7 @@
 !  - Z axis is up
 !
 ! To report bugs or suggest improvements to the code, please use our online
-! bug tracking system at http://www.geodynamics.org/roundup .
+! Issues tracking system at https://github.com/SPECFEM/specfem3d_globe/ .
 !
 ! Evolution of the code:
 ! ---------------------
@@ -329,7 +329,7 @@
 !             would lead to problems. passing arguments is a way to avoid such complications.
 !
 !             however, the mesher makes one exception here: it uses the
-!             module "meshfem3D_models_par" defined in the 'meshfem3D_models.f90' file.
+!             module "meshfem_models_par" defined in the 'meshfem3D_models.f90' file.
 !             the exception is based on the fact, that when one wants to incorporate
 !             a new 3D/1D velocity model, it became tedious to change so many routines hardly
 !             related to any model specific need.
@@ -339,7 +339,7 @@
 !             to have an idea where you will have to put some new code:
 !
 !                 - meshfem3D_models.f90: main file for models
-!                     put your model structure into the module "meshfem3D_models_par"
+!                     put your model structure into the module "meshfem_models_par"
 !                     and add your specific routine calls to get 1D/3D/attenuation values.
 !
 !                 - get_model_parameters.f90:

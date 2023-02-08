@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -51,12 +51,12 @@
   use shared_parameters, only: &
     R_CENTRAL_CUBE,RICB,RCMB
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     myrank,nspec,nglob,iregion_code, &
     ibool,idoubling,xstore,ystore,zstore, &
     xstore_glob,ystore_glob,zstore_glob
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     NCHUNKS,SAVE_MESH_FILES,ABSORBING_CONDITIONS,LOCAL_PATH, &
     ADIOS_FOR_ARRAYS_SOLVER,ADIOS_FOR_SOLVER_MESHFILES, &
     ROTATION,EXACT_MASS_MATRIX_FOR_ROTATION,GRAVITY_INTEGRALS, &
@@ -64,11 +64,11 @@
     NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX, &
     volume_total,Earth_mass_total,Earth_center_of_mass_x_total,Earth_center_of_mass_y_total,Earth_center_of_mass_z_total
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     OCEANS
 
 #ifdef USE_CEM
-  use meshfem3D_models_par, only: CEM_REQUEST
+  use meshfem_models_par, only: CEM_REQUEST
 #endif
 
   use MPI_interfaces_par, only: &
@@ -601,14 +601,14 @@
 
   use shared_parameters, only: ratio_sampling_array
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     nspec,iregion_code, &
     NCHUNKS,NUMCORNERS_SHARED,NUMFACES_SHARED, &
     NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX, &
     NGLOB1D_RADIAL,NGLOB1D_RADIAL_CORNER, &
     ATT1,ATT2,ATT3
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     ATTENUATION,ANISOTROPIC_INNER_CORE,ANISOTROPIC_3D_MANTLE
 
   use regions_mesh_par2
@@ -936,13 +936,13 @@
   use constants, only: SUPPRESS_CRUSTAL_MESH, &
     GAUSSALPHA,GAUSSBETA,NGLLX,NGLLY,NGLLZ,NGNOD
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     iregion_code,IREGION_CRUST_MANTLE, &
     R670,RMOHO,R400,RMIDDLE_CRUST, &
     ner_mesh_layers,r_top,r_bottom, &
     CASE_3D
 
-  use meshfem3D_models_par, only: REGIONAL_MOHO_MESH
+  use meshfem_models_par, only: REGIONAL_MOHO_MESH
 
   use regions_mesh_par
   use regions_mesh_par2
@@ -1097,9 +1097,10 @@
 
 ! creates global indexing array ibool
 
-  use constants, only: NGLLX,NGLLY,NGLLZ,ZERO,MAX_STRING_LEN,IREGION_CRUST_MANTLE
+  use constants, only: NGLLX,NGLLY,NGLLZ,ZERO,MAX_STRING_LEN,IREGION_CRUST_MANTLE, &
+    myrank,IMAIN
 
-  use meshfem3d_par, only: &
+  use meshfem_par, only: &
     nspec,nglob,iregion_code, &
     ibool,xstore,ystore,zstore, &
     myrank
@@ -1123,6 +1124,12 @@
 
   ! sets up global addressing
   if (npointot > 0) then
+    if (myrank == 0) then
+      write(IMAIN,*) '    total number of points            : ',npointot
+      write(IMAIN,*) '    array memory required per process : ',dble(npointot) * dble(8) / 1024.d0 / 1024.d0,'MB'
+      call flush_IMAIN()
+    endif
+
     ! allocate memory for arrays
     allocate(xp(npointot), &
              yp(npointot), &
@@ -1135,10 +1142,10 @@
     ! we need to create a copy of the x, y and z arrays because sorting in get_global will swap
     ! these arrays and therefore destroy them
 
-  ! openmp mesher
-  !!$OMP PARALLEL DEFAULT(SHARED) &
-  !!$OMP PRIVATE(ispec,ieoff,ilocnum,i,j,k)
-  !!$OMP DO
+! openmp mesher
+!!$OMP PARALLEL DEFAULT(SHARED) &
+!!$OMP PRIVATE(ispec,ieoff,ilocnum,i,j,k)
+!!$OMP DO
     do ispec = 1,nspec
       ieoff = NGLLX * NGLLY * NGLLZ * (ispec-1)
       ilocnum = 0
@@ -1157,8 +1164,13 @@
         enddo
       enddo
     enddo
-  !!$OMP ENDDO
-  !!$OMP END PARALLEL
+!!$OMP ENDDO
+!!$OMP END PARALLEL
+
+    if (myrank == 0) then
+      write(IMAIN,*) '    getting global points             : npointot = ',npointot,' nspec = ',nspec
+      call flush_IMAIN()
+    endif
 
     call get_global(npointot,xp,yp,zp,ibool,nglob_new)
 
@@ -1190,6 +1202,11 @@
   !  endif
   !  call synchronize_all()
   !enddo
+
+  if (myrank == 0) then
+    write(IMAIN,*) '    creating indirect addressing'
+    call flush_IMAIN()
+  endif
 
   ! creates a new indirect addressing to reduce cache misses in memory access in the solver
   ! this is *critical* to improve performance in the solver
@@ -1229,6 +1246,11 @@
     enddo
   enddo
 
+  if (myrank == 0) then
+    write(IMAIN,*) '    ibool ok'
+    call flush_IMAIN()
+  endif
+
   end subroutine crm_setup_indexing
 
 !
@@ -1239,7 +1261,7 @@
 
 ! sets up MPI cutplane arrays
 
-  use meshfem3d_par, only: &
+  use meshfem_par, only: &
     nspec,iregion_code, &
     ibool,idoubling, &
     xstore,ystore,zstore, &
@@ -1310,7 +1332,7 @@
 
   subroutine crm_free_MPI_arrays()
 
-  use meshfem3D_par, only: iregion_code
+  use meshfem_par, only: iregion_code
 
   use MPI_interfaces_par
 
@@ -1350,7 +1372,7 @@
 
   use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     nspec,nglob, &
     myrank,ibool,xstore,ystore,zstore, &
     xstore_glob,ystore_glob,zstore_glob

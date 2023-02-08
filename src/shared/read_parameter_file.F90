@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -206,6 +206,12 @@
   call read_value_logical(USE_FORCE_POINT_SOURCE, 'USE_FORCE_POINT_SOURCE', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_FORCE_POINT_SOURCE'
 
+  ! Check whether the moment tensor derivate source is to be computed
+  call read_value_logical(USE_SOURCE_DERIVATIVE, 'USE_SOURCE_DERIVATIVE', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE'
+  call read_value_integer(USE_SOURCE_DERIVATIVE_DIRECTION, 'USE_SOURCE_DERIVATIVE_DIRECTION', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE_DIRECTION'
+
   ! monochromatic double couple source
   call read_value_logical(USE_MONOCHROMATIC_CMT_SOURCE, 'USE_MONOCHROMATIC_CMT_SOURCE', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_MONOCHROMATIC_CMT_SOURCE'
@@ -327,7 +333,7 @@
   call read_value_integer(USER_NSTEP, 'NSTEP', ier); ier = 0
   ! no error checking, continue if not available
 
-  ! regional local mesh parameters
+  ! (optional) regional local mesh parameters
   if (REGIONAL_MESH_CUTOFF) then
     ! flag to switch on local mesh
     call read_value_logical(USE_LOCAL_MESH, 'USE_LOCAL_MESH', ier); ier = 0
@@ -347,6 +353,21 @@
     call read_value_integer(NZ_DOUBLING_5, 'NZ_DOUBLING_5', ier); ier = 0
 
     ! no error checking, continue if not available
+  endif
+
+  ! (optional) scattering perturbations
+  call read_value_logical(ADD_SCATTERING_PERTURBATIONS, 'SCATTERING_PERTURBATIONS', ier); ier = 0
+  if (ADD_SCATTERING_PERTURBATIONS) then
+    ! perturbation strength (e.g., 0.1 for 10% perturbations)
+    call read_value_double_precision(SCATTERING_STRENGTH, 'SCATTERING_STRENGTH', ier); ier = 0
+    ! correlation factor (e.g., 1.0 for k * a ~ 1.0)
+    call read_value_double_precision(SCATTERING_CORRELATION, 'SCATTERING_CORRELATION', ier); ier = 0
+  endif
+
+  ! (optional) simultaneous run execution shifts
+  call read_value_logical(SHIFT_SIMULTANEOUS_RUNS, 'SHIFT_SIMULTANEOUS_RUNS', ier); ier = 0
+  if (SHIFT_SIMULTANEOUS_RUNS) then
+    call read_value_double_precision(FILESYSTEM_IO_BANDWIDTH, 'FILESYSTEM_IO_BANDWIDTH', ier); ier = 0
   endif
 
   ! closes parameter file

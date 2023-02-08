@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  8 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -37,7 +37,7 @@
     IREGION_CRUST_MANTLE,IREGION_OUTER_CORE,IREGION_INNER_CORE
 
   use shared_parameters, only: R_PLANET
-  use meshfem3D_models_par, only: TOPOGRAPHY
+  use meshfem_models_par, only: TOPOGRAPHY
 
   implicit none
 
