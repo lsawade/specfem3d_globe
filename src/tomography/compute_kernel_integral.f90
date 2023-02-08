@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -162,7 +162,7 @@ subroutine compute_kernel_integral_iso()
   enddo
 
   ! statistics
-  ! (note: sum_all_cr() will only return valid results to master process)
+  ! (note: sum_all_cr() will only return valid results to main process)
   ! kernel integration: for whole volume
   call sum_all_cr(kernel_integral_alpha,integral_alpha_sum)
   call sum_all_cr(kernel_integral_beta,integral_beta_sum)
@@ -381,7 +381,7 @@ subroutine compute_kernel_integral_tiso()
   enddo
 
   ! statistics
-  ! (note: sum_all_cr() will only return valid results to master process)
+  ! (note: sum_all_cr() will only return valid results to main process)
   ! kernel integration: for whole volume
   call sum_all_cr(integral_bulk,integral_bulk_sum)
   call sum_all_cr(integral_betav,integral_betav_sum)
@@ -606,7 +606,7 @@ subroutine compute_kernel_integral_tiso_iso()
   enddo
 
   ! statistics
-  ! (note: sum_all_cr() will only return valid results to master process)
+  ! (note: sum_all_cr() will only return valid results to main process)
   ! kernel integration: for whole volume
   call sum_all_cr(integral_bulk,integral_bulk_sum)
   call sum_all_cr(integral_beta,integral_beta_sum)

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -29,8 +29,8 @@
 
 ! preparing model parameter coefficients on all processes
 
-  use shared_parameters, only: LOCAL_PATH,SAVE_MESH_FILES
-  use meshfem3D_models_par
+  use shared_parameters, only: LOCAL_PATH,SAVE_MESH_FILES,ADD_SCATTERING_PERTURBATIONS
+  use meshfem_models_par
 
   implicit none
 
@@ -38,7 +38,7 @@
   integer :: ier
 
   ! sets up spline coefficients for ellipticity
-  if (ELLIPTICITY) call make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2,ONE_CRUST)
+  if (ELLIPTICITY) call make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2)
 
   ! read topography and bathymetry file
   if (TOPOGRAPHY) then
@@ -86,8 +86,10 @@
       ! (including their 1D-crustal profiles)
       call model_attenuation_setup(REFERENCE_1D_MODEL,CRUSTAL)
     endif
-
   endif
+
+  ! sets up scattering perturbations
+  if (ADD_SCATTERING_PERTURBATIONS) call model_scattering_broadcast()
 
   end subroutine meshfem3D_models_broadcast
 
@@ -101,7 +103,7 @@
 
 ! preparing model parameter coefficients on all processes for reference models
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -129,6 +131,13 @@
 
     case (REFERENCE_MODEL_CASE65TAY)
       call model_case65TAY_broadcast(CRUSTAL)
+
+    case (REFERENCE_MODEL_MARS_1D)
+      call model_mars_1D_broadcast(CRUSTAL)
+
+    case (REFERENCE_MODEL_CCREM)
+      call model_ccrem_broadcast(CRUSTAL)
+
   end select
 
   end subroutine meshfem3D_reference_model_broadcast
@@ -142,9 +151,8 @@
 
 ! preparing model parameter coefficients on all processes for mantle models
 
-  use constants, only: myrank
-
-  use meshfem3D_models_par
+  use constants, only: myrank,IMAIN
+  use meshfem_models_par
 
   implicit none
 
@@ -209,6 +217,26 @@
         ! Montagner anisotropic model
         call model_aniso_mantle_broadcast()
 
+      case (THREE_D_MODEL_BKMNS_GLAD)
+        ! GLAD model expansion on block-mantle-spherical-harmonics
+        if (myrank == 0) write(IMAIN,*) 'setting up both s362ani and bkmns models...'
+        ! needs s362ani topo for 410/660
+        call model_s362ani_broadcast(THREE_D_MODEL_S362ANI)
+        ! block-mantle-spherical-harmonics model
+        call model_bkmns_mantle_broadcast()
+
+      case (THREE_D_MODEL_SPIRAL)
+        ! SPiRal model
+        call model_mantle_spiral_broadcast()
+
+      case (THREE_D_MODEL_HETEROGEN_PREM)
+        !chris modif checker 02/20/21
+        call model_heterogen_mntl_broadcast()
+
+      case (THREE_D_MODEL_SH_MARS)
+        ! Mars spherical harmonics model
+        call model_SH_mars_broadcast()
+
       case default
         call exit_MPI(myrank,'3D model not defined')
 
@@ -244,8 +272,9 @@
 
 ! preparing model parameter coefficients on all processes for crustal models
 
-  use meshfem3D_models_par
+  use constants, only: myrank,IMAIN
   use shared_parameters, only: SAVE_MESH_FILES
+  use meshfem_models_par
 
   implicit none
 
@@ -289,6 +318,26 @@
       ! by default (vs,rho,eta,moho) from crust 1.0 (global coverage)
       call model_crust_1_0_broadcast()
 
+    case (ICRUST_SGLOBECRUST)
+      ! modified crust2.0 for SGLOBE-rani
+      call model_sglobecrust_broadcast()
+
+    case (ICRUST_BKMNS_GLAD)
+      ! GLAD model expansion on block-mantle-spherical-harmonics
+      if (myrank == 0) write(IMAIN,*) 'setting up both crust 2.0 and bkmns crust models ...'
+      ! needs crust 2.0 for moho depths
+      call model_crust_2_0_broadcast()
+      ! crustal structure in blocks between topography and 80km depth
+      call model_bkmns_crust_broadcast()
+
+    case (ICRUST_SPIRAL)
+      ! anisotropic crust from SPiRaL
+      call model_crust_spiral_broadcast()
+
+    case (ICRUST_SH_MARS)
+      ! Mars SH model (defines both crust & mantle)
+      call model_SH_mars_broadcast()
+
     case default
       stop 'crustal model type not defined'
 
@@ -296,7 +345,6 @@
 
   ! plot moho as VTK file output
   if (SAVE_MESH_FILES) call meshfem3D_plot_VTK_crust_moho()
-
 
   end subroutine meshfem3D_crust_broadcast
 
@@ -320,7 +368,8 @@
 !
 ! routine returns: rho,vpv,vph,vsv,vsh,eta_aniso,Qkappa,Qmu
 
-  use meshfem3D_models_par
+  use shared_parameters, only: REGIONAL_MESH_CUTOFF
+  use meshfem_models_par
 
   implicit none
 
@@ -333,6 +382,26 @@
 
   ! local parameters
   double precision :: drhodr,vp,vs
+  logical :: check_doubling_flag
+
+  ! initializes
+  if (REGIONAL_MESH_CUTOFF) then
+    ! no need to check doubling flags
+    check_doubling_flag = .false.
+  else
+    ! check if mesh doubling flags and layering are consistent
+    check_doubling_flag = .true.
+  endif
+
+  vpv = ZERO
+  vph = ZERO
+  vsv = ZERO
+  vsh = ZERO
+  eta_aniso = ONE
+  rho = ZERO
+
+  Qmu = ZERO
+  Qkappa = ZERO
 
 !---
 !
@@ -343,13 +412,12 @@
   ! gets 1-D reference model parameters
   select case (REFERENCE_1D_MODEL)
 
-    case (REFERENCE_MODEL_PREM)
+    case (REFERENCE_MODEL_PREM,REFERENCE_MODEL_PREM2)
       ! PREM (by Dziewonski & Anderson) - used also as background for 3D models
       if (TRANSVERSE_ISOTROPY) then
         ! default PREM:
         !   gets anisotropic PREM parameters, with radial anisotropic extension (from moho to surface for crustal model)
-        call model_prem_aniso(r_prem,rho,vpv,vph,vsv,vsh,eta_aniso, &
-                              Qkappa,Qmu,idoubling,CRUSTAL,ONE_CRUST)
+        call model_prem_aniso(r_prem,rho,vpv,vph,vsv,vsh,eta_aniso,Qkappa,Qmu,idoubling,CRUSTAL,check_doubling_flag)
 
         ! calculates isotropic values
         vp = sqrt(((8.d0+4.d0*eta_aniso)*vph*vph + 3.d0*vpv*vpv &
@@ -371,13 +439,13 @@
         !case (THREE_D_MODEL_SGLOBE,THREE_D_MODEL_SGLOBE_ISO)
         !  ! gets anisotropic PREM parameters, with isotropic extension (from moho to surface for crustal model)
         !  call model_prem_aniso_extended_isotropic(r_prem,rho,vpv,vph,vsv,vsh,eta_aniso,Qkappa,Qmu, &
-        !                                           idoubling,CRUSTAL,ONE_CRUST)
+        !                                           idoubling,CRUSTAL,check_doubling_flag)
         !
         ! eventually also Ritsema models, check...
         !case (THREE_D_MODEL_S20RTS,THREE_D_MODEL_S40RTS)
         !  ! gets anisotropic PREM parameters, with isotropic extension (from moho to surface for crustal model)
         !  call model_prem_aniso_extended_isotropic(r_prem,rho,vpv,vph,vsv,vsh,eta_aniso,Qkappa,Qmu, &
-        !                                           idoubling,CRUSTAL,ONE_CRUST)
+        !                                           idoubling,CRUSTAL,check_doubling_flag)
         !
         !case default
         !  continue
@@ -385,8 +453,7 @@
 
       else
         ! isotropic PREM model
-        call model_prem_iso(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL, &
-                            ONE_CRUST,.true.)
+        call model_prem_iso(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL,check_doubling_flag)
         vpv = vp
         vph = vp
         vsv = vs
@@ -440,7 +507,7 @@
     case (REFERENCE_MODEL_IASP91)
       ! IASP91 (by Kennett & Engdahl) - pure isotropic model, used in 1D model mode only
       call model_iasp91(r_prem,rho,vp,vs,Qkappa,Qmu,idoubling, &
-                        ONE_CRUST,.true.,RICB,RCMB,RTOPDDOUBLEPRIME, &
+                        ONE_CRUST,check_doubling_flag,RICB,RCMB,RTOPDDOUBLEPRIME, &
                         R771,R670,R400,R220,R120,RMOHO,RMIDDLE_CRUST)
       vpv = vp
       vph = vp
@@ -451,7 +518,7 @@
     case (REFERENCE_MODEL_JP1D)
       !JP1D (by Zhao et al.) - pure isotropic model, used also as background for 3D models
       call model_jp1d(r_prem,rho,vp,vs,Qkappa,Qmu,idoubling, &
-                      .true.,RICB,RCMB,RTOPDDOUBLEPRIME, &
+                      check_doubling_flag,RICB,RCMB,RTOPDDOUBLEPRIME, &
                       R670,R220,R771,R400,R80,RMOHO,RMIDDLE_CRUST)
       vpv = vp
       vph = vp
@@ -468,10 +535,19 @@
       vsh = vs
       eta_aniso = 1.d0
 
+    case (REFERENCE_MODEL_CCREM)
+      ! CCREM (by Ma & Tkalcic) - pure isotropic model
+      call model_ccrem(r_prem,rho,vp,vs,Qkappa,Qmu,idoubling,iregion_code)
+      vpv = vp
+      vph = vp
+      vsv = vs
+      vsh = vs
+      eta_aniso = 1.d0
+
+    ! Mars 1D models
     case (REFERENCE_MODEL_SOHL)
       ! Mars
-      call model_Sohl(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL, &
-                      ONE_CRUST,.true.)
+      call model_Sohl(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL,check_doubling_flag)
       vpv = vp
       vph = vp
       vsv = vs
@@ -487,10 +563,19 @@
       vsh = vs
       eta_aniso = 1.d0
 
+    case (REFERENCE_MODEL_MARS_1D)
+      ! Mars
+      call model_mars_1D(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL,.true.,iregion_code)
+      vpv = vp
+      vph = vp
+      vsv = vs
+      vsh = vs
+      eta_aniso = 1.d0
+
+    ! Moon 1D models
     case (REFERENCE_MODEL_VPREMOON)
       ! Moon
-      call model_vpremoon(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL, &
-                          ONE_CRUST,.true.,iregion_code)
+      call model_vpremoon(r_prem,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL,.true.,iregion_code)
       vpv = vp
       vph = vp
       vsv = vs
@@ -524,14 +609,14 @@
 !
 
   subroutine meshfem3D_models_get3Dmntl_val(iregion_code,r_prem,rho, &
-                              vpv,vph,vsv,vsh,eta_aniso, &
-                              RCMB,RMOHO, &
-                              xmesh,ymesh,zmesh,r, &
-                              c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
-                              c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
-                              ispec,i,j,k)
+                                            vpv,vph,vsv,vsh,eta_aniso, &
+                                            RCMB,RMOHO, &
+                                            r,theta,phi, &
+                                            c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
+                                            c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
+                                            ispec,i,j,k)
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -541,17 +626,17 @@
   double precision, intent(inout) :: vpv,vph,vsv,vsh,eta_aniso
 
   double precision,intent(in) :: RCMB,RMOHO
-  double precision,intent(in) :: xmesh,ymesh,zmesh,r
+  double precision,intent(in) :: r,theta,phi
 
   ! the 21 coefficients for an anisotropic medium in reduced notation
   double precision,intent(inout) :: c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
-                                  c33,c34,c35,c36,c44,c45,c46,c55,c56,c66
+                                    c33,c34,c35,c36,c44,c45,c46,c55,c56,c66
 
   ! heterogen model and CEM needs these (CEM to determine iglob)
   integer, intent(in) :: ispec, i, j, k
 
   ! local parameters
-  double precision :: r_used,r_dummy,theta,phi
+  double precision :: r_used
   double precision :: dvp,dvs,drho,vp,vs,moho,sediment
   double precision :: dvpv,dvph,dvsv,dvsh,deta
   double precision :: lat,lon
@@ -560,7 +645,7 @@
   real(kind=4) :: xcolat,xlon,xrad
   real(kind=4) :: xdvpv,xdvph,xdvsv,xdvsh
 
-  logical :: found_crust,suppress_mantle_extension,is_inside_region
+  logical :: found_crust,suppress_mantle_extension,is_inside_region,convert_tiso_to_cij
 
   ! initializes perturbation values
   dvs = ZERO
@@ -580,10 +665,6 @@
 
   r_used = ZERO
   suppress_mantle_extension = .false.
-
-  ! gets point's theta/phi
-  call xyz_2_rthetaphi_dble(xmesh,ymesh,zmesh,r_dummy,theta,phi)
-  call reduce(theta,phi)
 
 !---
 !
@@ -764,8 +845,9 @@
             r_used = 6321000.d0/R_PLANET
           endif
 
-          call mantle_sglobe(r_used,theta,phi,dvsv,dvsh,dvp,drho)
+          call mantle_sglobe(r_used,theta,phi,vsv,vsh,dvsv,dvsh,dvp,drho)
 
+          ! updates velocities from reference model
           if (TRANSVERSE_ISOTROPY) then
             ! tiso perturbation
             vpv = vpv*(1.0d0+dvp)
@@ -795,6 +877,37 @@
                                   c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
                                   c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
+        case (THREE_D_MODEL_BKMNS_GLAD)
+          ! GLAD model expansion on block-mantle-spherical-harmonics
+          ! model takes actual position (includes topography between 80km depth and surface topo)
+          r_used = r
+          call model_bkmns_mantle(r_used,theta,phi,vpv,vph,vsv,vsh,eta_aniso,rho)
+
+        case (THREE_D_MODEL_SPIRAL)
+          ! SPiRaL v1.4 anisotropic model
+          lat = (PI/2.0d0-theta)*180.0d0/PI
+          lon = phi*180.0d0/PI
+          ! input: lat in range [-90,90]; lon in range [-180,180]
+          if (lon > 180.0d0) lon = lon - 360.0d0
+          call model_mantle_spiral(r_used,lat,lon,vpv,vph,vsv,vsh,eta_aniso,rho, &
+                                   c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
+                                   c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
+
+        case (THREE_D_MODEL_HETEROGEN_PREM)
+          ! chris modif checkers 02/20/21
+          call model_heterogen_mantle(ispec,i,j,k,r_prem,theta,phi,dvs,dvp,drho)
+          ! vpv = vpv*(1.0d0+dvp) ! correct format with initial heterogenous model
+          vpv = dvp
+          vph = dvp
+          vsv = dvs
+          vsh = dvs
+          rho = drho
+
+        case (THREE_D_MODEL_SH_MARS)
+          ! Mars model expansion on spherical harmonics
+          r_used = r  ! takes actual position (between CMB and surface)
+          call model_SH_mars_crustmantle(r_used,theta,phi,vpv,vph,vsv,vsh,eta_aniso,rho)
+
         case default
           print *,'Error: do not recognize value for THREE_D_MODEL ',THREE_D_MODEL
           stop 'unknown 3D Earth model in meshfem3D_models_get3Dmntl_val(), please check... '
@@ -806,10 +919,11 @@
     ! heterogen model
     ! adds additional mantle perturbations
     ! (based on density variations) on top of reference 3D model
-    if (HETEROGEN_3D_MANTLE .and. .not. suppress_mantle_extension) then
+    if (HETEROGEN_3D_MANTLE &
+        .and. .not. suppress_mantle_extension &
+        .and. THREE_D_MODEL /= THREE_D_MODEL_HETEROGEN_PREM) then
       ! gets spherical coordinates of actual point location
-      call xyz_2_rthetaphi_dble(xmesh,ymesh,zmesh,r_used,theta,phi)
-      call reduce(theta,phi)
+      r_used = r
       ! adds hetergeneous perturbations (isotropic)
       call model_heterogen_mantle(ispec,i,j,k,r_used,theta,phi,dvs,dvp,drho)
       vpv = vpv*(1.0d0+dvp)
@@ -866,14 +980,39 @@
   !
   ! converts isotropic/tiso parameters to fully anisotropic parameters
   if (ANISOTROPIC_3D_MANTLE .and. iregion_code == IREGION_CRUST_MANTLE) then
+    ! checks models if we need to convert tiso values to full cij
+    convert_tiso_to_cij = .true.
 
-    ! anisotropic model between the Moho and 670 km (change to CMB if desired)
+    ! special case for fully anisotropic models
+    ! anisotropic models defined between the Moho and 670 km (change to CMB if desired)
     if (THREE_D_MODEL == THREE_D_MODEL_ANISO_MANTLE) then
       ! special case for model_aniso_mantle()
-      ! c11,.. already set in model_aniso_mantle() routine
-      ! nothing to do left
-      continue
-    else
+      if (suppress_mantle_extension) then
+        ! point is in crust, and CRUSTAL == .false. (no 3D crustal model); model_aniso_mantle() hasn't been called.
+        ! we still need to convert the 1D reference crustal values (vpv,vph,..) to full cij coefficients
+        convert_tiso_to_cij = .true.
+      else
+        ! c11,.. already set in model_aniso_mantle() routine
+        ! nothing left to do
+        convert_tiso_to_cij = .false.
+      endif
+    endif
+
+    ! SPiRal model
+    if (THREE_D_MODEL == THREE_D_MODEL_SPIRAL) then
+      ! special case for appended _1Dcrust cases
+      if (suppress_mantle_extension) then
+        ! point is in crust, and CRUSTAL == .false. (no 3D crustal model); model_mantle_spiral() hasn't been called.
+        ! we still need to convert the 1D reference crustal values (vpv,vph,..) to full cij coefficients
+        convert_tiso_to_cij = .true.
+      else
+        ! sets c11,.. in model_mantle_spiral() routine
+        ! nothing left to do
+        convert_tiso_to_cij = .false.
+      endif
+    endif
+
+    if (convert_tiso_to_cij) then
       ! convert isotropic/tiso parameters to full cij
       if (TRANSVERSE_ISOTROPY) then
         ! assume that transverse isotropy is given for a radial symmetry axis
@@ -893,6 +1032,7 @@
                                           c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
       else
+        ! we need to convert tiso/iso values to full cij coefficients
         ! calculates isotropic values from given (transversely isotropic) reference values
         ! (are non-dimensionalized)
         !
@@ -929,6 +1069,7 @@
         c66 = c44
       endif
     endif
+
   endif ! ANISOTROPIC_3D_MANTLE
 
   if (ANISOTROPIC_INNER_CORE .and. iregion_code == IREGION_INNER_CORE) then
@@ -1024,7 +1165,7 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine meshfem3D_models_get3Dcrust_val(iregion_code,xmesh,ymesh,zmesh,r, &
+  subroutine meshfem3D_models_get3Dcrust_val(iregion_code,r,theta,phi, &
                                              vpv,vph,vsv,vsh,rho,eta_aniso, &
                                              c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
                                              c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
@@ -1032,13 +1173,14 @@
 
 ! returns velocities and density for points in 3D crustal region
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
   integer,intent(in) :: iregion_code
   ! note: r is the exact radius (and not r_prem with tolerance)
-  double precision,intent(in) :: xmesh,ymesh,zmesh,r
+  !       theta in [0,PI], phi in [0,2PI]
+  double precision,intent(in) :: r,theta,phi
   double precision,intent(inout) :: vpv,vph,vsv,vsh,rho,eta_aniso
 
   ! the 21 coefficients for an anisotropic medium in reduced notation
@@ -1049,21 +1191,18 @@
   double precision,intent(inout) :: moho,sediment
 
   ! local parameters
-  double precision :: r_dummy,theta,phi
   double precision :: lat,lon
   double precision :: vpvc,vphc,vsvc,vshc,etac
   double precision :: vpc,vsc,rhoc !vpc_eu
-
+  double precision :: c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                      c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c
+  double precision :: A,C,L,N,F
   double precision :: dvs,dvp
-  logical :: found_crust,is_inside_region
+  logical :: found_crust,is_inside_region,moho_only
 
   ! checks if anything to do, that is, there is nothing to do
   ! for point radius smaller than deepest possible crust radius (~80 km depth)
-  if (r < R_DEEPEST_CRUST ) return
-
-  ! gets point's position theta/phi, lat/lon
-  call xyz_2_rthetaphi_dble(xmesh,ymesh,zmesh,r_dummy,theta,phi)
-  call reduce(theta,phi)
+  if (r < R_DEEPEST_CRUST) return
 
   ! lat/lon in degrees (range lat/lon = [-90,90] / [-180,180]
   lat = (PI_OVER_TWO - theta) * RADIANS_TO_DEGREES
@@ -1075,22 +1214,33 @@
 ! ADD YOUR MODEL HERE
 !
 !---
+
+  ! initializes
   found_crust = .false.
+  moho_only = .false.
+  moho = 0.d0
+  sediment = 0.d0
 
   ! crustal model can vary for different 3-D models
   select case (THREE_D_MODEL)
 
     case (THREE_D_MODEL_SEA99_JP3D,THREE_D_MODEL_JP3D)
+      ! partial/regional crustal model only
       ! tries to use Zhao's model of the crust
       call model_jp3d_iso_zhao(r,theta,phi,vpc,vsc,dvp,dvs,rhoc,moho,sediment,found_crust,is_inside_region)
+
       if (.not. is_inside_region) then
         ! uses default crust outside of model region
-        call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust)
+        call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only, &
+                                   c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                                   c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c)
       endif
 
     case default
       ! default crust
-      call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust)
+      call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only, &
+                                 c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                                 c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c)
 
   end select
 
@@ -1105,29 +1255,70 @@
 
     ! sets anisotropy in crustal region as well
     if (ANISOTROPIC_3D_MANTLE .and. iregion_code == IREGION_CRUST_MANTLE) then
-      ! equivalent with an isotropic elastic tensor (given vpv and vsv as isotropic wave speeds)
-      ! note: todo - this could be written as a transversely isotropic tensor (given vphc,vpvc,vshc,vsvc and etac from above)
-      c11 = rho * vpv*vpv
-      c12 = rho * (vpv*vpv - 2.d0*vsv*vsv)
-      c13 = c12
-      c14 = 0.d0
-      c15 = 0.d0
-      c16 = 0.d0
-      c22 = c11
-      c23 = c12
-      c24 = 0.d0
-      c25 = 0.d0
-      c26 = 0.d0
-      c33 = c11
-      c34 = 0.d0
-      c35 = 0.d0
-      c36 = 0.d0
-      c44 = rho * vsv*vsv
-      c45 = 0.d0
-      c46 = 0.d0
-      c55 = c44
-      c56 = 0.d0
-      c66 = c44
+
+      if (THREE_D_MODEL == THREE_D_MODEL_SPIRAL .and. REFERENCE_CRUSTAL_MODEL == ICRUST_SPIRAL) then
+        ! SPiRal has fully anisotropic crustal parameters
+        ! c11,.. already set in model_crust_spiral() routine
+        c11 = c11c
+        c12 = c12c
+        c13 = c13c
+        c14 = c14c
+        c15 = c15c
+        c16 = c16c
+        c22 = c22c
+        c23 = c23c
+        c24 = c24c
+        c25 = c25c
+        c26 = c26c
+        c33 = c33c
+        c34 = c34c
+        c35 = c35c
+        c36 = c36c
+        c44 = c44c
+        c45 = c45c
+        c46 = c46c
+        c55 = c55c
+        c56 = c56c
+        c66 = c66c
+      else
+        if (TRANSVERSE_ISOTROPY) then
+          ! converts from a tiso crust parameterization to a fully anisotropic one
+          ! Love parameterization
+          A = rho * vph**2
+          C = rho * vpv**2
+          L = rho * vsv**2
+          N = rho * vsh**2
+          F = eta_aniso * (A - 2.d0 * L)
+          ! local (radial) coordinate system to global SPECFEM reference
+          call rotate_tensor_Love_to_global(theta,phi, &
+                                            A,C,N,L,F, &
+                                            c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
+                                            c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
+        else
+          ! equivalent with an isotropic elastic tensor (given vpv and vsv as isotropic wave speeds)
+          c11 = rho * vpv*vpv
+          c12 = rho * (vpv*vpv - 2.d0*vsv*vsv)
+          c13 = c12
+          c14 = 0.d0
+          c15 = 0.d0
+          c16 = 0.d0
+          c22 = c11
+          c23 = c12
+          c24 = 0.d0
+          c25 = 0.d0
+          c26 = 0.d0
+          c33 = c11
+          c34 = 0.d0
+          c35 = 0.d0
+          c36 = 0.d0
+          c44 = rho * vsv*vsv
+          c45 = 0.d0
+          c46 = 0.d0
+          c55 = c44
+          c56 = 0.d0
+          c66 = c44
+        endif
+      endif
     endif
   endif
 
@@ -1138,20 +1329,27 @@
 !
 
 
-  subroutine meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust)
+  subroutine meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc, &
+                                   moho,sediment,found_crust,elem_in_crust,moho_only, &
+                                   c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                                   c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c)
 
 ! returns velocity/density for default crust
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
+  ! lat/lon  - in degrees (range lat/lon = [-90,90] / [-180,180]
+  ! radius r - normalized by globe radius [0,1.x]
   double precision,intent(in) :: lat,lon,r
+
   double precision,intent(out) :: vpvc,vphc,vsvc,vshc,etac,rhoc
   double precision,intent(out) :: moho,sediment
   logical,intent(out) :: found_crust
-  logical,intent(in) :: elem_in_crust
-
+  logical,intent(in) :: elem_in_crust,moho_only
+  double precision,intent(out) :: c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                                  c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c
   ! local parameters
   ! for isotropic crust
   double precision :: vpc,vsc
@@ -1171,9 +1369,17 @@
   ! isotropic by default
   etac = 1.d0
 
+  ! anisotropy
+  c11c = 0.d0; c12c = 0.d0; c13c = 0.d0
+  c14c = 0.d0; c15c = 0.d0; c16c = 0.d0
+  c22c = 0.d0; c23c = 0.d0; c24c = 0.d0
+  c25c = 0.d0; c26c = 0.d0; c33c = 0.d0
+  c34c = 0.d0; c35c = 0.d0; c36c = 0.d0
+  c44c = 0.d0; c45c = 0.d0; c46c = 0.d0
+  c55c = 0.d0; c56c = 0.d0; c66c = 0.d0
+
   ! moho depth
   moho = 0.d0
-
   ! sediment depth
   sediment = 0.d0
 
@@ -1191,7 +1397,8 @@
 
     case (ICRUST_CRUST1)
       ! crust 1.0
-      call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust)
+      call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
+      if (moho_only) return
       vpvc = vpc
       vphc = vpc
       vsvc = vsc
@@ -1200,7 +1407,8 @@
     case (ICRUST_CRUST2)
       ! default
       ! crust 2.0
-      call model_crust_2_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust)
+      call model_crust_2_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
+      if (moho_only) return
       vpvc = vpc
       vphc = vpc
       vsvc = vsc
@@ -1208,7 +1416,8 @@
 
     case (ICRUST_CRUSTMAPS)
       ! general crustmaps
-      call model_crustmaps(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust)
+      call model_crustmaps(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
+      if (moho_only) return
       vpvc = vpc
       vphc = vpc
       vsvc = vsc
@@ -1229,7 +1438,7 @@
         found_crust = found_crust_area
       else
         ! by default takes Crust1.0 values
-        call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust)
+        call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
         vpvc = vpc
         vphc = vpc
         vsvc = vsc
@@ -1238,11 +1447,11 @@
 
     case (ICRUST_CRUST_SH)
       ! SH crust: provides TI crust
-      call crust_sh(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust)
+      call crust_sh(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
 
     case (ICRUST_EUCRUST)
       ! by default takes Crust1.0 values for vs/vp/rho/moho
-      call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust)
+      call model_crust_1_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
       vpvc = vpc
       vphc = vpc
       vsvc = vsc
@@ -1257,6 +1466,45 @@
         found_crust = found_crust_area
       endif
 
+    case (ICRUST_SGLOBECRUST)
+      ! modified crust 2.0 for SGLOBE-rani
+      call model_sglobecrust(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
+      if (moho_only) return
+      vpvc = vpc
+      vphc = vpc
+      vsvc = vsc
+      vshc = vsc
+
+    case (ICRUST_BKMNS_GLAD)
+      ! GLAD model expansion on block-mantle-spherical-harmonics
+      ! gets moho/sediment depth from Crust2.0 model
+      call model_crust_2_0(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
+      if (moho_only) return
+      vpvc = vpc
+      vphc = vpc
+      vsvc = vsc
+      vshc = vsc
+      ! overimposes model values taken at actual position (with topography) between 80km depth and surface topo
+      call model_bkmns_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc)
+
+    case (ICRUST_SPIRAL)
+      ! anisotropic crust from SPiRaL
+      ! unless we use SPiRaL anisotropic mantle, provdies TI crust only
+      call model_crust_spiral(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment, &
+                              c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                              c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c, &
+                              found_crust,elem_in_crust,moho_only)
+
+    case (ICRUST_SH_MARS)
+      ! Mars model expansion on spherical harmonics
+      ! SH mars model defines velocities in both crust & mantle
+      call model_SH_mars_crust(lat,lon,r,vpc,vsc,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
+      if (moho_only) return
+      vpvc = vpc
+      vphc = vpc
+      vsvc = vsc
+      vshc = vsc
+
     case default
       stop 'crustal model type not defined'
 
@@ -1269,7 +1517,7 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine meshfem3D_models_getatten_val(idoubling,xmesh,ymesh,zmesh,r_prem, &
+  subroutine meshfem3D_models_getatten_val(idoubling,r_prem,theta,phi, &
                                            ispec, i, j, k, &
                                            tau_e,tau_s, &
                                            moho,Qmu,Qkappa,elem_in_crust)
@@ -1278,20 +1526,24 @@
 !
 ! note:  only Qmu attenuation considered, Qkappa attenuation not used so far in solver...
 
-  use constants, only: N_SLS
+  use constants, only: N_SLS,SPONGE_MIN_Q,SPONGE_WIDTH_IN_DEGREES
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   use model_prem_par, only: PREM_RMOHO
+
+  use shared_parameters, only: ABSORB_USING_GLOBAL_SPONGE, &
+          SPONGE_LATITUDE_IN_DEGREES,SPONGE_LONGITUDE_IN_DEGREES,SPONGE_RADIUS_IN_DEGREES
 
   implicit none
 
   integer,intent(in) :: idoubling
 
-  double precision,intent(in) :: xmesh,ymesh,zmesh
+  double precision,intent(in) :: r_prem
+  double precision,intent(in) :: theta,phi
+
   integer,intent(in) :: ispec,i,j,k
 
-  double precision,intent(in) :: r_prem
   double precision,intent(in) :: moho
 
   ! attenuation values
@@ -1301,8 +1553,11 @@
   logical,intent(in) :: elem_in_crust
 
   ! local parameters
-  double precision :: r_dummy,theta,phi,theta_degrees,phi_degrees
+  double precision :: theta_degrees,phi_degrees
   double precision :: r_used
+
+  ! geographical values
+  double precision :: dist, theta_c, phi_c, dist_c, edge, sponge
 
   ! initializes
   tau_e(:)   = 0.0d0
@@ -1316,13 +1571,13 @@
   ! Get the value of Qmu (Attenuation) dependent on
   ! the radius (r_prem) and idoubling flag
   if (ATTENUATION_GLL) then
-     call model_attenuation_gll(ispec, i, j, k, Qmu)
-  else if (ATTENUATION_3D) then
-    ! used for models: s362ani_3DQ, s362iso_3DQ, 3D_attenuation
+    ! GLL models with attenuation
+    call model_attenuation_gll(ispec, i, j, k, Qmu)
 
-    ! gets spherical coordinates
-    call xyz_2_rthetaphi_dble(xmesh,ymesh,zmesh,r_dummy,theta,phi)
-    call reduce(theta,phi)
+  else if (ATTENUATION_3D) then
+    ! used for models: s362ani_3DQ, s362iso_3DQ, 3D_attenuation, SPiRal
+
+    ! gets spherical coordinates in degrees
     theta_degrees = theta / DEGREES_TO_RADIANS
     phi_degrees = phi / DEGREES_TO_RADIANS
 
@@ -1347,7 +1602,7 @@
 
     select case (REFERENCE_1D_MODEL)
 
-      ! case (REFERENCE_MODEL_PREM)
+      ! case (REFERENCE_MODEL_PREM,REFERENCE_MODEL_PREM2)
       ! this case is probably not needed since Qmu is 600. between R80 and surface
       !   call model_attenuation_1D_PREM(r_prem, Qmu)
 
@@ -1360,8 +1615,8 @@
           ! takes crustal Q value only if point is in actual crust
           if (r_prem > (ONE-moho) .or. elem_in_crust) then
             ! reference from 1D-REF aka STW105
-            Qmu=300.0d0
-            Qkappa=57822.5d0 !  not used so far...
+            Qmu = 300.0d0
+            Qkappa = 57822.5d0 !  not used so far...
           endif
         endif ! CRUSTAL
 
@@ -1381,6 +1636,27 @@
 
   endif
 
+  ! sponge layer
+  if (ABSORB_USING_GLOBAL_SPONGE) then
+    ! get distance to chunk center
+    call lat_2_geocentric_colat_dble(SPONGE_LATITUDE_IN_DEGREES, theta_c)
+    phi_c = SPONGE_LONGITUDE_IN_DEGREES * DEGREES_TO_RADIANS
+    call reduce(theta_c, phi_c)
+
+    dist = acos(cos(theta)*cos(theta_c) + sin(theta)*sin(theta_c)*cos(phi-phi_c))
+    dist_c = SPONGE_RADIUS_IN_DEGREES * DEGREES_TO_RADIANS
+    edge = SPONGE_WIDTH_IN_DEGREES * DEGREES_TO_RADIANS
+
+    if (dist > dist_c .and. Qmu > SPONGE_MIN_Q) then
+      if (dist - dist_c < edge) then
+        sponge = (1 + cos((dist - dist_c) / edge * PI)) / 2
+      else
+        sponge = 0.d0
+      endif
+      Qmu = SPONGE_MIN_Q + (Qmu - SPONGE_MIN_Q) * sponge
+    endif
+  endif
+
   ! Get tau_e from tau_s and Qmu
   call model_attenuation_getstored_tau(Qmu, tau_s, tau_e)
 
@@ -1392,19 +1668,19 @@
 !
 
 
-  subroutine meshfem3D_models_impose_val(iregion_code,xmesh,ymesh,zmesh,ispec,i,j,k, &
+  subroutine meshfem3D_models_impose_val(iregion_code,r,theta,phi,ispec,i,j,k, &
                                          vpv,vph,vsv,vsh,rho,eta_aniso, &
                                          c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
                                          c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
 ! overwrites values with updated model values (from iteration step) here, given at all GLL points
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
   integer,intent(in) :: iregion_code,ispec,i,j,k
-  double precision,intent(in) :: xmesh,ymesh,zmesh
+  double precision,intent(in) :: r,theta,phi
 
   double precision,intent(inout) :: vpv,vph,vsv,vsh,rho,eta_aniso
   double precision,intent(inout) :: c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
@@ -1414,11 +1690,8 @@
   ! checks if anything to do
   if (.not. MODEL_GLL) return
 
-  ! only valid for crust/mantle region at the moment...
-  if (iregion_code /= IREGION_CRUST_MANTLE) return
-
   ! over-impose values from model GLL values
-  call model_gll_impose_val(xmesh,ymesh,zmesh,ispec,i,j,k, &
+  call model_gll_impose_val(iregion_code,r,theta,phi,ispec,i,j,k, &
                             vpv,vph,vsv,vsh,rho,eta_aniso, &
                             c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
                             c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
@@ -1438,6 +1711,7 @@
 
   implicit none
 
+  ! local parameters
   double precision :: lat,lon,r,phi,theta
   double precision :: xmesh,ymesh,zmesh
 
@@ -1461,7 +1735,7 @@
 
   character(len=MAX_STRING_LEN) :: filename
 
-  ! only master process writes file
+  ! only main process writes file
   if (myrank /= 0) return
 
   write(IMAIN,*)
@@ -1498,14 +1772,11 @@
       phi = lon * PI/180.d0               ! longitude between [-pi,pi]
       r = 1.0d0                           ! radius at surface (normalized)
 
-      ! gets point's position
-      call rthetaphi_2_xyz_dble(xmesh,ymesh,zmesh,r,theta,phi)
-
-      ! debug
-      !print *,'debug: lat/lon',lat,lon,theta,phi,'xyz',xmesh,ymesh,zmesh
+      ! theta to [0,PI] and phi to [0,2PI]
+      call reduce(theta,phi)
 
       ! gets moho
-      call meshfem3D_models_get3Dcrust_val(iregion_code,xmesh,ymesh,zmesh,r, &
+      call meshfem3D_models_get3Dcrust_val(iregion_code,r,theta,phi, &
                                            vpv,vph,vsv,vsh,rho,eta_aniso, &
                                            c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
                                            c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
@@ -1514,9 +1785,15 @@
       iglob = i + (j-1) * NLON
       moho_depth(iglob) = moho * R_PLANET_KM  ! dimensionalize moho depth to km
       sediment_depth(iglob) = sediment * R_PLANET_KM
+
+      ! gets point's position x/y/z
+      call rthetaphi_2_xyz_dble(xmesh,ymesh,zmesh,r,theta,phi)
       tmp_x(iglob) = xmesh
       tmp_y(iglob) = ymesh
       tmp_z(iglob) = zmesh
+
+      ! debug
+      !print *,'debug: lat/lon',lat,lon,theta,phi,'xyz',xmesh,ymesh,zmesh
     enddo
   enddo
 
@@ -1582,10 +1859,11 @@
 
   use constants, only: PI,MAX_STRING_LEN,IMAIN,myrank
   use shared_parameters, only: LOCAL_PATH,RESOLUTION_TOPO_FILE,R_PLANET_KM
-  use meshfem3D_models_par, only: ibathy_topo
+  use meshfem_models_par, only: ibathy_topo
 
   implicit none
 
+  ! local parameters
   double precision :: lat,lon,r,phi,theta,elevation
   double precision :: xmesh,ymesh,zmesh
 
@@ -1602,7 +1880,7 @@
 
   character(len=MAX_STRING_LEN) :: filename
 
-  ! only master process writes file
+  ! only main process writes file
   if (myrank /= 0) return
 
   ! number of samples per degree

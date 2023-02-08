@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -54,11 +54,11 @@
 
   use shared_parameters, only: ATT_F_C_SOURCE
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     OCEANS,TRANSVERSE_ISOTROPY,ANISOTROPIC_3D_MANTLE, &
     ANISOTROPIC_INNER_CORE,ATTENUATION
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     NCHUNKS,ABSORBING_CONDITIONS,LOCAL_PATH, &
     ROTATION,EXACT_MASS_MATRIX_FOR_ROTATION, &
     nspec,nglob,iregion_code
@@ -81,7 +81,7 @@
     nspec2D_xmin,nspec2D_xmax,nspec2D_ymin,nspec2D_ymax, &
     ispec_is_tiso, &
     tau_s_store,tau_e_store,Qmu_store, &
-    nspec_actually, nspec_ani, nspec_stacey, nglob_xy, nglob_oceans ! prname,
+    nspec_ani, nspec_stacey, nglob_xy, nglob_oceans ! prname,
 
   use adios_helpers_mod
   use manager_adios
@@ -105,7 +105,6 @@
 
   integer :: i,j,k,ispec,iglob,ier
   real(kind=CUSTOM_REAL),dimension(:),allocatable :: tmp_array_x, tmp_array_y, tmp_array_z
-  real(kind=CUSTOM_REAL),dimension(1) :: dummy_1d
   double precision :: f_c_source
 
   ! local parameters
@@ -122,12 +121,67 @@
   ! user output
   if (myrank == 0) then
 #if defined(USE_ADIOS)
-    write(IMAIN,*) '    solver   in ADIOS 1 file format'
+    write(IMAIN,*) '    solver   in ADIOS1 file format'
 #elif defined(USE_ADIOS2)
-    write(IMAIN,*) '    solver   in ADIOS 2 file format'
+    write(IMAIN,*) '    solver   in ADIOS2 file format'
 #endif
     call flush_IMAIN()
   endif
+
+  ! mesh topology
+
+  ! mesh arrays used in the solver to locate source and receivers
+  ! and for anisotropy and gravity, save in single precision
+  ! use tmp_array for temporary storage to perform conversion
+  allocate(tmp_array_x(nglob),stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary x array for mesh topology')
+  allocate(tmp_array_y(nglob),stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary y array for mesh topology')
+  allocate(tmp_array_z(nglob),stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary z array for mesh topology')
+
+  ! note: we keep these temporary arrays until after the perform/close/end_step call is done,
+  !       since the write_adios_** calls might be in deferred mode.
+
+  !--- x coordinate
+  tmp_array_x(:) = 0._CUSTOM_REAL
+  do ispec = 1,nspec
+    do k = 1,NGLLZ
+      do j = 1,NGLLY
+        do i = 1,NGLLX
+          iglob = ibool(i,j,k,ispec)
+          ! distinguish between single and double precision for reals
+          tmp_array_x(iglob) = real(xstore(i,j,k,ispec), kind=CUSTOM_REAL)
+        enddo
+      enddo
+    enddo
+  enddo
+  !--- y coordinate
+  tmp_array_y(:) = 0._CUSTOM_REAL
+  do ispec = 1,nspec
+    do k = 1,NGLLZ
+      do j = 1,NGLLY
+        do i = 1,NGLLX
+          iglob = ibool(i,j,k,ispec)
+          ! distinguish between single and double precision for reals
+          tmp_array_y(iglob) = real(ystore(i,j,k,ispec), kind=CUSTOM_REAL)
+        enddo
+      enddo
+    enddo
+  enddo
+  !--- z coordinate
+  tmp_array_z(:) = 0._CUSTOM_REAL
+  do ispec = 1,nspec
+    do k = 1,NGLLZ
+      do j = 1,NGLLY
+        do i = 1,NGLLX
+          iglob = ibool(i,j,k,ispec)
+          ! distinguish between single and double precision for reals
+          tmp_array_z(iglob) = real(zstore(i,j,k,ispec), kind=CUSTOM_REAL)
+        enddo
+      enddo
+    enddo
+  enddo
 
   ! create a prefix for the file name such as LOCAL_PATH/regX_
   !call create_name_database_adios(reg_name,iregion_code,LOCAL_PATH)
@@ -153,9 +207,9 @@
   call define_adios_scalar(myadios_group, group_size_inc, region_name_scalar, STRINGIFY_VAR(nglob))
 
   local_dim = nglob
-  call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, "x_global", dummy_1d)
-  call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, "y_global", dummy_1d)
-  call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, "z_global", dummy_1d)
+  call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, "x_global", tmp_array_x)
+  call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, "y_global", tmp_array_y)
+  call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, "z_global", tmp_array_z)
 
   local_dim = NGLLX * NGLLY * NGLLZ * nspec
   call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(xstore))
@@ -170,7 +224,7 @@
   call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(ispec_is_tiso))
 
   ! local GLL points
-  local_dim = NGLLX * NGLLY * NGLLZ * nspec_actually
+  local_dim = NGLLX * NGLLY * NGLLZ * nspec
   call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(xixstore))
   call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(xiystore))
   call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(xizstore))
@@ -265,8 +319,8 @@
   if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
     if (iregion_code == IREGION_CRUST_MANTLE .or. iregion_code == IREGION_INNER_CORE) then
       local_dim = nglob_xy
-      call define_adios_global_real_1d_array(myadios_group,group_size_inc, local_dim,region_name, STRINGIFY_VAR(b_rmassx))
-      call define_adios_global_real_1d_array(myadios_group,group_size_inc, local_dim,region_name, STRINGIFY_VAR(b_rmassy))
+      call define_adios_global_array1D(myadios_group,group_size_inc, local_dim,region_name, STRINGIFY_VAR(b_rmassx))
+      call define_adios_global_array1D(myadios_group,group_size_inc, local_dim,region_name, STRINGIFY_VAR(b_rmassy))
     endif
   endif
 
@@ -278,7 +332,7 @@
 
 
   !--- Open an ADIOS handler to the restart file. ---------
-  outputname = trim(LOCAL_PATH) // "/solver_data.bp"
+  outputname = get_adios_filename(trim(LOCAL_PATH) // "/solver_data")
   ! user output
   if (myrank == 0) write(IMAIN,*) '    saving arrays in ADIOS file: ',trim(outputname)
 
@@ -290,62 +344,13 @@
     call open_file_adios_write_append(myadios_file,myadios_group,outputname,group_name)
   endif
 
+  ! note: adios2 increases step numbers on variables when appending to a file.
+  !       this can lead to issues when reading back values for the next regions, for example, reg2/nspec
+  !       to work-around this, we explicitly call begin_step() and end_step() for writing out region1/2/3 data
+  call write_adios_begin_step(myadios_file)
+
+  ! sets group size
   call set_adios_group_size(myadios_file,group_size_inc)
-
-  ! mesh topology
-
-  ! mesh arrays used in the solver to locate source and receivers
-  ! and for anisotropy and gravity, save in single precision
-  ! use tmp_array for temporary storage to perform conversion
-  allocate(tmp_array_x(nglob),stat=ier)
-  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary x array for mesh topology')
-  allocate(tmp_array_y(nglob),stat=ier)
-  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary y array for mesh topology')
-  allocate(tmp_array_z(nglob),stat=ier)
-  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary z array for mesh topology')
-
-  ! note: we keep these temporary arrays until after the perform/close/end_step call is done,
-  !       since the write_adios_** calls might be in deferred mode.
-
-  !--- x coordinate
-  tmp_array_x(:) = 0._CUSTOM_REAL
-  do ispec = 1,nspec
-    do k = 1,NGLLZ
-      do j = 1,NGLLY
-        do i = 1,NGLLX
-          iglob = ibool(i,j,k,ispec)
-          ! distinguish between single and double precision for reals
-          tmp_array_x(iglob) = real(xstore(i,j,k,ispec), kind=CUSTOM_REAL)
-        enddo
-      enddo
-    enddo
-  enddo
-  !--- y coordinate
-  tmp_array_y(:) = 0._CUSTOM_REAL
-  do ispec = 1,nspec
-    do k = 1,NGLLZ
-      do j = 1,NGLLY
-        do i = 1,NGLLX
-          iglob = ibool(i,j,k,ispec)
-          ! distinguish between single and double precision for reals
-          tmp_array_y(iglob) = real(ystore(i,j,k,ispec), kind=CUSTOM_REAL)
-        enddo
-      enddo
-    enddo
-  enddo
-  !--- z coordinate
-  tmp_array_z(:) = 0._CUSTOM_REAL
-  do ispec = 1,nspec
-    do k = 1,NGLLZ
-      do j = 1,NGLLY
-        do i = 1,NGLLX
-          iglob = ibool(i,j,k,ispec)
-          ! distinguish between single and double precision for reals
-          tmp_array_z(iglob) = real(zstore(i,j,k,ispec), kind=CUSTOM_REAL)
-        enddo
-      enddo
-    enddo
-  enddo
 
   !--- Schedule writes for the previously defined ADIOS variables
   ! save nspec and nglob, to be used in combine_paraview_data
@@ -378,7 +383,7 @@
   call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
                                    trim(region_name) // STRINGIFY_VAR(ispec_is_tiso))
 
-  local_dim = NGLLX * NGLLY * NGLLZ * nspec_actually
+  local_dim = NGLLX * NGLLY * NGLLZ * nspec
   call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
                                    trim(region_name) // STRINGIFY_VAR(xixstore))
   call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
@@ -540,6 +545,9 @@
         call exit_MPI(myrank,'negative mass matrix term for the oceans')
   endif
 
+  ! end step to indicate output is completed. ADIOS2 can do I/O
+  call write_adios_end_step(myadios_file)
+
   !--- perform the actual write to disk
   ! Reset the path to its original value to avoid bugs.
   call write_adios_perform(myadios_file)
@@ -572,10 +580,10 @@
 
   ! debug daniel
   !call synchronize_all()
-  !print *,myrank,'nspec2d top      :',NSPEC2D_TOP,NSPEC2D_TOP_wmax
-  !print *,myrank,'nspec2d bottom   :',NSPEC2D_BOTTOM,NSPEC2D_BOTTOM_wmax
-  !print *,myrank,'nspec2d xmin_xmax:',NSPEC2DMAX_XMIN_XMAX,NSPEC2DMAX_XMIN_XMAX_wmax
-  !print *,myrank,'nspec2d ymin_ymax:',NSPEC2DMAX_YMIN_YMAX,NSPEC2DMAX_YMIN_YMAX_wmax
+  !print *,'debug: ',myrank,'nspec2d top      :',NSPEC2D_TOP,NSPEC2D_TOP_wmax
+  !print *,'debug: ',myrank,'nspec2d bottom   :',NSPEC2D_BOTTOM,NSPEC2D_BOTTOM_wmax
+  !print *,'debug: ',myrank,'nspec2d xmin_xmax:',NSPEC2DMAX_XMIN_XMAX,NSPEC2DMAX_XMIN_XMAX_wmax
+  !print *,'debug: ',myrank,'nspec2d ymin_ymax:',NSPEC2DMAX_YMIN_YMAX,NSPEC2DMAX_YMIN_YMAX_wmax
   !call synchronize_all()
 
   ! checks
@@ -648,7 +656,7 @@
   call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(jacobian2D_top))
 
   !--- Open an ADIOS handler to the restart file. ---------
-  outputname = trim(LOCAL_PATH) // "/boundary.bp"
+  outputname = get_adios_filename(trim(LOCAL_PATH) // "/boundary")
   ! user output
   if (myrank == 0) write(IMAIN,*) '    saving arrays in ADIOS file: ',trim(outputname)
 
@@ -764,7 +772,7 @@
     call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(Qmu_store))
 
     !--- Open an ADIOS handler to the restart file. ---------
-    outputname = trim(LOCAL_PATH) // "/attenuation.bp"
+    outputname = get_adios_filename(trim(LOCAL_PATH) // "/attenuation")
     ! user output
     if (myrank == 0) write(IMAIN,*) '    saving arrays in ADIOS file: ',trim(outputname)
 
@@ -852,7 +860,6 @@
 
   ! local parameters
   character(len=MAX_STRING_LEN) :: outputname, group_name ! prname,
-  integer :: i,ier
   integer(kind=8) :: local_dim
   integer(kind=8) :: group_size_inc
   ! ADIOS variables
@@ -867,9 +874,6 @@
   ! wmax = world_max variables to have constant strides in adios file
   integer :: num_interfaces_wmax, max_nibool_interfaces_wmax, &
              num_phase_ispec_wmax, num_colors_outer_wmax, num_colors_inner_wmax
-  integer, dimension(:),allocatable :: nibool_interfaces_wmax,my_neighbors_wmax
-  integer, dimension(:,:),allocatable :: ibool_interfaces_wmax,phase_ispec_inner_wmax
-  integer, dimension(:),allocatable :: num_elem_colors_wmax
 
   ! user output
   if (myrank == 0) then
@@ -961,7 +965,7 @@
   endif
 
   !--- Open an ADIOS handler to the restart file. ---------
-  outputname = trim(LOCAL_PATH) // "/solver_data_mpi.bp"
+  outputname = get_adios_filename(trim(LOCAL_PATH) // "/solver_data_mpi")
   ! user output
   if (myrank == 0) write(IMAIN,*) '    saving arrays in ADIOS file: ',trim(outputname)
 
@@ -984,33 +988,21 @@
   call write_adios_scalar(myadios_file,myadios_group,trim(region_name) // "num_interfaces", num_interfaces)
   call write_adios_scalar(myadios_file,myadios_group,trim(region_name) // "max_nibool_interfaces", max_nibool_interfaces)
 
-  ! allocates buffers with max sizes (same size for all processes for constant strides)
-  allocate(my_neighbors_wmax(num_interfaces_wmax), &
-           nibool_interfaces_wmax(num_interfaces_wmax), stat=ier)
-  if (ier /= 0) stop 'Error allocating wmax arrays'
-  ! initializes
-  my_neighbors_wmax(:) = -1
-  my_neighbors_wmax(1:num_interfaces) = my_neighbors(1:num_interfaces)  ! current process valid range
-  nibool_interfaces_wmax(:) = -1
-  nibool_interfaces_wmax(1:num_interfaces) = nibool_interfaces(1:num_interfaces)
-
-  allocate(ibool_interfaces_wmax(max_nibool_interfaces_wmax,num_interfaces_wmax),stat=ier)
-  if (ier /= 0) stop 'Error allocating ibool_interfaces_wmax array'
-  ibool_interfaces_wmax(:,:) = -1
-  do i = 1,num_interfaces
-    ibool_interfaces_wmax(1:max_nibool_interfaces,i) = ibool_interfaces(1:max_nibool_interfaces,i)
-  enddo
-
   if (num_interfaces_wmax > 0) then
+    ! note: using the *_wmax array sizes for local_dim is providing the same local_dim/global_dim/offset values
+    !       in the adios file for all rank processes. this mimicks the same chunk sizes for all processes in ADIOS files.
+    !       this helps when reading back arrays using offsets based on the local_dim value.
+    !
+    ! we thus use num_interfaces_wmax here rather than num_interfaces
     local_dim = num_interfaces_wmax
     call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
-                                     trim(region_name) // "my_neighbors", my_neighbors_wmax)
+                                     trim(region_name) // "my_neighbors", my_neighbors)
     call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
-                                     trim(region_name) // "nibool_interfaces", nibool_interfaces_wmax)
+                                     trim(region_name) // "nibool_interfaces", nibool_interfaces)
 
     local_dim = max_nibool_interfaces_wmax * num_interfaces_wmax
     call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
-                                     trim(region_name) // "ibool_interfaces", ibool_interfaces_wmax)
+                                     trim(region_name) // "ibool_interfaces", ibool_interfaces)
   endif
 
   ! inner/outer elements
@@ -1018,34 +1010,20 @@
   call write_adios_scalar(myadios_file,myadios_group,trim(region_name) // "nspec_outer", nspec_outer)
   call write_adios_scalar(myadios_file,myadios_group,trim(region_name) // "num_phase_ispec", num_phase_ispec)
 
-  allocate(phase_ispec_inner_wmax(num_phase_ispec_wmax,2),stat=ier)
-  if (ier /= 0) stop 'Error allocating phase_ispec_inner_wmax array'
-  ! initializes
-  phase_ispec_inner_wmax(:,:) = -1
-  do i = 1,2
-    phase_ispec_inner_wmax(1:num_phase_ispec,i) = phase_ispec_inner(1:num_phase_ispec,i)
-  enddo
-
   if (num_phase_ispec_wmax > 0) then
     local_dim = num_phase_ispec_wmax * 2
     call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
-                                     trim(region_name) // "phase_ispec_inner", phase_ispec_inner_wmax)
+                                     trim(region_name) // "phase_ispec_inner", phase_ispec_inner)
   endif
 
   ! mesh coloring
   call write_adios_scalar(myadios_file,myadios_group,trim(region_name) // "num_colors_outer", num_colors_outer)
   call write_adios_scalar(myadios_file,myadios_group,trim(region_name) // "num_colors_inner", num_colors_inner)
 
-  allocate(num_elem_colors_wmax(num_colors_outer_wmax + num_colors_inner_wmax),stat=ier)
-  if (ier /= 0) stop 'Error allocating num_elem_colors_wmax array'
-
   if (USE_MESH_COLORING_GPU) then
-    num_elem_colors_wmax(:) = -1
-    num_elem_colors_wmax(1:(num_colors_outer+num_colors_inner)) = num_elem_colors(1:(num_colors_outer+num_colors_inner))
-
     local_dim = num_colors_outer_wmax + num_colors_inner_wmax
     call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
-                                     trim(region_name) // "num_elem_colors", num_elem_colors_wmax)
+                                     trim(region_name) // "num_elem_colors", num_elem_colors)
   endif
 
   !--- Reset the path to zero and perform the actual write to disk
@@ -1054,11 +1032,6 @@
   call close_file_adios(myadios_file)
 
   num_regions_written = num_regions_written + 1
-
-  ! frees temporary arrays
-  deallocate(my_neighbors_wmax,nibool_interfaces_wmax)
-  deallocate(ibool_interfaces_wmax)
-  deallocate(num_elem_colors_wmax)
 
   end subroutine save_mpi_arrays_adios
 
@@ -1072,10 +1045,10 @@
 
   use constants
 
-  use meshfem3d_par, only: &
+  use meshfem_par, only: &
     myrank, LOCAL_PATH
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     HONOR_1D_SPHERICAL_MOHO
     !SAVE_BOUNDARY_MESH,HONOR_1D_SPHERICAL_MOHO,SUPPRESS_CRUSTAL_MESH
 
@@ -1157,7 +1130,7 @@
   call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, region_name, STRINGIFY_VAR(normal_670))
 
   !--- Open an ADIOS handler to the restart file. ---------
-  outputname = trim(LOCAL_PATH) // "/boundary_disc.bp"
+  outputname = get_adios_filename(trim(LOCAL_PATH) // "/boundary_disc")
   ! user output
   if (myrank == 0) write(IMAIN,*) '    saving arrays in ADIOS file: ',trim(outputname)
 

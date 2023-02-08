@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !          Main authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -66,17 +66,23 @@
   program xwrite_profile
 
   use constants, only: &
-    GRAV,PI,IMAIN,ISTANDARD_OUTPUT, &
+    GRAV,PI,MAX_STRING_LEN,IMAIN,ISTANDARD_OUTPUT, &
     IREGION_INNER_CORE,IREGION_OUTER_CORE,IREGION_CRUST_MANTLE, &
-    IFLAG_IN_FICTITIOUS_CUBE,IFLAG_INNER_CORE_NORMAL,IFLAG_MIDDLE_CENTRAL_CUBE,IFLAG_TOP_CENTRAL_CUBE,IFLAG_BOTTOM_CENTRAL_CUBE, &
+    IFLAG_IN_FICTITIOUS_CUBE,IFLAG_INNER_CORE_NORMAL, &
+    IFLAG_MIDDLE_CENTRAL_CUBE,IFLAG_TOP_CENTRAL_CUBE,IFLAG_BOTTOM_CENTRAL_CUBE, &
     IFLAG_OUTER_CORE_NORMAL, &
     IFLAG_MANTLE_NORMAL,IFLAG_670_220,IFLAG_220_80,IFLAG_80_MOHO,IFLAG_CRUST, &
+    IPLANET_EARTH, &
     myrank
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     CRUSTAL,ONE_CRUST
 
-  use shared_parameters
+  use shared_parameters, only: &
+    doubling_index,MAX_NUMBER_OF_MESH_LAYERS,rmaxs,rmins, &
+    MODEL,MODEL_GLL,OUTPUT_FILES, &
+    OCEANS,TOPOGRAPHY,TRANSVERSE_ISOTROPY, &
+    PLANET_TYPE,R_PLANET,RCMB,RICB,RMOHO,RMOHO_FICTITIOUS_IN_MESHER,ROCEAN,RHOAV
 
   implicit none
 
@@ -264,6 +270,7 @@
   call write_profile_setup()
 
 ! < this part is from create_regions_mesh -> initialize_layers()
+  ! see also: call define_all_layers_number_and_offset(NUMBER_OF_MESH_LAYERS,idummy)
   if (ONE_CRUST) then
     NUMBER_OF_MESH_LAYERS = MAX_NUMBER_OF_MESH_LAYERS - 1
   else
@@ -294,6 +301,7 @@
       ! colat/lon in rad
       theta = theta_degrees * PI/180.0d0
       phi   = phi_degrees   * PI/180.0d0
+
       ! theta between 0 and PI, and phi between 0 and 2*PI
       call reduce(theta,phi)
 
@@ -337,14 +345,22 @@
         else
           ! 1D crustal models
           if (TOPOGRAPHY) then
-            write(57,'(a)') '# oceans'
+            if (PLANET_TYPE == IPLANET_EARTH) then
+              write(57,'(a)') '# oceans'
+            else
+              write(57,'(a)') '# no oceans, only topography'
+            endif
           else
             write(57,'(a)') '# 1D reference oceans'
           endif
         endif
       else
         if (TOPOGRAPHY) then
-          write(57,'(a)') '# oceans'
+          if (PLANET_TYPE == IPLANET_EARTH) then
+            write(57,'(a)') '# oceans'
+          else
+            write(57,'(a)') '# no oceans, only topography'
+          endif
         else
           write(57,'(a)') '# no oceans'
         endif
@@ -399,7 +415,7 @@
           !print *,'rmin == moho at line ',iline
         endif
 
-        if (rmin == rmax_last) then  !!!! this means that we have just jumped between layers
+        if (abs(rmin - rmax_last) < 1.d-9) then !!!! rmin == rmax_last: this means that we have just jumped between layers
           ! depth increment
           ! write values every 10 km in the deep earth and every 1 km in the shallow earth
           if (rmin > ((R_PLANET/1000.d0)-DELTA_HIRES_DEPTH)/(R_PLANET/1000.d0)) then
@@ -421,7 +437,12 @@
           rmax_last = rmax
 
           ! number of iterations in increments of delta between rmin and rmax
-          nit = floor((rmax - rmin)/delta) + 1
+          ! note: instead of (rmax - rmin), we add a factor (rmax * 0.999999 - rmin) to avoid getting an extra step
+          !       in case the difference is an exact delta match, since we add +1 to nit to reach rmax
+          nit = floor((rmax*0.9999999 - rmin)/delta) + 1
+
+          ! debug
+          !print *,'debug: write profile ilayer/iregion ',ilayer,iregion_code,'rmin/rmax',rmin,rmax,'delta',delta,'nit',nit
 
           do idep = 1,nit+1
             ! line counters
@@ -442,6 +463,9 @@
 
             ! radius
             r = rmin + (idep-1)*delta
+
+            ! debug
+            !print *,'debug: write profile radius ',ilayer,iregion_code,'idep',idep,nit+1,'r',r,rmin,'delta',delta
 
             ! make sure we are within the right shell in PREM to honor discontinuities
             ! use small geometrical tolerance
@@ -479,7 +503,7 @@
             if (iline == iline_cmb) str_info = ' # CMB'
             if (iline == iline_moho) str_info = ' # moho'
 
-            write(57,'(F8.0,7F9.2,F9.5,a)') &
+            write(57,'(F10.0,7F12.2,F12.5,a)') &
               sngl(r_prem*R_PLANET),sngl(rho*1000.d0),sngl(vpv*1000.d0),sngl(vsv*1000.d0), &
               sngl(Qkappa),sngl(Qmu),sngl(vph*1000.d0),sngl(vsh*1000.d0),sngl(eta_aniso),trim(str_info)
 
@@ -487,7 +511,7 @@
             iline = iline + 1
 
             ! debug
-            !write(*,'(i3,11F10.4)') &
+            !write(*,'(i3,11F12.4)') &
             ! iline,sngl(rmin*(R_PLANET/1000.d0)),sngl(rmax*(R_PLANET/1000.d0)), &
             ! sngl(r_prem*(R_PLANET/1000.d0)),sngl(r*(R_PLANET/1000.d0)), &
             ! sngl(vpv),sngl(vph),sngl(vsv),sngl(vsh),sngl(rho),sngl(eta_aniso),sngl(Qmu)
@@ -558,7 +582,7 @@
   subroutine write_profile_setup()
 
   use constants, only: IMAIN,myrank,N_SLS,NGLLX,NGLLY,NGLLZ,SUPPRESS_MOHO_STRETCHING
-  use meshfem3D_models_par
+  use meshfem_models_par
   use shared_parameters
 
   implicit none
@@ -667,18 +691,16 @@
       write(IMAIN,*) '  no general mantle anisotropy'
     endif
 
-    ! model
-    if (MODEL == 'gll') then
-      write(IMAIN,*)
-      write(IMAIN,*) 'mesh setup: '
-      write(IMAIN,*) '  NCHUNKS            : ',NCHUNKS
-      write(IMAIN,*) '  NSPEC crust/mantle : ',NSPEC_REGIONS(IREGION_CRUST_MANTLE)
-      write(IMAIN,*) '  NSPEC outer core   : ',NSPEC_REGIONS(IREGION_OUTER_CORE)
-      write(IMAIN,*) '  NSPEC inner core   : ',NSPEC_REGIONS(IREGION_INNER_CORE)
-      write(IMAIN,*) '  NGLLX/NGLLY/NGLLZ  : ',NGLLX,NGLLY,NGLLZ
-      write(IMAIN,*)
-      write(IMAIN,*)
-    endif
+    ! model mesh setup
+    write(IMAIN,*)
+    write(IMAIN,*) 'mesh setup: '
+    write(IMAIN,*) '  NCHUNKS            : ',NCHUNKS
+    write(IMAIN,*) '  NSPEC crust/mantle : ',NSPEC_REGIONS(IREGION_CRUST_MANTLE)
+    write(IMAIN,*) '  NSPEC outer core   : ',NSPEC_REGIONS(IREGION_OUTER_CORE)
+    write(IMAIN,*) '  NSPEC inner core   : ',NSPEC_REGIONS(IREGION_INNER_CORE)
+    write(IMAIN,*) '  NGLLX/NGLLY/NGLLZ  : ',NGLLX,NGLLY,NGLLZ
+    write(IMAIN,*)
+    write(IMAIN,*)
 
     call flush_IMAIN()
   endif
@@ -704,7 +726,7 @@
   subroutine write_profile_moho_depth(theta,phi,moho)
 
   use constants, only: myrank
-  use meshfem3D_models_par
+  use meshfem_models_par
   use shared_parameters
 
   implicit none
@@ -713,21 +735,20 @@
   double precision,intent(inout) :: moho
 
   ! local parameters
-  double precision :: r,xmesh,ymesh,zmesh,sediment
+  double precision :: r,sediment
   double precision :: rho,vpv,vph,vsv,vsh,eta_aniso
   double precision :: c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26,c33,c34,c35,c36,c44,c45,c46,c55,c56,c66
 
   ! moho depth
   ! read crustal models and topo models as they are needed to modify the depths of the discontinuities
   if (CRUSTAL) then
-    ! convert from rthetaphi to xyz, with r=-7km
+    ! fixes depth to r=-7km
     r = 1.0d0 - 7.0d0/(R_PLANET/1000.d0)
-    call rthetaphi_2_xyz_dble(xmesh,ymesh,zmesh,r,theta,phi)
 
-    !if (myrank == 0) print *, '  xmesh,ymesh,zmesh,r,theta,phi = ',xmesh,ymesh,zmesh,r,90.0-theta*180./PI,phi*180./PI
+    !if (myrank == 0) print *, 'debug: r,theta,phi = ',r,90.0-theta*180./PI,phi*180./PI
 
     ! gets moho depth from crustal model
-    call meshfem3D_models_get3Dcrust_val(IREGION_CRUST_MANTLE,xmesh,ymesh,zmesh,r, &
+    call meshfem3D_models_get3Dcrust_val(IREGION_CRUST_MANTLE,r,theta,phi, &
                                          vpv,vph,vsv,vsh,rho,eta_aniso, &
                                          c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
                                          c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
@@ -752,7 +773,7 @@
   subroutine write_profile_elevation(theta,phi,elevation)
 
   use constants, only: THICKNESS_OCEANS_PREM,myrank
-  use meshfem3D_models_par
+  use meshfem_models_par
   use shared_parameters
 
   implicit none
@@ -805,7 +826,7 @@
                                         rho,vpv,vph,vsv,vsh,eta_aniso,Qmu,Qkappa)
 
   use constants, only: myrank,N_SLS,TINYVAL
-  use meshfem3D_models_par
+  use meshfem_models_par
   use shared_parameters
 
   implicit none
@@ -816,7 +837,6 @@
   double precision,intent(out) :: rho,vpv,vph,vsv,vsh,eta_aniso,Qmu,Qkappa
 
   ! local parameters
-  double precision :: xmesh,ymesh,zmesh
   double precision :: moho,sediment
   double precision :: c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26,c33,c34,c35,c36,c44,c45,c46,c55,c56,c66
   ! Attenuation values
@@ -856,35 +876,36 @@
   Qmu = 0.d0
   Qkappa = 0.d0 ! not used, not stored so far...
   tau_e(:) = 0.d0
+  tau_s(:) = 0.d0
+  moho = 0.d0
+  sediment = 0.d0
+
   i = 1; j = 1; k = 1; ispec = 1 ! dummy GLL point
 
   ! do not force the element/point to be in the crust
   elem_in_crust = .false.
 
-  ! convert from rthetaphi to xyz to use in function calls.
-  call rthetaphi_2_xyz_dble(xmesh,ymesh,zmesh,r_prem,theta,phi)
-
 ! < start GET_MODEL
   ! checks r_prem,rmin/rmax and assigned idoubling
-  call get_model_check_idoubling(r_prem,xmesh,ymesh,zmesh,rmin,rmax,idoubling, &
-                      RICB,RCMB,RTOPDDOUBLEPRIME, &
-                      R220,R670)
+  call get_model_check_idoubling(r_prem,theta,phi,rmin,rmax,idoubling, &
+                                 RICB,RCMB,RTOPDDOUBLEPRIME, &
+                                 R220,R670)
 
   ! gets reference model values: rho,vpv,vph,vsv,vsh and eta_aniso
   call meshfem3D_models_get1D_val(iregion_code,idoubling, &
-                        r_prem,rho,vpv,vph,vsv,vsh,eta_aniso, &
-                        Qkappa,Qmu,RICB,RCMB, &
-                        RTOPDDOUBLEPRIME,R80,R120,R220,R400,R670,R771, &
-                        RMOHO,RMIDDLE_CRUST)
+                                  r_prem,rho,vpv,vph,vsv,vsh,eta_aniso, &
+                                  Qkappa,Qmu,RICB,RCMB, &
+                                  RTOPDDOUBLEPRIME,R80,R120,R220,R400,R670,R771, &
+                                  RMOHO,RMIDDLE_CRUST)
 
   ! gets the 3-D model parameters for the mantle
   call meshfem3D_models_get3Dmntl_val(iregion_code,r_prem,rho, &
-                        vpv,vph,vsv,vsh,eta_aniso, &
-                        RCMB,RMOHO, &
-                        xmesh,ymesh,zmesh,r, &
-                        c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
-                        c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
-                        ispec,i,j,k)
+                                      vpv,vph,vsv,vsh,eta_aniso, &
+                                      RCMB,RMOHO, &
+                                      r,theta,phi, &
+                                      c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
+                                      c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
+                                      ispec,i,j,k)
 
   ! gets the 3-D crustal model
   if (CRUSTAL) then
@@ -896,7 +917,7 @@
       elem_in_mantle = .false.
     endif
     if (.not. elem_in_mantle) then
-      call meshfem3D_models_get3Dcrust_val(iregion_code,xmesh,ymesh,zmesh,r_prem, &
+      call meshfem3D_models_get3Dcrust_val(iregion_code,r_prem,theta,phi, &
                                            vpv,vph,vsv,vsh,rho,eta_aniso, &
                                            c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
                                            c33,c34,c35,c36,c44,c45,c46,c55,c56,c66, &
@@ -908,12 +929,12 @@
 
   !!! VH  commented out following two lines from get_model
   !! overwrites with tomographic model values (from iteration step) here, given at all GLL points
-  !call meshfem3D_models_impose_val(iregion_code,xmesh,ymesh,zmesh,ispec,i,j,k, &
+  !call meshfem3D_models_impose_val(iregion_code,r,theta,phi,ispec,i,j,k, &
   !                                 vpv,vph,vsv,vsh,rho,eta_aniso, &
   !                                 c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
   !                                 c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
   !
-  ! note: for GLL models, we would need to have the GLL point index (ispec,i,j,k) instead of location (r_prem,xmesh,ymesh,zmesh).
+  ! note: for GLL models, we would need to have the GLL point index (ispec,i,j,k) instead of location (r_prem,theta,phi).
   !       the mesh indexing however is only available after running the full mesher.
   !
   !       todo: a workaround would be to run first mesher, then read in the database files and search for the closest GLL
@@ -936,7 +957,7 @@
   !
   !note:  only Qmu attenuation considered, Qkappa attenuation not used so far...
   if (ATTENUATION) then
-    call meshfem3D_models_getatten_val(idoubling,xmesh,ymesh,zmesh,r_prem, &
+    call meshfem3D_models_getatten_val(idoubling,r_prem,theta,phi, &
                                        ispec, i, j, k, &
                                        tau_e,tau_s, &
                                        moho,Qmu,Qkappa,elem_in_crust)
@@ -954,7 +975,7 @@
 
   use constants, only: IFLAG_CRUST,IFLAG_80_MOHO,IFLAG_220_80,R_UNIT_SPHERE
   use shared_parameters
-  use meshfem3D_models_par
+  use meshfem_models_par
 
   implicit none
 
@@ -994,7 +1015,7 @@
   subroutine write_profile_ocean(r_prem,elevation,iline,iline_ocean)
 
   use constants, only: MINIMUM_THICKNESS_3D_OCEANS
-  use meshfem3D_models_par
+  use meshfem_models_par
   use shared_parameters
 
   implicit none
@@ -1072,6 +1093,9 @@
       endif
     endif
 
+    ! Mars and Moon models have no ocean layers
+    if (PLANET_TYPE /= IPLANET_EARTH) nlayers_ocean = 0
+
     ! adds ocean layer
     if (nlayers_ocean > 0) then
       ! ocean line
@@ -1085,9 +1109,9 @@
         ! ocean properties (salt water parameters from PREM)
         if (ilayers_ocean == 0) then
           ! line with section info
-          write(57,'(F8.0,7F9.2,F9.5,a)') sngl(r_ocean*R_PLANET),1020.0,1450.,0.0,57822.5,0.0,1450.0,0.0,1.0,' # ocean'
+          write(57,'(F10.0,7F12.2,F12.5,a)') sngl(r_ocean*R_PLANET),1020.0,1450.,0.0,57822.5,0.0,1450.0,0.0,1.0,' # ocean'
         else
-          write(57,'(F8.0,7F9.2,F9.5)') sngl(r_ocean*R_PLANET),1020.0,1450.,0.0,57822.5,0.0,1450.0,0.0,1.0
+          write(57,'(F10.0,7F12.2,F12.5)') sngl(r_ocean*R_PLANET),1020.0,1450.,0.0,57822.5,0.0,1450.0,0.0,1.0
         endif
         ! line counter
         iline = iline + 1
@@ -1095,7 +1119,7 @@
       ! at surface
       if (r_ocean < 1.d0) then
         ! last line exactly at earth surface
-        write(57,'(F8.0,7F9.2,F9.5)') sngl(1.0d0*R_PLANET),1020.0,1450.,0.0,57822.5,0.0,1450.,0.0,1.0
+        write(57,'(F10.0,7F12.2,F12.5)') sngl(1.0d0*R_PLANET),1020.0,1450.,0.0,57822.5,0.0,1450.,0.0,1.0
         ! line counter
         iline = iline + 1
       endif

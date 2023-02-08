@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -50,7 +50,7 @@
 
   ! forces
   use specfem_par, only: &
-    USE_FORCE_POINT_SOURCE,force_stf,factor_force_source, &
+    USE_FORCE_POINT_SOURCE, USE_MONOCHROMATIC_CMT_SOURCE,force_stf,factor_force_source, &
     comp_dir_vect_source_E,comp_dir_vect_source_N,comp_dir_vect_source_Z_UP
 
   use specfem_par, only: &
@@ -69,6 +69,7 @@
   double precision, dimension(6,NSOURCES) :: moment_tensor
 
   double precision, dimension(NSOURCES) :: final_distance
+  double precision, dimension(NSOURCES) :: r0_source
 
   ! point locations
   double precision, allocatable, dimension(:,:) :: xyz_target
@@ -189,6 +190,12 @@
              xyz_target(NDIM,NSOURCES_SUBSET_current_size),stat=ier)
     if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary source arrays')
 
+    ! initializes
+    ispec_selected_subset(:) = 0
+    xi_subset(:) = 0.d0; eta_subset(:) = 0.d0; gamma_subset(:) = 0.d0
+    xyz_found_subset(:,:) = 0.d0; xyz_target(:,:) = 0.d0
+    final_distance_subset(:) = HUGEVAL
+
     ! arrays to collect data
     if (myrank == 0) then
       allocate(ispec_selected_all(NSOURCES_SUBSET_current_size,0:NPROCTOT_VAL-1), &
@@ -208,6 +215,11 @@
                final_distance_all(1,1),stat=ier)
       if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary source dummy arrays for gather')
     endif
+
+    ! initializes
+    ispec_selected_all(:,:) = 0
+    xi_all(:,:) = 0.d0; eta_all(:,:) = 0.d0; gamma_all(:,:) = 0.d0
+    xyz_found_all(:,:,:) = 0.d0; final_distance_all(:,:) = HUGEVAL
 
     ! loop over sources within this subset
     do isource_in_this_subset = 1,NSOURCES_SUBSET_current_size
@@ -300,6 +312,9 @@
       ! point depth (in m)
       depth = srcdepth(isource)*1000.0d0
 
+      ! normalized source radius
+      r0 = R_UNIT_SPHERE
+
       ! finds elevation of position
       if (TOPOGRAPHY) then
         call get_topo_bathy(lat,lon,elevation,ibathy_topo)
@@ -323,7 +338,10 @@
         r0 = r0*(1.0d0-(2.0d0/3.0d0)*ell*p20)
       endif
 
-      ! subtracts source depth (given in km)
+      ! stores surface radius for info output
+      r0_source(isource) = r0
+
+      ! subtracts source depth (given in m)
       r_target = r0 - depth/R_PLANET
 
       ! Populate the source depth in normalized coordinates
@@ -535,9 +553,19 @@
               write(IMAIN,*) '    using a source of period ',f0
               write(IMAIN,*)
               write(IMAIN,*) '    half duration in period: ',hdur(isource),' seconds'
+            case (4)
+              ! Gaussian by Meschede et al. (2011)
+              write(IMAIN,*) '    using Gaussian source time function by Meschede et al. (2011), eq.(2)'
+              write(IMAIN,*) '             tau: ',hdur(isource),' seconds'
             case default
               stop 'unsupported force_stf value!'
             end select
+          else if (USE_MONOCHROMATIC_CMT_SOURCE) then
+            ! moment tensor
+            write(IMAIN,*) '    using monochromatic source time function'
+            ! add message if source is monochromatic
+            write(IMAIN,*)
+            write(IMAIN,*) '    period: ',hdur(isource),' seconds'
           else
             ! moment tensor
             write(IMAIN,*) '    using (quasi) Heaviside source time function'
@@ -597,7 +625,7 @@
         call geocentric_2_geographic_dble(theta_source(isource),colat_source)
 
         ! brings longitude between -PI and PI
-        if (phi_source(isource) > PI) phi_source(isource)=phi_source(isource)-TWO_PI
+        if (phi_source(isource) > PI) phi_source(isource) = phi_source(isource) - TWO_PI
 
         write(IMAIN,*)
         write(IMAIN,*) '  original (requested) position of the source:'
@@ -612,7 +640,7 @@
         write(IMAIN,*)
         write(IMAIN,*) '        latitude: ',(PI_OVER_TWO-colat_source)*RADIANS_TO_DEGREES
         write(IMAIN,*) '       longitude: ',phi_source(isource)*RADIANS_TO_DEGREES
-        write(IMAIN,*) '           depth: ',(r0-r_found)*R_PLANET/1000.0d0,' km'
+        write(IMAIN,*) '           depth: ',(r0_source(isource)-r_found)*R_PLANET/1000.0d0,' km'
         write(IMAIN,*)
 
         ! display error in location estimate
@@ -770,8 +798,9 @@
   if (USE_FORCE_POINT_SOURCE) then
     ! point forces
     if (myrank == 0) then
-      ! only master process reads in FORCESOLUTION file
-      call get_force(tshift_src,hdur,srclat,srclon,srcdepth,DT,NSOURCES, &
+      ! only main process reads in FORCESOLUTION file
+      call get_force(tshift_src,hdur, &
+                     srclat,srclon,srcdepth,DT,NSOURCES, &
                      min_tshift_src_original,force_stf,factor_force_source, &
                      comp_dir_vect_source_E,comp_dir_vect_source_N,comp_dir_vect_source_Z_UP)
     endif
@@ -784,15 +813,17 @@
   else
     ! CMT moment tensors
     if (myrank == 0) then
-      ! only master process reads in CMTSOLUTION file
-      call get_cmt(yr,jda,mo,da,ho,mi,sec,tshift_src,hdur,srclat,srclon,srcdepth,moment_tensor, &
+      ! only main process reads in CMTSOLUTION file
+      call get_cmt(yr,jda,mo,da,ho,mi,sec, &
+                   tshift_src,hdur, &
+                   srclat,srclon,srcdepth,moment_tensor, &
                    DT,NSOURCES,min_tshift_src_original)
     endif
     ! broadcast ispecific moment tensor infos
     call bcast_all_dp(moment_tensor,6*NSOURCES)
   endif
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_dp(tshift_src,NSOURCES)
   call bcast_all_dp(hdur,NSOURCES)
   call bcast_all_dp(srclat,NSOURCES)
@@ -836,7 +867,7 @@
 
   ! standard deviation for Gaussian
   ! (removes factor of 100 added for search radius from typical_size_squared)
-  sigma_squared = typical_size_squared / 100.
+  sigma_squared = typical_size_squared / 100.d0
 
   ! searches through all elements
   do ispec = 1,nspec

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -38,6 +38,7 @@
   integer :: multiplication_factor
   double precision :: min_chunk_width_in_degrees
   double precision :: dt_auto
+  double precision :: MIN_GLL_POINT_SPACING,MIN_GLL_POINT_SPACING_NGLL5
   integer :: nex_max_auto_ner_estimate
 
   ! initializes
@@ -90,7 +91,7 @@
       NER_771_670              = 3
       NER_TOPDDOUBLEPRIME_771  = 3
       NER_CMB_TOPDDOUBLEPRIME  = 1
-      NER_OUTER_CORE           = 5
+      NER_OUTER_CORE           = 6
       NER_TOP_CENTRAL_CUBE_ICB = 1
     else if (NEX_MAX*multiplication_factor <= 96) then
       DT                       = 0.2d0
@@ -652,6 +653,78 @@
       endif
     endif
 
+  else
+    ! adapts the empirical time step estimate to different NGLL settings.
+    ! the empirical sizes are estimated for NGLL == 5, here we modify them according to the change
+    ! of the minimum spacing between different NGLL settings.
+    if (NGLLX /= 5) then
+      ! relative minimum distance between two GLL points
+      ! the roots x_i are given by the first derivative of the Legendre Polynomial: P_n-1'(x_i) = 0
+      !
+      ! note: the x_i interval is between [-1,1], thus relative to the full length, we divide by 2
+      !
+      ! formulas:
+      ! see: https://en.wikipedia.org/wiki/Gaussian_quadrature  -> section Gauss-Lobatto rules
+      !      http://mathworld.wolfram.com/LobattoQuadrature.html
+      !
+      ! numerical values:
+      ! see: http://keisan.casio.com/exec/system/1280801905
+
+      ! spacing for NGLLX == 5
+      MIN_GLL_POINT_SPACING_NGLL5 = 0.5d0 * ( 1.d0 - sqrt(3.d0 / 7.d0) ) ! 0.1726
+
+      ! NGLL choosen
+      ! (see also in auto_ner.f90)
+      select case (NGLLX)
+      case (2)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - 1.0 ) ! 1.0
+      case (3)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - 0.0 ) ! 0.5
+      case (4)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - sqrt(1.d0 / 5.d0) ) ! 0.2764
+      case (5)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - sqrt(3.d0 / 7.d0) ) ! 0.1726
+      case (6)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - sqrt(1.d0/21.d0*(7.d0 + 2.d0 * sqrt(7.d0))) ) !0.117472
+      case (7)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - 0.830223896278566929872 ) ! 0.084888
+      case (8)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - 0.8717401485096066153374 ) ! 0.0641299
+      case (9)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - 0.8997579954114601573123 ) ! 0.050121
+      case (10)
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 1.d0 - 0.9195339081664588138289 ) ! 0.040233
+      case default
+        ! no formula yet, takes average
+        MIN_GLL_POINT_SPACING = 0.5d0 * ( 2.d0 / dble(NGLLX-1) )
+        !stop 'get_timestep_and_layers: NGLLX > 10 value not supported yet! please consider adding it...'
+      end select
+
+      ! adapts DT setting
+      DT = DT * MIN_GLL_POINT_SPACING / MIN_GLL_POINT_SPACING_NGLL5
+    endif
+  endif
+
+  ! cut-off mesh
+  if (REGIONAL_MESH_CUTOFF) then
+    ! sets number of element layers to zero below the cut-off depth
+    if (REGIONAL_MESH_CUTOFF_DEPTH <= 771.d0) then
+      NER_TOPDDOUBLEPRIME_771  = 0
+      NER_CMB_TOPDDOUBLEPRIME  = 0
+      NER_OUTER_CORE           = 0
+      NER_TOP_CENTRAL_CUBE_ICB = 0
+    endif
+    if (REGIONAL_MESH_CUTOFF_DEPTH <= 670.d0) NER_771_670  = 0
+    if (REGIONAL_MESH_CUTOFF_DEPTH <= 600.d0) NER_670_600  = 0
+    if (REGIONAL_MESH_CUTOFF_DEPTH <= 400.d0) NER_600_400  = 0
+    if (REGIONAL_MESH_CUTOFF_DEPTH <= 220.d0) NER_400_220  = 0
+    if (REGIONAL_MESH_CUTOFF_DEPTH <= 80.d0) NER_220_80   = 0
+    if (REGIONAL_MESH_CUTOFF_DEPTH <= 24.4d0) NER_80_MOHO = 0
+
+    if (REGIONAL_MESH_CUTOFF_DEPTH < 24.0d0) then
+      print *,'Regional mesh cutoff depth ',REGIONAL_MESH_CUTOFF_DEPTH,' is too shallow. Please select a depth >= 24.4 km.'
+      stop 'Invalid regional mesh cutoff depth'
+    endif
   endif
 
 !---
@@ -667,8 +740,19 @@
     ! Mars
     if (NCHUNKS == 6) then
       if (CRUSTAL .and. CASE_3D) then
-        if (REFERENCE_CRUSTAL_MODEL == ICRUST_CRUSTMAPS) &
-          DT = DT*(1.d0 - 0.1d0)
+        ! limits time step size for thinner crustal elements in mars_1D model
+        if (REFERENCE_1D_MODEL == REFERENCE_MODEL_MARS_1D) then
+          if (DT > 0.06) DT = 0.06
+        endif
+        ! crustmaps safety
+        if (REFERENCE_CRUSTAL_MODEL == ICRUST_CRUSTMAPS) then
+          DT = DT * (1.d0 - 0.1d0)
+        endif
+      else
+        ! Mars 1D model time step reduction
+        if (REFERENCE_1D_MODEL == REFERENCE_MODEL_MARS_1D) then
+          DT = DT * (1.d0 - 0.3d0)
+        endif
       endif
     endif
     if (MARS_REGIONAL_MOHO_MESH .and. MARS_HONOR_DEEP_MOHO) then
@@ -714,6 +798,13 @@
         ! reduces time step size for crustmaps crustal model
         if (REFERENCE_CRUSTAL_MODEL == ICRUST_CRUSTMAPS) &
           DT = DT*(1.d0 - 0.3d0)
+        ! reduces time step size for SGLOBE-rani crustal model
+        if (REFERENCE_CRUSTAL_MODEL == ICRUST_SGLOBECRUST) &
+          DT = DT*(1.d0 - 0.4d0)
+        ! reduces time step size for SPiRaL crustal model
+        ! (this is only needed for meshes with NEX < 144 due to critical element shapes in the crust)
+        if (REFERENCE_CRUSTAL_MODEL == ICRUST_SPIRAL .and. NEX_MAX < 144) &
+          DT = DT*(1.d0 - 0.4d0)
       endif
     endif
 
@@ -855,7 +946,7 @@
 
   use constants, only: NGLLX,PI,NPTS_PER_WAVELENGTH,REFERENCE_MODEL_CASE65TAY
 
-  use shared_parameters, only: T_min_period, &
+  use shared_parameters, only: T_min_period,estimated_min_wavelength, &
     ANGULAR_WIDTH_XI_IN_DEGREES,ANGULAR_WIDTH_ETA_IN_DEGREES, &
     NEX_XI,NEX_ETA, &
     PLANET_TYPE,IPLANET_EARTH,IPLANET_MARS,IPLANET_MOON,R_PLANET, &
@@ -941,9 +1032,8 @@
   case default
     ! avoiding exit_MPI(), since we also call this routine in create_header_file
     ! which can be compiled without MPI - using stop instead
-    !call exit_MPI(myrank,'Invalid planet, auto_attenuation_periods() not implemented yet')
-    print *,'Invalid planet, auto_attenuation_periods() not implemented yet'
-    stop 'Invalid planet, auto_attenuation_periods() not implemented yet'
+    print *,'Invalid planet in get_minimum_period_estimate() not implemented yet'
+    stop 'Invalid planet in get_minimum_period_estimate() not implemented yet'
   end select
 
   ! number of elements along one side of a chunk
@@ -983,5 +1073,8 @@
 
   ! estimated minimum period resolved
   T_min_period = tmp
+
+  ! estimated minimum wavelength
+  estimated_min_wavelength = T_min_period * S_VELOCITY_MIN
 
   end subroutine get_minimum_period_estimate

@@ -17,8 +17,8 @@ $header = <<END;
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -56,8 +56,8 @@ END
 
 
 $warning = <<END;
- fprintf(stderr,"ERROR: GPU_MODE enabled without GPU/CUDA/OpenCL Support. "
-                "To enable GPU support, reconfigure with --with-gpu and/or --with-opencl flag.\\n");
+ fprintf(stderr,"ERROR: GPU_MODE enabled without CUDA/OpenCL/HIP Support. "
+                "To enable GPU support, reconfigure with --with-cuda and/or --with-opencl and/or --with-hip flag.\\n");
  exit(1);
 END
 

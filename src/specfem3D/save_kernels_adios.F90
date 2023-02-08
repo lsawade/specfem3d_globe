@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -84,7 +84,8 @@
   integer(kind=8) :: local_dim
 
   ! Type inference for define_adios_global_array1D. Avoid additional args.
-  real(kind=CUSTOM_REAL), dimension(1,1,1,1) :: dummy_real4d
+  real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: dummy_real4d
+  integer :: ier
 
   ! user output
   if (myrank == 0) then
@@ -96,7 +97,7 @@
     call flush_IMAIN()
   endif
 
-  outputname = trim(OUTPUT_FILES)//"/kernels.bp"
+  outputname = get_adios_filename(trim(OUTPUT_FILES)//"/kernels")
 
   group_name = "SPECFEM3D_GLOBE_KERNELS"
 
@@ -109,6 +110,11 @@
   call define_adios_scalar(myadios_group, group_size_inc, '', "reg1/nspec", NSPEC_CRUST_MANTLE_ADJOINT)
 
   if (SIMULATION_TYPE == 3) then
+    ! dummy for definitions
+    allocate(dummy_real4d(NGLLX,NGLLY,NGLLZ,NSPEC_CRUST_MANTLE_ADJOINT),stat=ier)
+    if (ier /= 0) stop 'Error allocating dummy array'
+    dummy_real4d(:,:,:,:) = 0.0
+
     ! crust mantle
     if (ANISOTROPIC_KL) then
 
@@ -246,8 +252,21 @@
     if (APPROXIMATE_HESS_KL) then
       !call save_kernels_Hessian()
       local_dim = NSPEC_CRUST_MANTLE_ADJOINT* NGLLX * NGLLY * NGLLZ
-      call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, '', STRINGIFY_VAR(hess_kl_crust_mantle))
+      call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, '', &
+                                       STRINGIFY_VAR(hess_kl_crust_mantle))
+
+      call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, '', &
+                                       STRINGIFY_VAR(hess_rho_kl_crust_mantle))
+
+      call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, '', &
+                                       STRINGIFY_VAR(hess_kappa_kl_crust_mantle))
+
+      call define_adios_global_array1D(myadios_group, group_size_inc, local_dim, '', &
+                                       STRINGIFY_VAR(hess_mu_kl_crust_mantle))
     endif
+
+    deallocate(dummy_real4d)
+
   endif
 
   ! save source derivatives for adjoint simulations
@@ -637,6 +656,15 @@
   ! stores into file
   call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
                                    STRINGIFY_VAR(hess_kl_crust_mantle))
+
+  call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
+                                   STRINGIFY_VAR(hess_rho_kl_crust_mantle))
+
+  call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
+                                   STRINGIFY_VAR(hess_kappa_kl_crust_mantle))
+
+  call write_adios_global_1d_array(myadios_file, myadios_group, myrank, sizeprocs_adios, local_dim, &
+                                   STRINGIFY_VAR(hess_mu_kl_crust_mantle))
 
   ! sync adios2 writes before loosing the temporary scope of the arrays
   if (is_adios_version2) call write_adios_perform(myadios_file)

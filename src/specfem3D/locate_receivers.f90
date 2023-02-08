@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -147,7 +147,7 @@
            final_distance(nrec),stat=ier)
   if (ier /= 0) call exit_MPI(myrank,'Error allocating temporary receiver arrays')
 
-  ! read that STATIONS file on the master
+  ! read that STATIONS file on the main
   call read_receiver_locations()
 
   ! loop on all the stations to locate them in the mesh
@@ -353,7 +353,7 @@
 
     ! gather arrays
     if (myrank == 0) then
-      ! only master process needs full arrays allocated
+      ! only main process needs full arrays allocated
       allocate(ispec_selected_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
                xi_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
                eta_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
@@ -692,7 +692,7 @@
   ! local parameters
   integer :: ier,irec,i
   integer, allocatable, dimension(:) :: station_duplet
-  character(len=256) :: string
+  character(len=256) :: line
 
   ! reads stations files
   if (myrank == 0) then
@@ -712,15 +712,15 @@
       !read(IIN,*,iostat=ier) station_name(irec),network_name(irec),stlat(irec),stlon(irec),stele(irec),stbur(irec)
 
       ! reads in line as string
-      read(IIN,"(a256)",iostat=ier) string
+      read(IIN,"(a256)",iostat=ier) line
       if (ier /= 0) then
         write(IMAIN,*) 'Error reading in station ',irec
         call exit_MPI(myrank,'Error reading in station in STATIONS file')
       endif
 
-      ! skips empty lines
-      do while( len_trim(string) == 0 )
-        read(IIN,"(a256)",iostat=ier) string
+      ! skips empty lines and comment lines
+      do while( len_trim(line) == 0 .or. line(1:1) == '#')
+        read(IIN,"(a256)",iostat=ier) line
         if (ier /= 0) then
           write(IMAIN,*) 'Error reading in station ',irec
           call exit_MPI(myrank,'Error reading in station in STATIONS file')
@@ -728,8 +728,8 @@
       enddo
 
       ! reads in station information
-      read(string(1:len_trim(string)),*,iostat=ier) station_name(irec),network_name(irec), &
-                                                    stlat(irec),stlon(irec),stele(irec),stbur(irec)
+      read(line(1:len_trim(line)),*,iostat=ier) station_name(irec),network_name(irec), &
+                                                stlat(irec),stlon(irec),stele(irec),stbur(irec)
       if (ier /= 0) then
         write(IMAIN,*) 'Error reading in station ',irec
         call exit_MPI(myrank,'Error reading in station in STATIONS file')
@@ -778,7 +778,7 @@
 
   endif
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_ch_array(station_name,nrec,MAX_LENGTH_STATION_NAME)
   call bcast_all_ch_array(network_name,nrec,MAX_LENGTH_NETWORK_NAME)
   call bcast_all_dp(stlat,nrec)

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -48,7 +48,7 @@
     call flush_IMAIN()
   endif
 
-  ! improvements to make: read-in by master and broadcast to all slaves
+  ! improvements to make: read-in by main and broadcast to all secondary processes
   open(IIN,file=trim(PATHNAME_KL_REG),status='old',action='read',iostat=ios)
   if (ios /= 0 ) call exit_MPI(myrank,'Error opening file '//trim(PATHNAME_KL_REG)//' in read_kl_regular_grid() routine')
 
@@ -257,8 +257,10 @@
     ! (lat,lon,radius) for isp point
     lat = KL_REG_MIN_LAT + ilat * GRID%dlat * GRID%ndoubling(ilayer)
     lon = KL_REG_MIN_LON + (ilon - 1) * GRID%dlon * GRID%ndoubling(ilayer)
+
     ! convert radius to meters and then scale
     radius = GRID%rlayer(ilayer) * 1000.0 / R_PLANET
+
     ! (x,y,z) for isp point
     th = (90.0 - lat) * DEGREES_TO_RADIANS; ph = lon * DEGREES_TO_RADIANS
     x_target = radius * sin(th) * cos(ph)
@@ -278,6 +280,7 @@
       dist_squared = (x_target - xstore(iglob))**2 &
                    + (y_target - ystore(iglob))**2 &
                    + (z_target - zstore(iglob))**2
+
       !  we compare squared distances instead of distances themselves to significantly speed up calculations
       if (dist_squared > typical_size_squared) cycle
 
@@ -457,5 +460,6 @@
 
   xi = EPS * nint(xi / EPS)
   eta = EPS * nint(eta / EPS)
+
   end subroutine chunk_map
 

@@ -1,8 +1,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -127,6 +127,9 @@ GPU_REALW_BUFFER (d_alpha_kl_crust_mantle);
 GPU_REALW_BUFFER (d_beta_kl_crust_mantle);
 GPU_REALW_BUFFER (d_cijkl_kl_crust_mantle);
 GPU_REALW_BUFFER (d_hess_kl_crust_mantle);
+GPU_REALW_BUFFER (d_hess_rho_kl_crust_mantle);
+GPU_REALW_BUFFER (d_hess_kappa_kl_crust_mantle);
+GPU_REALW_BUFFER (d_hess_mu_kl_crust_mantle);
 
 // inner / outer elements
 GPU_INT_BUFFER (d_phase_ispec_inner_crust_mantle);
@@ -331,7 +334,7 @@ GPU_REALW_BUFFER (d_hgammar);
 
 // adjoint sources
 GPU_INT_BUFFER (d_number_adjsources_global);
-GPU_REALW_BUFFER (d_source_adjoint);
+GPU_REALW_BUFFER (d_stf_array_adjoint);
 GPU_REALW_BUFFER (d_hxir_adj);
 GPU_REALW_BUFFER (d_hetar_adj);
 GPU_REALW_BUFFER (d_hgammar_adj);
@@ -359,50 +362,20 @@ GPU_REALW_BUFFER (d_b_send_accel_buffer_outer_core);
 // absorbing boundaries
 // ------------------------------------------------------------------   //
 // crust/mantle
-GPU_INT_BUFFER (d_nimin_crust_mantle);
-GPU_INT_BUFFER (d_nimax_crust_mantle);
-GPU_INT_BUFFER (d_njmin_crust_mantle);
-GPU_INT_BUFFER (d_njmax_crust_mantle);
-GPU_INT_BUFFER (d_nkmin_xi_crust_mantle);
-GPU_INT_BUFFER (d_nkmin_eta_crust_mantle);
-GPU_INT_BUFFER (d_ibelm_xmin_crust_mantle);
-GPU_INT_BUFFER (d_ibelm_xmax_crust_mantle);
-GPU_INT_BUFFER (d_ibelm_ymin_crust_mantle);
-GPU_INT_BUFFER (d_ibelm_ymax_crust_mantle);
-GPU_REALW_BUFFER (d_normal_xmin_crust_mantle);
-GPU_REALW_BUFFER (d_normal_xmax_crust_mantle);
-GPU_REALW_BUFFER (d_normal_ymin_crust_mantle);
-GPU_REALW_BUFFER (d_normal_ymax_crust_mantle);
-GPU_REALW_BUFFER (d_jacobian2D_xmin_crust_mantle);
-GPU_REALW_BUFFER (d_jacobian2D_xmax_crust_mantle);
-GPU_REALW_BUFFER (d_jacobian2D_ymin_crust_mantle);
-GPU_REALW_BUFFER (d_jacobian2D_ymax_crust_mantle);
-GPU_REALW_BUFFER (d_absorb_xmin_crust_mantle);
-GPU_REALW_BUFFER (d_absorb_xmax_crust_mantle);
-GPU_REALW_BUFFER (d_absorb_ymin_crust_mantle);
-GPU_REALW_BUFFER (d_absorb_ymax_crust_mantle);
+GPU_INT_BUFFER (d_abs_boundary_ispec_crust_mantle);
+GPU_INT_BUFFER (d_abs_boundary_npoin_crust_mantle);
+GPU_INT_BUFFER (d_abs_boundary_ijk_crust_mantle);
+GPU_REALW_BUFFER (d_abs_boundary_jacobian2Dw_crust_mantle);
+GPU_REALW_BUFFER (d_abs_boundary_normal_crust_mantle);
+GPU_REALW_BUFFER (d_absorb_buffer_crust_mantle);
 GPU_REALW_BUFFER (d_rho_vp_crust_mantle);
 GPU_REALW_BUFFER (d_rho_vs_crust_mantle);
 // outer core
-GPU_INT_BUFFER (d_nimin_outer_core);
-GPU_INT_BUFFER (d_nimax_outer_core);
-GPU_INT_BUFFER (d_njmin_outer_core);
-GPU_INT_BUFFER (d_njmax_outer_core);
-GPU_INT_BUFFER (d_nkmin_xi_outer_core);
-GPU_INT_BUFFER (d_nkmin_eta_outer_core);
-GPU_INT_BUFFER (d_ibelm_xmin_outer_core);
-GPU_INT_BUFFER (d_ibelm_xmax_outer_core);
-GPU_INT_BUFFER (d_ibelm_ymin_outer_core);
-GPU_INT_BUFFER (d_ibelm_ymax_outer_core);
-GPU_REALW_BUFFER (d_jacobian2D_xmin_outer_core);
-GPU_REALW_BUFFER (d_jacobian2D_xmax_outer_core);
-GPU_REALW_BUFFER (d_jacobian2D_ymin_outer_core);
-GPU_REALW_BUFFER (d_jacobian2D_ymax_outer_core);
-GPU_REALW_BUFFER (d_absorb_xmin_outer_core);
-GPU_REALW_BUFFER (d_absorb_xmax_outer_core);
-GPU_REALW_BUFFER (d_absorb_ymin_outer_core);
-GPU_REALW_BUFFER (d_absorb_ymax_outer_core);
-GPU_REALW_BUFFER (d_absorb_zmin_outer_core);
+GPU_INT_BUFFER (d_abs_boundary_ispec_outer_core);
+GPU_INT_BUFFER (d_abs_boundary_npoin_outer_core);
+GPU_INT_BUFFER (d_abs_boundary_ijk_outer_core);
+GPU_REALW_BUFFER (d_abs_boundary_jacobian2Dw_outer_core);
+GPU_REALW_BUFFER (d_absorb_buffer_outer_core);
 GPU_REALW_BUFFER (d_vp_outer_core);
 
 // ------------------------------------------------------------------   //
@@ -418,3 +391,46 @@ GPU_INT_BUFFER (d_ibelm_top_crust_mantle);
 GPU_REALW_BUFFER (d_jacobian2D_top_crust_mantle);
 GPU_REALW_BUFFER (d_Sigma_kl);
 
+// ------------------------------------------------------------------   //
+// LDDRK
+// ------------------------------------------------------------------   //
+GPU_REALW_BUFFER (d_tau_sigmainvval);
+// wavefields intermediate
+GPU_REALW_BUFFER (d_displ_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_veloc_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_b_displ_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_b_veloc_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_displ_outer_core_lddrk);
+GPU_REALW_BUFFER (d_veloc_outer_core_lddrk);
+GPU_REALW_BUFFER (d_b_displ_outer_core_lddrk);
+GPU_REALW_BUFFER (d_b_veloc_outer_core_lddrk);
+GPU_REALW_BUFFER (d_displ_inner_core_lddrk);
+GPU_REALW_BUFFER (d_veloc_inner_core_lddrk);
+GPU_REALW_BUFFER (d_b_displ_inner_core_lddrk);
+GPU_REALW_BUFFER (d_b_veloc_inner_core_lddrk);
+// rotation
+GPU_REALW_BUFFER (d_A_array_rotation_lddrk);
+GPU_REALW_BUFFER (d_B_array_rotation_lddrk);
+GPU_REALW_BUFFER (d_b_A_array_rotation_lddrk);
+GPU_REALW_BUFFER (d_b_B_array_rotation_lddrk);
+// attenuation
+GPU_REALW_BUFFER (d_R_xx_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_R_yy_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_R_xy_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_R_xz_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_R_yz_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_b_R_xx_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_b_R_yy_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_b_R_xy_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_b_R_xz_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_b_R_yz_crust_mantle_lddrk);
+GPU_REALW_BUFFER (d_R_xx_inner_core_lddrk);
+GPU_REALW_BUFFER (d_R_yy_inner_core_lddrk);
+GPU_REALW_BUFFER (d_R_xy_inner_core_lddrk);
+GPU_REALW_BUFFER (d_R_xz_inner_core_lddrk);
+GPU_REALW_BUFFER (d_R_yz_inner_core_lddrk);
+GPU_REALW_BUFFER (d_b_R_xx_inner_core_lddrk);
+GPU_REALW_BUFFER (d_b_R_yy_inner_core_lddrk);
+GPU_REALW_BUFFER (d_b_R_xy_inner_core_lddrk);
+GPU_REALW_BUFFER (d_b_R_xz_inner_core_lddrk);
+GPU_REALW_BUFFER (d_b_R_yz_inner_core_lddrk);

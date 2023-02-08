@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -49,6 +49,7 @@ module asdf_data
     !seismic record info
     real, pointer :: receiver_lat(:), receiver_lo(:)
     real, pointer :: receiver_el(:), receiver_dpt(:)
+
     character(len=32),pointer :: receiver_name_array(:)
     character(len=8),pointer :: network_array(:)
     character(len=3),pointer :: component_array(:)

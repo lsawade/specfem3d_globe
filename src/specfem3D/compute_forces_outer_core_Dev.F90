@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -127,7 +127,7 @@
 !   big loop over all spectral elements in the fluid
 ! ****************************************************
 
-  if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE /= 1 .and. (iphase == 1)) then
+  if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE > 1 .and. (iphase == 1)) then
     div_displfluid(:,:,:,:) = 0._CUSTOM_REAL
   endif
 
@@ -155,16 +155,17 @@
 ! openmp solver
 !$OMP PARALLEL DEFAULT(NONE) &
 !$OMP SHARED( deriv, &
-!$OMP num_elements, phase_ispec_inner, iphase, ibool, displfluid, &
+!$OMP num_elements, phase_ispec_inner, iphase, ibool, &
+!$OMP displfluid, accelfluid, &
 !$OMP gravity_pre_store, &
-!$OMP deltat, two_omega_earth, timeval, A_array_rotation, B_array_rotation, &
-!$OMP MOVIE_VOLUME, &
-!$OMP accelfluid, USE_LDDRK, A_array_rotation_lddrk, &
+!$OMP deltat, two_omega_earth, timeval, &
+!$OMP A_array_rotation, B_array_rotation, &
+!$OMP A_array_rotation_lddrk, B_array_rotation_lddrk, &
 !$OMP sum_terms, &
 #ifdef FORCE_VECTORIZATION
 !$OMP ibool_inv_tbl, ibool_inv_st, num_globs, phase_iglob, &
 #endif
-!$OMP istage, B_array_rotation_lddrk, div_displfluid ) &
+!$OMP istage, div_displfluid ) &
 !$OMP PRIVATE( &
 !$OMP ispec_p, ispec, i, j, k, iglob, chi_elem, &
 !$OMP xixl, xiyl, xizl, etaxl, etayl, etazl, gammaxl, gammayl, gammazl, jacobianl, &
@@ -179,7 +180,9 @@
 !$OMP newtemp1, newtemp2, newtemp3 ) &
 !$OMP FIRSTPRIVATE( hprime_xx, hprime_xxT, hprimewgll_xxT, hprimewgll_xx, &
 !$OMP wgllwgll_yz_3D, wgllwgll_xz_3D, wgllwgll_xy_3D, wgll_cube, &
-!$OMP MYALPHA_LDDRK,MYBETA_LDDRK )
+!$OMP MYALPHA_LDDRK,MYBETA_LDDRK, &
+!$OMP USE_LDDRK,ROTATION_VAL,GRAVITY_VAL,MOVIE_VOLUME, &
+!$OMP NSPEC_OUTER_CORE_3DMOVIE )
 
 !$OMP DO SCHEDULE(GUIDED)
   do ispec_p = 1,num_elements
@@ -230,7 +233,7 @@
 
 
     DO_LOOP_IJK
-      ! get derivatives of velocity potential with respect to x, y and z
+      ! get derivatives of potential with respect to x, y and z
       xixl = deriv(1,INDEX_IJK,ispec)
       xiyl = deriv(2,INDEX_IJK,ispec)
       xizl = deriv(3,INDEX_IJK,ispec)
@@ -437,7 +440,7 @@
         ! note: these calculations are only considered for SIMULATION_TYPE == 1 .and. SAVE_FORWARD
         !          and one has set MOVIE_VOLUME_TYPE == 4 when MOVIE_VOLUME is .true.;
         !         in case of SIMULATION_TYPE == 3, it gets overwritten by compute_kernels_outer_core()
-        if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE /= 1) then
+        if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE > 1) then
           div_displfluid(INDEX_IJK,ispec) = dpotentialdxl(INDEX_IJK) * vec_x &
                                           + dpotentialdyl(INDEX_IJK) * vec_y &
                                           + dpotentialdzl(INDEX_IJK) * vec_z

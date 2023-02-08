@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -119,14 +119,27 @@
 
 ! standard routine to setup model
 
-  use constants, only: N_SLS,myrank
+  use constants, only: N_SLS,myrank,IMAIN
 
-  use shared_parameters, only: ATT_F_C_SOURCE
+  use shared_parameters, only: ATT_F_C_SOURCE,ATTENUATION_GLL,ATTENUATION_3D
   use regions_mesh_par2, only: tau_s_store
 
   implicit none
 
-  ! master process determines period ranges
+  ! user info
+  if (myrank == 0) then
+    write(IMAIN,*) 'attenuation model:'
+    if (ATTENUATION_GLL) then
+      write(IMAIN,*) '  GLL model'
+    else if (ATTENUATION_3D) then
+      write(IMAIN,*) '  3D model'
+    else
+      write(IMAIN,*) '  1D reference model'
+    endif
+    call flush_IMAIN()
+  endif
+
+  ! main process determines period ranges
   if (myrank == 0) call read_attenuation_model()
 
   ! broadcasts to all others
@@ -201,11 +214,17 @@
   use model_sea1d_par, only: &
     NR_SEA1D,SEA1DM_V_Qmu_sea1d ! SEA1DM_V_radius_sea1d
 
+  use model_ccrem_par, only: &
+    NR_CCREM_layers,CCREM_Qmu_original
+
   use model_case65tay_par, only: &
     NR_case65TAY,Mcase65TAY_V_Qmu
 
   use model_vpremoon_par, only: &
     NR_VPREMOON_layers,VPREMOON_Qmu_original
+
+  use model_mars_1d_par, only: &
+    NR_mars_1D_layers,mars_1D_Qmu_original
 
   implicit none
 
@@ -230,43 +249,66 @@
   ! (uses USE_EXTERNAL_CRUSTAL_MODEL set to false)
   select case(REFERENCE_1D_MODEL)
   case (REFERENCE_MODEL_PREM, &
+        REFERENCE_MODEL_PREM2, &
         REFERENCE_MODEL_IASP91, &
         REFERENCE_MODEL_JP1D)
     ! PREM Q layers
+    if (myrank == 0) write(IMAIN,*) '  model: PREM attenuation'
     Qn = 12
 
   case (REFERENCE_MODEL_AK135F_NO_MUD)
     ! redefines "pure" 1D model without crustal modification
+    if (myrank == 0) write(IMAIN,*) '  model: AK135 attenuation'
     call define_model_ak135(.false.)
     Qn = NR_AK135F_NO_MUD
 
   case (REFERENCE_MODEL_1066A)
     ! redefines "pure" 1D model without crustal modification
+    if (myrank == 0) write(IMAIN,*) '  model: 1066A attenuation'
     call define_model_1066a(.false.)
     Qn = NR_1066A
 
   case (REFERENCE_MODEL_1DREF)
     ! redefines "pure" 1D model without crustal modification
+    if (myrank == 0) write(IMAIN,*) '  model: 1D_REF attenuation'
     call define_model_1dref(.false.)
     Qn = NR_REF
 
   case (REFERENCE_MODEL_SEA1D)
     ! redefines "pure" 1D model without crustal modification
+    if (myrank == 0) write(IMAIN,*) '  model: SEA_1D attenuation'
     call define_model_sea1d(.false.)
     Qn = NR_SEA1D
 
+  case (REFERENCE_MODEL_CCREM)
+    ! redefines "pure" 1D model without crustal modification
+    if (myrank == 0) write(IMAIN,*) '  model: CCREM attenuation'
+    ! no need to redefine 1D model, Qmu_original array contains original values (without CRUSTAL modification)
+    Qn = NR_CCREM_layers
+
+  ! Mars models
   case (REFERENCE_MODEL_SOHL, &
         REFERENCE_MODEL_SOHL_B)
     ! Mars, Q from PREM
+    if (myrank == 0) write(IMAIN,*) '  model: Sohl attenuation'
     Qn = 12
 
   case (REFERENCE_MODEL_CASE65TAY)
     ! redefines "pure" 1D model without crustal modification
+    if (myrank == 0) write(IMAIN,*) '  model: Case65TAY attenuation'
     call define_model_case65TAY(.false.)
     Qn = NR_case65TAY
 
+  case (REFERENCE_MODEL_MARS_1D)
+    ! Mars
+    if (myrank == 0) write(IMAIN,*) '  model: mars_1D attenuation'
+    ! no need to redefine 1D model, Qmu_original array contains original values (without CRUSTAL modification)
+    Qn = NR_mars_1D_layers
+
+  ! Moon models
   case (REFERENCE_MODEL_VPREMOON)
     ! Moon
+    if (myrank == 0) write(IMAIN,*) '  model: VPREMOON attenuation'
     ! no need to redefine 1D model, Qmu_original array contains original values (without CRUSTAL modification)
     Qn = NR_VPREMOON_layers
 
@@ -284,6 +326,7 @@
 
   select case(REFERENCE_1D_MODEL)
   case (REFERENCE_MODEL_PREM, &
+        REFERENCE_MODEL_PREM2, &
         REFERENCE_MODEL_IASP91, &
         REFERENCE_MODEL_JP1D)
     ! PREM Q values
@@ -306,6 +349,11 @@
     ! radius = SEA1DM_V_radius_sea1d(:)
     Qmu(:) = SEA1DM_V_Qmu_sea1d(:)
 
+  case (REFERENCE_MODEL_CCREM)
+    ! Moon
+    Qmu(:) = CCREM_Qmu_original(:)
+
+  ! Mars models
   case (REFERENCE_MODEL_SOHL, &
         REFERENCE_MODEL_SOHL_B)
     ! Mars: todo - future use attenuation model by Nimmo & Faul, 2013?
@@ -317,6 +365,11 @@
     ! values as defined in model
     Qmu(:) = Mcase65TAY_V_Qmu(:)
 
+  case (REFERENCE_MODEL_MARS_1D)
+    ! Mars
+    Qmu(:) = mars_1D_Qmu_original(:)
+
+  ! Moon models
   case (REFERENCE_MODEL_VPREMOON)
     ! Moon
     Qmu(:) = VPREMOON_Qmu_original(:)
@@ -442,6 +495,7 @@
   if (Qmu <= 0.0d0) Qmu = ATTENUATION_COMP_MAXIMUM
   if (Qmu > ATTENUATION_COMP_MAXIMUM) Qmu = ATTENUATION_COMP_MAXIMUM
 
+  ! won't get executed since Qmu not zero anymore, but left here...
   if (rw > 0 .and. Qmu == 0.0d0) then
     ! read
     Qmu = 0.0d0
@@ -478,7 +532,7 @@
       rw = -1
     endif
   else
-    ! WRITE SUCCESSFUL
+    ! WRITE
     AM_S%tau_e_storage(:,Qtmp)    = tau_e(:)
     AM_S%Qmu_storage(Qtmp)        = Qmu
     rw = 1
@@ -551,6 +605,10 @@
   if (min_period < TOL_ZERO) &
     call exit_MPI(myrank,'Error invalid maximum period in attenuation_tau_sigma(), cannot be zero or negative.')
 
+  ! requires N_SLS > 1
+  if (n <= 1) &
+    call exit_MPI(myrank,'Error invalid number of SLS in attenuation_tau_sigma(), cannot be less or equal to one.')
+
   ! min and max frequencies
   f1 = 1.0d0 / max_period
   f2 = 1.0d0 / min_period
@@ -607,6 +665,8 @@
   min_value  = -1.0e-4
   err        = 0
   prnt       = 0
+  tau_s(:)   = 0.d0
+  tau_e(:)   = 0.d0
 
   ! Determine the min and max frequencies
   f1 = 1.0d0 / t1

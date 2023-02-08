@@ -1,6 +1,6 @@
 program test_save
 
-  use meshfem3D_par
+  use meshfem_par
   use manager_adios
 
   implicit none
@@ -32,7 +32,7 @@ program test_save
 
     write(IMAIN,*)
     write(IMAIN,*) '*** Specfem3D MPI Mesher ***'
-    write(IMAIN,*) 'Version: ', git_version
+    write(IMAIN,*) 'Version: ', git_package_version
     write(IMAIN,*)
     call flush_IMAIN()
   endif
@@ -78,10 +78,13 @@ program test_save
     print *
 
     ! sets compute parameters accordingly
-    call rcp_compute_parameters()
+    call rcp_set_compute_parameters()
+
+    ! sets mesh parameters
+    call rcp_set_mesh_parameters()
   endif
 
-  ! broadcast parameters read from master to all processes
+  ! broadcast parameters read from main process to all processes
   call broadcast_computed_parameters()
 
   ! tests further calls from initialize_mesher.f90
@@ -96,7 +99,7 @@ program test_save
   ! outputs mesh info and saves new header file
   call finalize_mesher()
 
-  ! results only on master available
+  ! results only on main available
   if (myrank == 0) then
     print *
     print *,'Checks:'
@@ -104,9 +107,19 @@ program test_save
 
     ! volume
     ! without topo/ellip: 0.69581709728628893d0
-    ! with    topo/ellip: 0.69301991059962509 , gcc version 5.4: 0.69301991059962254
+    ! with    topo/ellip: 0.69301991059962509
+    !
+    ! accuracy:
+    !    gcc version 9.3: 0.69301991059962509 (MacOS)
+    !    gcc version 5.4: 0.69301991059962254
+    !    gcc version 7.5: 0.69301991064577684 (IBM Power)
+    !
+    ! new PREM model with inner core at 1221.5km instead of 1221.0km
+    !    calculated volume:   0.69301991575060418
+    !
     print *,'volume_total = ',volume_total
-    if (abs(volume_total - 0.69301991059962d0) > 1.d-14) then
+    if (abs(volume_total - 0.6930199157d0) > 1.d-10) then
+      print *,'volume expected: ',0.6930199157d0,' difference: ',abs(volume_total - 0.6930199157d0)
       print *,'ERROR: volume_total value invalid'
       stop 1
     else

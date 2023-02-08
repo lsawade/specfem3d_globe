@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -40,7 +40,7 @@
           seismo_offset,seismo_current,it_end, &
           OUTPUT_SEISMOS_SAC_ALPHANUM,OUTPUT_SEISMOS_SAC_BINARY, &
           NTSTEP_BETWEEN_OUTPUT_SEISMOS, &
-          MODEL,OUTPUT_FILES
+          MODEL,OUTPUT_FILES,NTSTEP_BETWEEN_OUTPUT_SAMPLE
 
   use specfem_par, only: &
           yr => yr_SAC,jda => jda_SAC,ho => ho_SAC,mi => mi_SAC,sec => sec_SAC, &
@@ -73,7 +73,7 @@
   real :: DEPMAX
   real :: SCALE_F
   real :: ODELTA
-  real ::  B,E,O,A
+  real :: B,E,O,A
   real :: STLA,STLO,STEL,STDP
   real :: EVLA,EVLO,EVEL,EVDP
   real :: MAG,DIST,AZ,BAZ,GCARC
@@ -116,6 +116,7 @@
   logical, external :: is_leap_year
 
   integer :: imodulo_5
+  integer :: seismo_current_used
 
   !----------------------------------------------------------------
 
@@ -148,6 +149,8 @@
 ! file. The header section is stored on the first 30 cards. This is followed
 ! by one or two data sections. The data is in 5G15.7 format.
 !----------------------------------------------------------------------
+!
+! SAC header file format: https://ds.iris.edu/files/sac-manual/manual/file_format.html
 
   ! define certain default values
 
@@ -157,7 +160,7 @@
   INTERNAL = -12345.00 ! SAC internal variables, always left undefined
   BYSAC    = -12345.00 ! values calculated by SAC from other variables
   !
-  DELTA  = sngl(DT)    ! [REQUIRED]
+  DELTA  = sngl(DT*NTSTEP_BETWEEN_OUTPUT_SAMPLE)    ! [REQUIRED]
   DEPMIN = BYSAC
   DEPMAX = BYSAC
   DEPMEN = BYSAC
@@ -215,6 +218,9 @@
   !USER1  = sngl(elon)
   !USER2  = sngl(depth)
   !USER3  = sngl(cmt_hdur) !half duration from CMT if not changed to t0 = 0.d0 (point source)
+
+  ! actual seismogram length
+  seismo_current_used = ceiling(real(seismo_current) / NTSTEP_BETWEEN_OUTPUT_SAMPLE)
 
   ! to avoid compiler warnings
   value1 = elat
@@ -297,12 +303,12 @@
   NVHDR=6 ! SAC header version number. Current is 6
 
   ! CSS3.0 variables:
-  NORID =int(undef) !origin ID
-  NEVID =int(undef) !event  ID
+  NORID = int(undef) !origin ID
+  NEVID = int(undef) !event  ID
   !NWVID =undef !waveform ID
 
   ! NUMBER of POINTS:
-  NPTS = it_end-seismo_offset ! [REQUIRED]
+  NPTS = ceiling(real(it_end-seismo_offset) / NTSTEP_BETWEEN_OUTPUT_SAMPLE) ! [REQUIRED]
   ! event type
   IFTYPE = 1 ! 1=ITIME, i.e. seismogram  [REQUIRED] # numbering system is
   IDEP   = 6 ! 6: displ/nm                          # quite strange, best
@@ -312,10 +318,10 @@
   IQUAL  = int(undef) ! quality
   ISYNTH = int(undef) ! 1 real data, 2...n synth. flag
   ! permission flags:
-  LEVEN =1 ! evenly spaced data [REQUIRED]
-  LPSPOL=1 ! ? pos. polarity of components (has to be TRUE for LCALDA=1)
-  LOVROK=1 ! 1: OK to overwrite file on disk
-  LCALDA=1 ! 1: calculate DIST, AZ, BAZ, and GCARC, 0: do nothing
+  LEVEN  = 1 ! evenly spaced data [REQUIRED]
+  LPSPOL = 1 ! ? pos. polarity of components (has to be TRUE for LCALDA=1)
+  LOVROK = 1 ! 1: OK to overwrite file on disk
+  LCALDA = 1 ! 1: calculate DIST, AZ, BAZ, and GCARC, 0: do nothing
   ! ------------------end format 5I10---------
   !
   !----------------------------------
@@ -345,8 +351,8 @@
 
   ! indicates SEM synthetics
   KUSER0 = 'SY'          ! Network code assigned by IRIS for synthetic seismograms
-  KUSER1 = 'SEM7.0.0'
-  KUSER2 = 'Horse'       ! most was done in year of the horse: jan 31, 2014 - feb 18, 2015
+  KUSER1 = 'SEM8.0.0'    ! code version 8.0
+  KUSER2 = 'Tiger'       ! year of the tiger: Feb 01 2022 - Jan 21 2023
                          ! (chinese zodiac http://en.wikipedia.org/wiki/Chinese_zodiac :)
 
   !KUSER0 = 'PDE_LAT_'          !  A8
@@ -445,10 +451,10 @@
 
     ! now write data - with five values per row:
     ! ---------------
-    imodulo_5 = mod(seismo_current,5)
+    imodulo_5 = mod(seismo_current_used,5)
     if (imodulo_5 == 0) then
       ! five values per row
-      do isample = 1+5,seismo_current+1,5
+      do isample = 1+5,seismo_current_used+1,5
         value1 = dble(seismogram_tmp(iorientation,isample-5))
         value2 = dble(seismogram_tmp(iorientation,isample-4))
         value3 = dble(seismogram_tmp(iorientation,isample-3))
@@ -458,7 +464,7 @@
       enddo
     else
       ! five values per row as long as possible
-      do isample = 1+5,(seismo_current-imodulo_5)+1,5
+      do isample = 1+5,(seismo_current_used-imodulo_5)+1,5
         value1 = dble(seismogram_tmp(iorientation,isample-5))
         value2 = dble(seismogram_tmp(iorientation,isample-4))
         value3 = dble(seismogram_tmp(iorientation,isample-3))
@@ -467,10 +473,10 @@
         write(IOUT_SAC,510) sngl(value1),sngl(value2),sngl(value3),sngl(value4),sngl(value5)
       enddo
       ! loads remaining values
-      if (imodulo_5 >= 1) value1 = dble(seismogram_tmp(iorientation,seismo_current-imodulo_5+1))
-      if (imodulo_5 >= 2) value2 = dble(seismogram_tmp(iorientation,seismo_current-imodulo_5+2))
-      if (imodulo_5 >= 3) value3 = dble(seismogram_tmp(iorientation,seismo_current-imodulo_5+3))
-      if (imodulo_5 >= 4) value4 = dble(seismogram_tmp(iorientation,seismo_current-imodulo_5+4))
+      if (imodulo_5 >= 1) value1 = dble(seismogram_tmp(iorientation,seismo_current_used-imodulo_5+1))
+      if (imodulo_5 >= 2) value2 = dble(seismogram_tmp(iorientation,seismo_current_used-imodulo_5+2))
+      if (imodulo_5 >= 3) value3 = dble(seismogram_tmp(iorientation,seismo_current_used-imodulo_5+3))
+      if (imodulo_5 >= 4) value4 = dble(seismogram_tmp(iorientation,seismo_current_used-imodulo_5+4))
       ! writes out last data line
       select case(imodulo_5)
       case (1)
@@ -651,8 +657,8 @@
     ! now write SAC time series to file
     ! BS BS write whole time series at once (hope to increase I/O performance
     ! compared to using a loop on it)
-    tmp(1:seismo_current) = real(seismogram_tmp(iorientation,1:seismo_current))
-    call write_n_real(tmp(1:seismo_current),seismo_current)
+    tmp(1:seismo_current_used) = real(seismogram_tmp(iorientation,1:seismo_current_used))
+    call write_n_real(tmp(1:seismo_current_used),seismo_current_used)
 
     call close_file()
 

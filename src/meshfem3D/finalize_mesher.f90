@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -27,8 +27,8 @@
 
   subroutine finalize_mesher()
 
-  use meshfem3D_par
-  use meshfem3D_models_par
+  use meshfem_par
+  use meshfem_models_par
 
   use manager_adios
 
@@ -39,9 +39,18 @@
   double precision :: tCPU
   double precision, external :: wtime
 
-  integer :: NT_DUMP_ATTENUATION_optimal
   logical, parameter :: PRINT_INFO_TO_SCREEN = .false.
+  integer :: numelem_total_all
 
+  ! number of elements
+  numelem_crust_mantle = NSPEC_REGIONS(IREGION_CRUST_MANTLE)
+  numelem_outer_core = NSPEC_REGIONS(IREGION_OUTER_CORE)
+  numelem_inner_core = NSPEC_REGIONS(IREGION_INNER_CORE)
+
+  numelem_total = numelem_crust_mantle + numelem_outer_core + numelem_inner_core
+
+  ! stats
+  call sum_all_i(numelem_total,numelem_total_all)
 
   !--- print number of points and elements in the mesh for each region
   if (myrank == 0) then
@@ -50,12 +59,6 @@
     distance_to_center_in_km = (sqrt(Earth_center_of_mass_x_total**2 + &
                                      Earth_center_of_mass_y_total**2 + &
                                      Earth_center_of_mass_z_total**2) / Earth_mass_total) / 1000.d0
-
-    numelem_crust_mantle = NSPEC_REGIONS(IREGION_CRUST_MANTLE)
-    numelem_outer_core = NSPEC_REGIONS(IREGION_OUTER_CORE)
-    numelem_inner_core = NSPEC_REGIONS(IREGION_INNER_CORE)
-
-    numelem_total = numelem_crust_mantle + numelem_outer_core + numelem_inner_core
 
     ! check volume of chunk
     write(IMAIN,*)
@@ -111,7 +114,8 @@
     write(IMAIN,*) 'Repartition of elements in regions:'
     write(IMAIN,*) '----------------------------------'
     write(IMAIN,*)
-    write(IMAIN,*) 'total number of elements in each slice: ',numelem_total
+    write(IMAIN,*) 'number of elements in each slice      : ',numelem_total
+    write(IMAIN,*) 'total number of elements in all slices: ',numelem_total_all
     write(IMAIN,*)
     write(IMAIN,*) ' - crust and mantle: ',sngl(100.d0*dble(numelem_crust_mantle)/dble(numelem_total)),' %'
     write(IMAIN,*) ' - outer core: ',sngl(100.d0*dble(numelem_outer_core)/dble(numelem_total)),' %'
@@ -157,6 +161,10 @@
                           NSPEC_CRUST_MANTLE_STACEY,NSPEC_OUTER_CORE_STACEY, &
                           NGLOB_CRUST_MANTLE_OCEANS,NSPEC_OUTER_CORE_ROTATION,NT_DUMP_ATTENUATION_optimal, &
                           PRINT_INFO_TO_SCREEN)
+
+
+    ! save binary file for solver to read in
+    call save_arrays_mesh_parameters()
 
   endif   ! end of section executed by main process only
 

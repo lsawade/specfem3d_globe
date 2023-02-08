@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -83,7 +83,7 @@
            stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating EPcrust arrays')
 
-  ! read EPCRUST model on master
+  ! read EPCRUST model on main
   if (myrank == 0) call read_epcrust_model()
 
   ! broadcast EPCRUST model
@@ -188,6 +188,18 @@
   found_crust = .false.
   point_in_area = .false.
 
+  vpc = ZERO
+  vsc = ZERO
+  rhoc = ZERO
+
+  mohoc = ZERO
+  sedimentc = ZERO
+
+  zsmooth(:)   = ZERO
+  vpsmooth(:)  = ZERO
+  vssmooth(:)  = ZERO
+  rhosmooth(:) = ZERO
+
   ! min/max area:
   !
   ! EPcrust lat/lon range:     lat[9.0/ 89.5] / lon[-56.0 / 70.0]
@@ -254,7 +266,6 @@
   if (INCLUDE_SEDIMENTS_IN_CRUST .and. zsmooth(1) >= MINIMUM_SEDIMENT_THICKNESS) then
     sedimentc = zsmooth(1) / R_PLANET_KM
   endif
-
 
   ! initializes
   vp = ZERO

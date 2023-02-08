@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -31,7 +31,7 @@
 
 ! creates all elements belonging to different regions of the mesh
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     nspec,iregion_code, &
     idoubling,is_on_a_slice_edge, &
     IMAIN,myrank, &
@@ -44,7 +44,7 @@
     CUT_SUPERBRICK_XI,CUT_SUPERBRICK_ETA, &
     ner_mesh_layers
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     TRANSVERSE_ISOTROPY
 
   use regions_mesh_par2, only: &
@@ -69,7 +69,7 @@
   integer,intent(in) :: offset_proc_xi,offset_proc_eta
 
   ! local parameters
-  integer :: ispec_count,nspec_tiso
+  integer :: ispec_count,ispec_count_all,nspec_tiso
 
   ! parameters needed to store the radii of the grid points in the spherically symmetric Earth
   double precision :: rmin,rmax
@@ -80,6 +80,9 @@
   !double precision :: time_start,tCPU
   integer,dimension(8) :: tval
 
+  ! tolerance value to zero layer thickness
+  double precision, parameter :: TOLERANCE_LAYER_THICKNESS = 1.d-9
+
   ! initializes flags for transverse isotropic elements
   ispec_is_tiso(:) = .false.
   nspec_tiso = 0
@@ -89,6 +92,9 @@
 
   ! counts all the elements in this region of the mesh
   ispec_count = 0
+
+  ! checks if anything to do
+  if (ifirst_region == 0 .and. ilast_region == 0) return
 
   ! loop on all the layers in this region of the mesh
   do ilayer_loop = ifirst_region,ilast_region
@@ -106,7 +112,13 @@
     rmin = rmins(ilayer)
     rmax = rmaxs(ilayer)
 
+    ! skips layers with zero thickness
+    if (abs(rmax - rmin) < TOLERANCE_LAYER_THICKNESS) cycle
+
     ner_without_doubling = ner_mesh_layers(ilayer)
+
+    ! checks if anything to do
+    if (ner_without_doubling == 0) cycle
 
     ! if there is a doubling at the top of this region, we implement it in the last two layers of elements
     ! and therefore we suppress two layers of regular elements here
@@ -184,16 +196,31 @@
 
   enddo ! of ilayer_loop
 
+  ! stats
+  call sum_all_i(ispec_count,ispec_count_all)
+
+  ! user output
+  if (myrank == 0 ) then
+    write(IMAIN,*) '  layers done'
+    write(IMAIN,*)
+    write(IMAIN,*) '  number of elements (per slice)        = ',ispec_count
+    write(IMAIN,*) '  total number of elements (all slices) = ',ispec_count_all
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
+  ! frees temporary arrays
   deallocate(stretch_tab)
   deallocate(perm_layer)
   deallocate(jacobian2D_moho,jacobian2D_400,jacobian2D_670)
 
-  if (myrank == 0 ) write(IMAIN,*)
-
   ! define central cube in inner core
   if (INCLUDE_CENTRAL_CUBE .and. iregion_code == IREGION_INNER_CORE) then
     ! user output
-    if (myrank == 0 ) write(IMAIN,*) '  creating central cube'
+    if (myrank == 0 ) then
+      write(IMAIN,*) '  creating central cube'
+      call flush_IMAIN()
+    endif
 
     call create_central_cube(ichunk,ispec_count,ipass, &
                              nspec,NEX_XI,NEX_PER_PROC_XI,NEX_PER_PROC_ETA, &
@@ -202,6 +229,14 @@
                              idoubling,iregion_code, &
                              rmin,rmax,R_CENTRAL_CUBE, &
                              ispec_is_tiso)
+
+    ! user output
+    if (myrank == 0 ) then
+      write(IMAIN,*) '  central cube done'
+      write(IMAIN,*) '    total number of elements = ',ispec_count
+      write(IMAIN,*)
+      call flush_IMAIN()
+    endif
   endif
 
   ! check total number of spectral elements created

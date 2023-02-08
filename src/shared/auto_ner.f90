@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -49,12 +49,13 @@
   subroutine auto_time_stepping(WIDTH, NEX_MAX, DT)
 
   use constants, only: DEGREES_TO_RADIANS, NGLLX, &
-    REFERENCE_MODEL_PREM,REFERENCE_MODEL_IASP91,REFERENCE_MODEL_AK135F_NO_MUD, &
+    REFERENCE_MODEL_PREM2,REFERENCE_MODEL_IASP91,REFERENCE_MODEL_AK135F_NO_MUD, &
     REFERENCE_MODEL_1066A,REFERENCE_MODEL_1DREF,REFERENCE_MODEL_JP1D,REFERENCE_MODEL_SEA1D, &
-    REFERENCE_MODEL_SOHL,REFERENCE_MODEL_SOHL_B,REFERENCE_MODEL_CASE65TAY, &
+    REFERENCE_MODEL_CCREM, &
+    REFERENCE_MODEL_SOHL,REFERENCE_MODEL_SOHL_B,REFERENCE_MODEL_CASE65TAY,REFERENCE_MODEL_MARS_1D, &
     REFERENCE_MODEL_VPREMOON,REFERENCE_MODEL_MOON_MEENA
 
-  use shared_parameters, only: REFERENCE_1D_MODEL,R_PLANET,RICB
+  use shared_parameters, only: REFERENCE_1D_MODEL,R_PLANET,RICB,CRUSTAL
 
   implicit none
 
@@ -104,36 +105,54 @@
 
   ! modifies maximum velocity according to reference 1D model
   select case (REFERENCE_1D_MODEL)
+  case (REFERENCE_MODEL_PREM2)
+    P_VELOCITY_MAX = 11.06003d0   ! vp: 11.3041 - 1.2730 * (1221.5/6371.)
+
   case (REFERENCE_MODEL_IASP91)
-    P_VELOCITY_MAX = 11.09147d0 ! vp: 11.24094 - 4.09689 * (1216.9/6371.)**2
+    P_VELOCITY_MAX = 11.09147d0   ! vp: 11.24094 - 4.09689 * (1216.9/6371.)**2
 
   case (REFERENCE_MODEL_AK135F_NO_MUD)
-    P_VELOCITY_MAX = 11.0427d0 ! vp
+    P_VELOCITY_MAX = 11.0427d0    ! vp
 
   case (REFERENCE_MODEL_1066A)
-    P_VELOCITY_MAX = 10.9687d0 ! vp
+    P_VELOCITY_MAX = 10.9687d0    ! vp
 
   case (REFERENCE_MODEL_1DREF)
-    P_VELOCITY_MAX = 11.02827d0  ! vpv (PREM)
+    P_VELOCITY_MAX = 11.02827d0   ! vpv (PREM)
 
   case (REFERENCE_MODEL_JP1D)
-    P_VELOCITY_MAX = 11.09147d0 ! vp: 11.24094 - 4.09689 * x**2 (IASP91)
+    P_VELOCITY_MAX = 11.09147d0   ! vp: 11.24094 - 4.09689 * x**2 (IASP91)
 
   case (REFERENCE_MODEL_SEA1D)
-    P_VELOCITY_MAX = 11.09142d0 ! vp
+    P_VELOCITY_MAX = 11.09142d0   ! vp
 
+  case (REFERENCE_MODEL_CCREM)
+    P_VELOCITY_MAX = 11.2636d0    ! vp
+
+  ! Mars models
   case (REFERENCE_MODEL_SOHL, &
         REFERENCE_MODEL_SOHL_B, &
-        REFERENCE_MODEL_CASE65TAY)
+        REFERENCE_MODEL_CASE65TAY, &
+        REFERENCE_MODEL_MARS_1D)
     ! Mars
     ! note: for mars, the time stepping is mostly affected by crustal elements.
     !       we will use two estimates, one for inner core and another for the crust to determine a minimum time step.
     ! inner core
-    P_VELOCITY_MAX = 7.3d0 * 1.1d0        ! vp: 11.26220 - 6.36400 * (1221.49/6371.)**2; daniel: increase by a factor 1.1x
+    P_VELOCITY_MAX = 7.3d0                ! vp: 11.26220 - 6.36400 * (1221.49/6371.)**2
     RADIAL_LEN_RATIO_CENTRAL_CUBE = 0.76  ! for an aspect ratio around 1.3
+
+    ! safety margin: increase by a factor 1.1x
+    P_VELOCITY_MAX = P_VELOCITY_MAX * 1.1d0
+
     ! surface/crust
     check_crust_DT = .true.
-    P_VELOCITY_MAX_CRUST = 7.73d0   ! according to crustmap marscrustp7.cmap (lower crust layer) files
+    if (CRUSTAL) then
+      ! uses 3D crustal map on top
+      P_VELOCITY_MAX_CRUST = 7.73d0   ! according to crustmap marscrustp7.cmap (lower crust layer) files
+    else
+      P_VELOCITY_MAX_CRUST = 7.747d0  ! same as for ONE_CRUST, value at 60 km depth (r = 3330 km) in modSOHL from IPGP
+      if (REFERENCE_1D_MODEL == REFERENCE_MODEL_MARS_1D) P_VELOCITY_MAX_CRUST = 6.22d0 ! according to table mars_1D.dat
+    endif
     ! empirical factor to account for aspect ratio in crust
     if (NEX_MAX < 480) then
       ! allows for larger time steps
@@ -142,7 +161,10 @@
       ! takes stretching effect into account which will lead to thinner elements closer to surface
       RADIAL_LEN_RATIO_CRUST = 0.46
     endif
+    ! smaller crustal elements for mars_1D model layering
+    if (REFERENCE_1D_MODEL == REFERENCE_MODEL_MARS_1D) RADIAL_LEN_RATIO_CRUST = 0.46
 
+  ! Moon models
   case (REFERENCE_MODEL_VPREMOON, &
         REFERENCE_MODEL_MOON_MEENA)
     ! Moon
@@ -150,6 +172,7 @@
     ! inner core
     P_VELOCITY_MAX = 7.3d0 * 1.1d0
     RADIAL_LEN_RATIO_CENTRAL_CUBE = 0.76
+
     ! surface/crust
     check_crust_DT = .true.
     P_VELOCITY_MAX_CRUST = 5.5d0   ! according to VPREMOON (lower crust layer)
@@ -161,6 +184,8 @@
       ! takes stretching effect into account which will lead to thinner elements closer to surface
       RADIAL_LEN_RATIO_CRUST = 0.46
     endif
+    ! smaller crustal elements for moon_1D model layering
+    if (REFERENCE_1D_MODEL == REFERENCE_MODEL_VPREMOON) RADIAL_LEN_RATIO_CRUST = 0.46
 
   end select
 
@@ -236,7 +261,7 @@
     ! minimum suggested time step
     DT = min(dt_suggested,dt_suggested_crust)
     !debug
-    !print *,'debug: auto_time_stepping: mars crust elem size ',elem_size, &
+    !print *,'debug: auto_time_stepping: crust elem size ',elem_size, &
     !        'dt_suggested,dt_suggested_crust',dt_suggested,dt_suggested_crust
   endif
 
@@ -341,6 +366,7 @@
   double precision, dimension(NUM_REGIONS-1) :: ratio_top
   double precision, dimension(NUM_REGIONS-1) :: ratio_bottom
   integer,          dimension(NUM_REGIONS-1) :: NER
+  integer :: i
 
 ! uses model specific radii to determine number of elements in radial direction
 ! (set by earlier call to routine get_model_parameters_radii())
@@ -386,7 +412,11 @@
   case (IPLANET_MARS)
     ! Mars
     ! note: radii R_.. are set according to Mars model geometry
-    radius(9)  = 1900000.0d0          ! in between R771 (at 2033km) and RTOPDOUBLEPRIME (at 1503km)
+    ! default Sohl model
+    !radius(9)  = 1900000.0d0          ! in between R771 (at 2033km) and RTOPDOUBLEPRIME (at 1503km)
+    ! general mars models
+    radius(9)  = RTOPDDOUBLEPRIME + (R771-RTOPDDOUBLEPRIME) * 0.75d0 ! in between R771 and RTOPDOUBLEPRIME
+
     radius(10) = RTOPDDOUBLEPRIME     ! depth = 1887 km, radius 1503000.0 m
     radius(11) = RCMB                 ! depth = 1922 km
 
@@ -412,6 +442,16 @@
     print *,'Invalid planet, auto_ner() not implemented yet'
     stop 'Invalid planet, auto_ner() not implemented yet'
   end select
+
+  ! checks if assigned radius is decreasing from top to center
+  do i = 2,NUM_REGIONS
+    if (radius(i-1) - radius(i) < 0.0) then
+      print *,'Invalid radius assigned: for planet ',PLANET_TYPE,' region radius must decrease with increasing region number'
+      print *,'                         at region ',i,' radius ',radius(i),' should be smaller than ',radius(i-1)
+      print *,'Please check assignement in auto_ner() routine'
+      stop 'Invalid region radius assigned in auto_ner() routine'
+    endif
+  enddo
 
   ! radii in km
   radius(:) = radius(:) / 1000.0d0
@@ -536,7 +576,13 @@
   end select
 
   ! debug
-  if (DEBUG) print *,'planet: ',PLANET_TYPE,'(1 == earth,2 == mars, 3 == moon) - target ratio ',aspect_ratio
+  if (DEBUG) then
+    print *,'debug planet: ',PLANET_TYPE,'(1 == earth,2 == mars, 3 == moon) - target ratio ',aspect_ratio
+    print *,'debug initial NER:'
+    do i = 1,NUM_REGIONS-1
+      print *,'debug: region ',i,'NER ',NER(i)
+    enddo
+  endif
 
   ! Find optimal elements per region
   do i = 1,NUM_REGIONS-1
@@ -646,8 +692,9 @@
   end select
 
   nex_xi = nex_xi_in / 16
-  ximin        = 1e7
+  if (nex_xi <= 0) nex_xi = 1
 
+  ximin        = 1e7
   rcube        = rcube_test
   rcubestep    = 1.0d0
 

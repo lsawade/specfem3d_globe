@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  3 . 6
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !                 Dimitri Komatitsch and Jeroen Tromp
 !    Seismological Laboratory - California Institute of Technology
@@ -340,8 +340,8 @@
 ! in which case it is 4
   integer, parameter :: NUMCORNERS_SHARED = 4
 
-! number of slaves per corner
-  integer, parameter :: NUMSLAVES = 2
+! number of secondarys per corner
+  integer, parameter :: NUMSECONDARYS = 2
 
 ! number of layers in PREM
   integer, parameter :: NR = 640

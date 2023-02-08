@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -27,8 +27,8 @@
 
   subroutine initialize_mesher()
 
-  use meshfem3D_par
-  use meshfem3D_models_par
+  use meshfem_par
+  use meshfem_models_par
 
   use manager_adios
 
@@ -62,7 +62,7 @@
     write(IMAIN,*) '*** Specfem3D MPI Mesher ***'
     write(IMAIN,*) '****************************'
     write(IMAIN,*)
-    write(IMAIN,*) 'Version: ', git_version
+    write(IMAIN,*) 'Version: ', git_package_version
     write(IMAIN,*)
     call flush_IMAIN()
   endif
@@ -75,7 +75,7 @@
     call read_compute_parameters()
   endif
 
-  ! broadcast parameters read from master to all processes
+  ! broadcast parameters read from main to all processes
   call broadcast_computed_parameters()
 
   ! check that the code is running with the requested number of processes
@@ -115,8 +115,8 @@
 
   subroutine im_initialize_system()
 
-  use meshfem3D_par
-  use meshfem3D_models_par
+  use meshfem_par
+  use meshfem_models_par
 
   use manager_adios
 

@@ -1,8 +1,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -49,7 +49,12 @@ by Dennis McRitchie (Princeton University, USA)
  ..
 */
 
+// strndup is non-standard C function
+// to avoid warning when compiling with -std=c99 flag
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include "config.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -165,6 +170,7 @@ FC_FUNC_(param_read,PARAM_READ)(char * string_read, int * string_read_len, char 
     regfree(&compiled_pattern);
     return;
   }
+
   // Read every line in the file.
   while (fgets(line, LINE_MAX, fid) != NULL) {
     // Get rid of the ending newline.
@@ -197,6 +203,7 @@ FC_FUNC_(param_read,PARAM_READ)(char * string_read, int * string_read_len, char 
     }
     free(keyword);
     regfree(&compiled_pattern);
+
     // If it matches, extract the value from the line.
     value = strndup(line+parameter[2].rm_so, parameter[2].rm_eo-parameter[2].rm_so);
 
@@ -211,9 +218,11 @@ FC_FUNC_(param_read,PARAM_READ)(char * string_read, int * string_read_len, char 
 
     free(value);
     free(namecopy);
+
     *ierr = 0;
     return;
   }
+
   // If no keyword matches, print out error and die.
   //printf("No match in parameter file for keyword '%s'\n", namecopy);
   free(namecopy);
@@ -258,6 +267,49 @@ FC_FUNC_(get_utctime_params,GET_UTCTIME_PARAMS)(int* stime_in,
   *ihr = ptm->tm_hour;
   *imin = ptm->tm_min;
   *isec = ptm->tm_sec;
+
+  return;
+}
+
+/* ----------------------------------------------------------------------------- */
+
+#include <errno.h>
+
+void
+FC_FUNC_(sleep_for_msec,SLEEP_FOR_MSEC)(int* millisec) {
+
+// note: nanosleep() function in C/C++ is standard. however, there is no nanosleep() in fortran.
+//       this is a wrapper function to sleep the process for a specified amount of milliseconds
+
+  // seconds
+  int sec = (int) (*millisec) / 1000;
+  // remaining milliseconds
+  int msec = (*millisec) - sec * 1000;
+
+  // check
+  if (sec < 0) sec = 0;
+  if (msec < 0) msec = 0;
+
+  //debug
+  //printf("debug: nanosleep w/ input: %d -> sec %d / millisec %d\n",*millisec,sec,msec);
+
+  // checks if anything to do
+  if (sec == 0 && msec == 0) return;
+
+  // requested time
+  // 1 millisecond = 1,000,000 Nanoseconds
+  struct timespec req = {sec, msec * 1000000};
+  // remaining time
+  struct timespec rem;
+
+  int rc = nanosleep(&req, &rem);
+  if (rc != 0){
+    if ((rc == -1) && (errno == EINTR)){
+      printf ("nanosleep execution failed : sleep was interrupted.\n");
+    }else{
+      printf ("nanosleep execution failed : returned %d.\n",rc);
+    }
+  }
 
   return;
 }

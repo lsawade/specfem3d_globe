@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -85,7 +85,7 @@
   if (ier /= 0) call exit_MPI(myrank,'Error allocating dvpstore array')
   dvpstore(:,:,:,:) = 0._CUSTOM_REAL
 
-  ! master process reads in model
+  ! main process reads in model
   if (myrank == 0) then
      write(IMAIN,*) 'Reading in model_heterogen_mantle.'
      call flush_IMAIN()
@@ -96,7 +96,7 @@
      call flush_IMAIN()
   endif
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_dp(HMM_rho_in,N_R*N_THETA*N_PHI)
 
   if (myrank == 0) then
@@ -150,7 +150,7 @@
   subroutine model_heterogen_mantle(ispec,i,j,k,radius,theta,phi,dvs,dvp,drho)
 
   use constants
-  use shared_parameters, only: R_PLANET
+  use shared_parameters, only: R_PLANET,THREE_D_MODEL
 
   use model_heterogen_mantle_par
 
@@ -172,6 +172,23 @@
   integer :: rec_read                             ! nr of record to be read from heterogen.dat (direct access file)
   double precision :: a,b,c                       ! substitutions in interpolation algorithm (weights)
   double precision :: r_target
+  double precision :: lat,lon
+
+  ! modification for heterogeneous model with PREM background reference
+  if (THREE_D_MODEL == THREE_D_MODEL_HETEROGEN_PREM) then
+    ! chris modif checkers 02/20/21
+    lat = (PI/2.0d0-theta)*180.0d0/PI
+    lon = phi*180.0d0/PI
+    if (lon > 180.0d0) lon = lon - 360.0d0
+
+    ! not fully done yet...
+    stop 'MODEL heterogen_prem is not fully implemented yet'
+
+    !call model_heterogen_mantle_prem(ispec,i,j,k,radius,lat,lon,dvs,dvp,drho)
+
+    ! all done
+    !return
+  endif
 
   ! dimensions in m
   r_target = radius*R_PLANET

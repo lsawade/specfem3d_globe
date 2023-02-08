@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -25,7 +25,7 @@
 !
 !=====================================================================
 
-  subroutine make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2,ONE_CRUST)
+  subroutine make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2)
 
 ! creates a spline for the ellipticity profile in PREM
 ! radius and density are non-dimensional
@@ -48,7 +48,6 @@
 
   integer,intent(inout) :: nspl
   double precision,dimension(NR_DENSITY),intent(inout) :: rspl,ellipicity_spline,ellipicity_spline2
-  logical,intent(in) :: ONE_CRUST
 
   ! local parameters
   integer :: i
@@ -57,12 +56,14 @@
                       R771,RTOPDDOUBLEPRIME,RCMB,RICB,RSURFACE
   double precision :: r_icb,r_cmb,r_topddoubleprime,r_771,r_670,r_600
   double precision :: r_400,r_220,r_80,r_moho,r_middle_crust,r_ocean,r_0
+  double precision :: SOHL_RMOHO,SOHL_R80,SOHL_R220,SOHL_R400,SOHL_R600,SOHL_R670, &
+                      SOHL_R771,SOHL_RTOPDDOUBLEPRIME,SOHL_RCMB
 
   double precision,dimension(NR_DENSITY) :: r,rho,epsilonval,eta
   double precision,dimension(NR_DENSITY) :: radau,k
   double precision,dimension(NR_DENSITY) :: s1,s2,s3
 
-  double precision :: z,g_a,bom,exponentval,i_rho,i_radau
+  double precision :: z,g_a,bom,exponentval,integral_rho,integral_radau
   double precision :: yp1,ypn
 
   ! debugging
@@ -80,17 +81,18 @@
 !                      please check the effect.
 
   ! Earth
+  ! PREM radius of the Earth for gravity calculation
+  double precision, parameter :: R_EARTH_ELLIPTICITY = 6371000.d0
   ! PREM radius of the ocean floor for gravity calculation
-  double precision, parameter :: ROCEAN_ELLIPTICITY = 6368000.d0  ! assumes ocean depth of 3km
+  double precision, parameter :: ROCEAN_ELLIPTICITY = PREM_ROCEAN
 
-  ! selects radii
-  ! radius of the planet for gravity calculation
-  RSURFACE = R_PLANET  ! physical surface (Earth: 6371000, ..)
   select case (PLANET_TYPE)
   case (IPLANET_EARTH)
     ! Earth
     ! default PREM
-    ROCEAN = PREM_ROCEAN
+    ! radius of the planet for gravity calculation
+    RSURFACE = R_EARTH_ELLIPTICITY  ! physical surface (Earth: 6371000, ..)
+    ROCEAN = ROCEAN_ELLIPTICITY
     RMIDDLE_CRUST = PREM_RMIDDLE_CRUST
     RMOHO = PREM_RMOHO
     R80  = PREM_R80
@@ -105,7 +107,12 @@
 
   case (IPLANET_MARS)
     ! Mars
-    ! default Sohn & Spohn Model A
+    ! default Sohn & Spohn Model
+    ! gets corresponding Sohl & Spoon model radii
+    call get_model_Sohl_radii(SOHL_RMOHO,SOHL_R80,SOHL_R220,SOHL_R400,SOHL_R600,SOHL_R670, &
+                              SOHL_R771,SOHL_RTOPDDOUBLEPRIME,SOHL_RCMB)
+    ! sets radii for density integration
+    RSURFACE = R_PLANET
     ROCEAN = SOHL_ROCEAN
     RMIDDLE_CRUST = SOHL_RMIDDLE_CRUST
     RMOHO = SOHL_RMOHO
@@ -122,6 +129,7 @@
   case (IPLANET_MOON)
     ! Moon
     ! default VPREMOON
+    RSURFACE = R_PLANET
     ROCEAN = VPREMOON_ROCEAN
     RMIDDLE_CRUST = VPREMOON_RMIDDLE_CRUST
     RMOHO = VPREMOON_RMOHO
@@ -140,71 +148,71 @@
   end select
 
   ! non-dimensionalize
-  r_icb = RICB/RSURFACE
-  r_cmb = RCMB/RSURFACE
-  r_topddoubleprime = RTOPDDOUBLEPRIME/RSURFACE
-  r_771 = R771/RSURFACE
-  r_670 = R670/RSURFACE
-  r_600 = R600/RSURFACE
-  r_400 = R400/RSURFACE
-  r_220 = R220/RSURFACE
-  r_80 = R80/RSURFACE
-  r_moho = RMOHO/RSURFACE
-  r_middle_crust = RMIDDLE_CRUST/RSURFACE
-  r_ocean = ROCEAN/RSURFACE
+  r_icb = RICB / RSURFACE
+  r_cmb = RCMB / RSURFACE
+  r_topddoubleprime = RTOPDDOUBLEPRIME / RSURFACE
+  r_771 = R771 / RSURFACE
+  r_670 = R670 / RSURFACE
+  r_600 = R600 / RSURFACE
+  r_400 = R400 / RSURFACE
+  r_220 = R220 / RSURFACE
+  r_80 = R80 / RSURFACE
+  r_moho = RMOHO / RSURFACE
+  r_middle_crust = RMIDDLE_CRUST / RSURFACE
+  r_ocean = ROCEAN / RSURFACE
   r_0 = 1.d0
 
   ! sets sampling points in different layers
   ! inner core
-  do i=1,163
+  do i = 1,163
     r(i) = r_icb*dble(i-1)/dble(162)
   enddo
   ! outer core
-  do i=164,323
+  do i = 164,323
     r(i) = r_icb+(r_cmb-r_icb)*dble(i-164)/dble(159)
   enddo
   ! D''
-  do i=324,336
+  do i = 324,336
     r(i) = r_cmb+(r_topddoubleprime-r_cmb)*dble(i-324)/dble(12)
   enddo
   ! D'' to 771
-  do i=337,517
+  do i = 337,517
     r(i) = r_topddoubleprime+(r_771-r_topddoubleprime)*dble(i-337)/dble(180)
   enddo
   ! 771 to 670
-  do i=518,530
+  do i = 518,530
     r(i) = r_771+(r_670-r_771)*dble(i-518)/dble(12)
   enddo
   ! 670 to 600
-  do i=531,540
+  do i = 531,540
     r(i) = r_670+(r_600-r_670)*dble(i-531)/dble(9)
   enddo
   ! 600 to 400
-  do i=541,565
+  do i = 541,565
     r(i) = r_600+(r_400-r_600)*dble(i-541)/dble(24)
   enddo
   ! 400 to 220
-  do i=566,590
+  do i = 566,590
     r(i) = r_400+(r_220-r_400)*dble(i-566)/dble(24)
   enddo
   ! 220 to 80
-  do i=591,609
+  do i = 591,609
     r(i) = r_220+(r_80-r_220)*dble(i-591)/dble(18)
   enddo
   ! 80 to Moho
-  do i=610,619
+  do i = 610,619
     r(i) = r_80+(r_moho-r_80)*dble(i-610)/dble(9)
   enddo
   ! Moho to middle crust
-  do i=620,626
+  do i = 620,626
     r(i) = r_moho+(r_middle_crust-r_moho)*dble(i-620)/dble(6)
   enddo
   ! middle crust to ocean
-  do i=627,633
+  do i = 627,633
     r(i) = r_middle_crust+(r_ocean-r_middle_crust)*dble(i-627)/dble(6)
   enddo
   ! ocean
-  do i=634,NR_DENSITY   ! NR_DENSITY = 640
+  do i = 634,NR_DENSITY   ! NR_DENSITY = 640
     r(i) = r_ocean+(r_0-r_ocean)*dble(i-634)/dble(6)
   enddo
 
@@ -214,7 +222,7 @@
     ! Earth
     ! use PREM to get the density profile for ellipticity (fine for other 1D reference models)
     do i = 1,NR_DENSITY
-      call prem_density(r(i),rho(i),ONE_CRUST)
+      call prem_density(r(i),rho(i))
       radau(i) = rho(i)*r(i)*r(i)
     enddo
 
@@ -225,9 +233,9 @@
     do i = 627,NR_DENSITY ! NR_DENSITY = 640
       r(i) = r_middle_crust+(r_0-r_middle_crust)*dble(i-627)/dble(12)
     enddo
-    ! use Sohl & Spohn model A (1997) to get the density profile for ellipticity.
+    ! use Sohl & Spohn model (1997) to get the density profile for ellipticity.
     do i = 1,NR_DENSITY
-      call Sohl_density(r(i),rho(i),ONE_CRUST)
+      call Sohl_density(r(i),rho(i))
       radau(i) = rho(i)*r(i)*r(i)
     enddo
 
@@ -239,7 +247,7 @@
       r(i) = r_middle_crust+(r_0-r_middle_crust)*dble(i-627)/dble(12)
     enddo
     do i = 1,NR_DENSITY
-      call model_vpremoon_density(r(i),rho(i),ONE_CRUST)
+      call model_vpremoon_density(r(i),rho(i))
       radau(i) = rho(i)*r(i)*r(i)
     enddo
 
@@ -251,16 +259,16 @@
   k(1) = 0.0d0
 
   do i = 2,NR_DENSITY
-    call intgrl(i_rho,r,1,i,rho,s1,s2,s3)
+    call intgrl(integral_rho,r,1,i,rho,s1,s2,s3)
 
 ! Radau approximation of Clairaut's equation for first-order terms of ellipticity, see e.g. Jeffreys H.,
 ! The figures of rotating planets, Mon. Not. R. astr. Soc., vol. 113, p. 97-105 (1953).
 ! The Radau approximation is mentioned on page 97.
 ! For more details see Section 14.1.2 in Dahlen and Tromp (1998)
 ! (see also in file ellipticity_equations_from_Dahlen_Tromp_1998.pdf in the "doc" directory of the code).
-    call intgrl(i_radau,r,1,i,radau,s1,s2,s3)
+    call intgrl(integral_radau,r,1,i,radau,s1,s2,s3)
 
-    z = (2.0d0/3.0d0)*i_radau/(i_rho*r(i)*r(i))
+    z = (2.0d0/3.0d0) * integral_radau / (integral_rho*r(i)*r(i))
 
     ! this comes from equation (14.19) in Dahlen and Tromp (1998)
     eta(i) = (25.0d0/4.0d0)*((1.0d0-(3.0d0/2.0d0)*z)**2.0d0)-1.0d0
@@ -273,7 +281,7 @@
   ! non-dimensionalized value
   bom = bom/sqrt(PI*GRAV*RHOAV)
 
-  g_a = 4.0d0*i_rho
+  g_a = 4.0d0 * integral_rho
   ! this is the equation right above (14.21) in Dahlen and Tromp (1998)
   epsilonval(NR_DENSITY) = (5.0d0/2.d0)*(bom**2.0d0)*R_UNIT_SPHERE / (g_a * (eta(NR_DENSITY)+2.0d0))
 

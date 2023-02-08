@@ -5,8 +5,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -96,11 +96,10 @@ __kernel void prepare_boundary_potential_on_device(const __global float * d_pote
   int id;\n\
   int iglob;\n\
   int iloc;\n\
-  int iinterface;\n\
 \n\
   id = get_global_id(0) + (get_global_size(0)) * (get_global_id(1));\n\
 \n\
-  for (iinterface = 0; iinterface <= num_interfaces - (1); iinterface += 1) {\n\
+  for (int iinterface = 0; iinterface < num_interfaces; iinterface += 1) {\n\
     if (id < d_nibool_interfaces[iinterface]) {\n\
       iloc = id + (max_nibool_interfaces) * (iinterface);\n\
       iglob = d_ibool_interfaces[iloc] - (1);\n\

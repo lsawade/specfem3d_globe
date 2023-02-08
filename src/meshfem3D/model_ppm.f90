@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -110,7 +110,7 @@
   ! upper mantle structure
   if (myrank == 0) call read_model_ppm()
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_singlei(PPM_num_v)
   call bcast_all_singlei(PPM_num_latperlon)
   call bcast_all_singlei(PPM_num_lonperdepth)

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -57,17 +57,18 @@
 
   program interpolate_model
 
-  use constants, only: SIZE_INTEGER, &
+  use constants, only: myrank
+
+  use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ, &
+    GAUSSALPHA,GAUSSBETA, &
+    SIZE_INTEGER,IIN,IOUT,MAX_STRING_LEN, &
     TWO_PI,R_UNIT_SPHERE,HUGEVAL_SNGL, &
     NGNOD,MIDX,MIDY,MIDZ, &
     IFLAG_CRUST,IFLAG_80_MOHO,IFLAG_220_80,IFLAG_670_220,IFLAG_MANTLE_NORMAL
 
-  use shared_parameters, only: R_PLANET_KM
+  use shared_parameters, only: R_PLANET_KM,LOCAL_PATH
 
   use postprocess_par, only: &
-    CUSTOM_REAL,NGLLX,NGLLY,NGLLZ, &
-    GAUSSALPHA,GAUSSBETA, &
-    IIN,IOUT,MAX_STRING_LEN, &
     NCHUNKS_VAL,NPROC_XI_VAL,NPROC_ETA_VAL,NPROCTOT_VAL,NEX_XI_VAL,NEX_ETA_VAL, &
     NSPEC_CRUST_MANTLE,NGLOB_CRUST_MANTLE
 
@@ -87,8 +88,11 @@
   ! model type
   ! isotropic model parameters (vp,vs,rho) or
   ! transversely isotropic model parameters (vpv,vph,vsv,vsh,eta,rho)
+  ! transversely isotropic model parameters (vpv,vph,vsv,vsh,eta,rho)
+  ! azimuthally anisotropic model parameters (vpv,vph,vsv,vsh,eta,rho,mu0,Gc_prime,Gs_prime)
   ! defaults: TI models
   logical :: USE_TRANSVERSE_ISOTROPY = .true.
+  logical :: USE_AZIMUTHAL_ANISOTROPY = .false.
 
   ! shear attenuation
   logical :: USE_ATTENUATION_Q = .false.
@@ -176,7 +180,7 @@
 
   ! model
   integer :: nparams
-  character(len=16),dimension(7) :: fname
+  character(len=16),dimension(10) :: fname
   character(len=MAX_STRING_LEN) :: m_file
   character(len=MAX_STRING_LEN) :: solver_file
 
@@ -188,8 +192,8 @@
   integer(kind=8) :: group_size_inc
 #endif
 
-  ! MPI parameters
-  integer :: sizeprocs,myrank
+  ! MPI processes
+  integer :: sizeprocs
 
   ! nodes search
   integer :: inodes
@@ -212,19 +216,6 @@
   call init_mpi()
   call world_size(sizeprocs)
   call world_rank(myrank)
-
-  ! checks number of processes
-  ! note: must run with same number of process as new mesh was created
-  if (sizeprocs /= NPROCTOT_VAL) then
-    ! usage info
-    if (myrank == 0) then
-      print *, "this program must be executed in parallel with NPROCTOT_VAL = ",NPROCTOT_VAL,"processes"
-      print *, "Invalid number of processes used: ", sizeprocs, " procs"
-      print *
-      print *, "Please run: mpirun -np ",NPROCTOT_VAL," ./bin/xinterpolate_model .."
-    endif
-    call abort_mpi()
-  endif
 
   ! checks program arguments
   if (myrank == 0) then
@@ -251,38 +242,15 @@
         print *,'                              = 1  - uses midpoints for search of closest element (default)'
         print *,'   (optional) nchunks - NCHUNKS (1,2,6) of old-model'
         print *,'   (optional) model_p - "iso" takes isotropic (vp,vs,rho) instead of transversely isotropic (vpv,vph,..) model,'
-        print *,'                        "att" adds Q model (qmu) parameter, "iso_att" takes isotropic + Q model'
+        print *,'                        "tiso_att" adds Q model (qmu) parameter, "iso_att" takes isotropic + Q model'
+        print *,'                        "azi" takes azimuthally anisotropic (vpv, vph, ..., mu0, Gc_prime, Gs_prime) model,'
+        print *,'                        "azi_att" adds Q model (qmu) parameter to azimuthally anisotropic model'
         print *,' '
         stop ' Reenter command line options'
       endif
     enddo
   endif
   call synchronize_all()
-
-  ! initializes chunks
-  ! new (target) mesh
-  nchunks_new = NCHUNKS_VAL  ! from compilation
-  nproctot_new = NPROCTOT_VAL
-  nproc_xi_new = NPROC_XI_VAL
-  nproc_eta_new = NPROC_ETA_VAL
-  nex_xi_new = NEX_XI_VAL
-  nspec_new = NSPEC_CRUST_MANTLE
-  nglob_new = NGLOB_CRUST_MANTLE
-
-  ! safety check, assumes to have NEX_XI == NEX_ETA for now
-  if (NEX_XI_VAL /= NEX_ETA_VAL) then
-    print *,'Error: NEX_XI must be equal to NEX_ETA'
-    stop 'Invalid NEX_XI/NEX_ETA values'
-  endif
-
-  ! old (source) mesh
-  nchunks_old = nchunks_new  ! by default assumes same nchunks (e.g., global to global interpolation)
-  nproctot_old = 0
-  nproc_eta_old = 0
-  nproc_xi_old = 0
-  nex_xi_old = 0
-  nspec_old = 0
-  nglob_old = 0
 
   ! reads input arguments
   want_midpoint = 1
@@ -314,10 +282,23 @@
     if (i == 7 .and. len_trim(arg) > 0) then
       if (trim(arg) == 'iso') then
         USE_TRANSVERSE_ISOTROPY = .false.
+        USE_AZIMUTHAL_ANISOTROPY = .false.
+        USE_ATTENUATION_Q = .false.
       else if (trim(arg) == 'iso_att') then
         USE_TRANSVERSE_ISOTROPY = .false.
+        USE_AZIMUTHAL_ANISOTROPY = .false.
         USE_ATTENUATION_Q = .true.
-      else if (trim(arg) == 'att') then
+      else if (trim(arg) == 'tiso_att') then
+        USE_TRANSVERSE_ISOTROPY = .true.
+        USE_AZIMUTHAL_ANISOTROPY = .false.
+        USE_ATTENUATION_Q = .true.
+      else if (trim(arg) == 'azi') then
+        USE_TRANSVERSE_ISOTROPY = .false.
+        USE_AZIMUTHAL_ANISOTROPY = .true.
+        USE_ATTENUATION_Q = .false.
+      else if (trim(arg) == 'azi_att') then
+        USE_TRANSVERSE_ISOTROPY = .false.
+        USE_AZIMUTHAL_ANISOTROPY = .true.
         USE_ATTENUATION_Q = .true.
       endif
     endif
@@ -353,6 +334,61 @@
     print *
   endif
 
+  ! reads mesh parameters
+  if (myrank == 0) then
+    ! reads mesh_parameters.bin file from input1dir/
+    LOCAL_PATH = dir_topo2
+    call read_mesh_parameters()
+  endif
+  ! broadcast parameters to all processes
+  call bcast_mesh_parameters()
+
+  ! user output
+  if (myrank == 0) then
+    print *,'mesh parameters (from new topo directory):'
+    print *,'  NSPEC_CRUST_MANTLE = ',NSPEC_CRUST_MANTLE
+    print *,'  NPROCTOT           = ',NPROCTOT_VAL
+    print *
+  endif
+
+  ! checks number of processes
+  ! note: must run with same number of process as new mesh was created
+  if (sizeprocs /= NPROCTOT_VAL) then
+    ! usage info
+    if (myrank == 0) then
+      print *, "this program must be executed in parallel with NPROCTOT_VAL = ",NPROCTOT_VAL,"processes"
+      print *, "Invalid number of processes used: ", sizeprocs, " procs"
+      print *
+      print *, "Please run: mpirun -np ",NPROCTOT_VAL," ./bin/xinterpolate_model .."
+    endif
+    call abort_mpi()
+  endif
+
+  ! safety check, assumes to have NEX_XI == NEX_ETA for now
+  if (NEX_XI_VAL /= NEX_ETA_VAL) then
+    print *,'Error: NEX_XI must be equal to NEX_ETA'
+    stop 'Invalid NEX_XI/NEX_ETA values'
+  endif
+
+  ! initializes chunks
+  ! new (target) mesh
+  nchunks_new = NCHUNKS_VAL  ! from compilation
+  nproctot_new = NPROCTOT_VAL
+  nproc_xi_new = NPROC_XI_VAL
+  nproc_eta_new = NPROC_ETA_VAL
+  nex_xi_new = NEX_XI_VAL
+  nspec_new = NSPEC_CRUST_MANTLE
+  nglob_new = NGLOB_CRUST_MANTLE
+
+  ! old (source) mesh
+  nchunks_old = nchunks_new  ! by default assumes same nchunks (e.g., global to global interpolation)
+  nproctot_old = 0
+  nproc_eta_old = 0
+  nproc_xi_old = 0
+  nex_xi_old = 0
+  nspec_old = 0
+  nglob_old = 0
+
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
   ! ADIOS
   call synchronize_all()
@@ -367,16 +403,17 @@
   call init_adios_group(myadios_group,"Interpolator")
 #endif
 
-  !  master process gets old, source mesh dimension
+  !  main process gets old, source mesh dimension
   if (myrank == 0) then
 
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
     ! ADIOS
+    solver_file = get_adios_filename(trim(dir_topo1)//'/solver_data')
+
     ! user output
-    print *, 'reading in ADIOS solver file: ',trim(dir_topo1)//'/solver_data.bp'
+    print *, 'reading in ADIOS solver file: ',trim(solver_file)
 
     ! opens adios file
-    write(solver_file,'(a,a)') trim(dir_topo1)//'/solver_data.bp'
     call open_file_adios_read_only_rank(myadios_file,myadios_group,myrank,solver_file)
 
     ! reads in scalars
@@ -487,9 +524,9 @@
       stop 'Error invalid number of processes for old setup found'
     endif
 
-  endif ! master
+  endif ! main
 
-  ! master broadcasts to all other processes (assumes all slices have equal nspec/nglob values)
+  ! main broadcasts to all other processes (assumes all slices have equal nspec/nglob values)
   call bcast_all_singlei(nspec_old)
   call bcast_all_singlei(nglob_old)
   call bcast_all_singlei(nproctot_old)
@@ -537,6 +574,17 @@
     fname(1:6) = (/character(len=16) :: "vpv","vph","vsv","vsh","eta","rho"/)
 #endif
 
+  else if (USE_AZIMUTHAL_ANISOTROPY) then
+     nparams = 9
+
+#ifdef USE_ADIOS_INSTEAD_OF_MESH
+     fname(1:9) = (/character(len=16) :: "reg1/vpv","reg1/vph","reg1/vsv","reg1/vsh","reg1/eta","reg1/rho", &
+                                         "reg1/mu0","reg1/Gc_prime","reg1/Gs_prime" /)
+#else
+     fname(1:9) = (/character(len=16) :: "vpv","vph","vsv","vsh","eta","rho", &
+                                         "mu0","Gc_prime","Gs_prime" /)
+#endif
+
   else
     ! isotropic model
     nparams = 3
@@ -553,8 +601,8 @@
 
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
   ! adios only for model_gll.bp implemented which uses vpv,vph,..,rho
-  if (nparams /= 6) &
-    stop 'ADIOS version only works for purely transversely isotropic model file model_gll.bp so far...'
+  if (nparams /= 6 .and. nparams /= 9) &
+    stop 'ADIOS version only works for purely transversely isotropic and azimuthally anisotropic model file model_gll so far...'
 #endif
 
   ! console output
@@ -576,6 +624,8 @@
     print *
     if (USE_TRANSVERSE_ISOTROPY) then
       print *,'model parameters:',nparams,' - transversely isotropic model'
+    else if (USE_AZIMUTHAL_ANISOTROPY) then
+      print *,'model parameters:',nparams,' - azimuthally anisotropic model'
     else
       print *,'model parameters:',nparams,' - isotropic model'
     endif
@@ -800,7 +850,7 @@
   call init_adios_group(myadios_group,"InterpolatorNew")
 
   ! opens adios file
-  write(solver_file,'(a,a)') trim(dir_topo2)//'/solver_data.bp'
+  solver_file = get_adios_filename(trim(dir_topo2)//'/solver_data')
   call open_file_adios_read_and_init_method(myadios_file,myadios_group,solver_file)
 
   ! reads in scalars for rank
@@ -823,6 +873,7 @@
 
   ! closes file
   call close_file_adios_read_and_finalize_method(myadios_file)
+  call delete_adios_group(myadios_group,"InterpolatorNew")
 
 #else
   ! opens binary file
@@ -910,7 +961,7 @@
     ! re-initiate group
     call init_adios_group(myadios_group,"InterpolatorOld")
     ! opens adios file
-    write(solver_file,'(a,a)') trim(dir_topo1)//'/solver_data.bp'
+    solver_file = get_adios_filename(trim(dir_topo1)//'/solver_data')
     call open_file_adios_read_and_init_method(myadios_file,myadios_group,solver_file)
 #endif
 
@@ -989,6 +1040,7 @@
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
     ! closes file
     call close_file_adios_read_and_finalize_method(myadios_file)
+    call delete_adios_group(myadios_group,"InterpolatorOld")
 #endif
 
     ! user output
@@ -1014,7 +1066,7 @@
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
     ! single adios file for all old model arrays
     ! opens adios file with old model values
-    write(solver_file,'(a,a)') trim(input_model_dir)//'/model_gll.bp'
+    solver_file = get_adios_filename(trim(input_model_dir)//'/model_gll')
     call open_file_adios_read_and_init_method(myadios_val_file,myadios_val_group,solver_file)
 #endif
 
@@ -1392,7 +1444,7 @@
   enddo
 
   ! opens new adios model file
-  write(solver_file,'(a,a)') trim(output_model_dir) //'/model_gll_interpolated.bp'
+  solver_file = get_adios_filename(trim(output_model_dir) //'/model_gll_interpolated')
   call open_file_adios_write(myadios_val_file,myadios_val_group,solver_file,group_name)
 
   call set_adios_group_size(myadios_val_file,group_size_inc)

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -568,7 +568,7 @@
                                             g11,g12,g13,g14,g15,g16,g22,g23,g24,g25,g26, &
                                             g33,g34,g35,g36,g44,g45,g46,g55,g56,g66)
 
-        ! forward shifts like: (see prepate_attenuation)
+        ! forward shifts like: (see prepare_attenuation)
         !  A_dble = 0.125d0 * (3.d0 * d11 + 3.d0 * d22 + 2.d0 * d12 + 4.d0 * d66)
         !  N_dble = 0.125d0 * (d11 + d22 - 2.d0 * d12 + 4.d0 * d66)
         !  L_dble = 0.5d0 * (d44 + d55)
@@ -1277,8 +1277,8 @@
 
             ! note: the C_ij and density kernels are not for relative perturbations (delta ln( m_i) = delta m_i / m_i),
             !          but absolute perturbations (delta m_i = m_i - m_0)
-            rho_kl_crust_mantle = - rho_kl_crust_mantle
-            cijkl_kl_crust_mantle = - cijkl_kl_crust_mantle
+            rho_kl_crust_mantle(i,j,k,ispec) = - rho_kl_crust_mantle(i,j,k,ispec)
+            cijkl_kl_crust_mantle(:,i,j,k,ispec) = - cijkl_kl_crust_mantle(:,i,j,k,ispec)
 
           endif ! SAVE_TRANSVERSE_KL_ONLY .or. SAVE_AZIMUTHAL_ANISO_KL_ONLY
 
@@ -1590,11 +1590,16 @@
            kappa_kl_crust_mantle(NGLLX,NGLLY,NGLLZ,NSPEC_CRUST_MANTLE_ADJOINT), &
            rhonotprime_kl_crust_mantle(NGLLX,NGLLY,NGLLZ,NSPEC_CRUST_MANTLE_ADJOINT),stat=ier)
   if (ier /= 0 ) stop 'Error allocating transverse kernels bulk_c_kl_crust_mantle,...'
+  mu_kl_crust_mantle(:,:,:,:) = 0.0_CUSTOM_REAL
+  kappa_kl_crust_mantle(:,:,:,:) = 0.0_CUSTOM_REAL
+  rhonotprime_kl_crust_mantle(:,:,:,:) = 0.0_CUSTOM_REAL
 
   ! bulk velocity kernels
   allocate(bulk_c_kl_crust_mantle(NGLLX,NGLLY,NGLLZ,NSPEC_CRUST_MANTLE_ADJOINT), &
            bulk_beta_kl_crust_mantle(NGLLX,NGLLY,NGLLZ,NSPEC_CRUST_MANTLE_ADJOINT),stat=ier)
   if (ier /= 0 ) stop 'Error allocating transverse kernels bulk_c_kl_crust_mantle,...'
+  bulk_c_kl_crust_mantle(:,:,:,:) = 0.0_CUSTOM_REAL
+  bulk_beta_kl_crust_mantle(:,:,:,:) = 0.0_CUSTOM_REAL
 
   ! crust_mantle
   do ispec = 1, NSPEC_CRUST_MANTLE_ADJOINT
@@ -1620,7 +1625,7 @@
           ! kernels rho^prime, beta, alpha
           rho_kl_crust_mantle(i,j,k,ispec) = (rho_kl + alpha_kl + beta_kl) * scale_kl
           beta_kl_crust_mantle(i,j,k,ispec) = &
-            2._CUSTOM_REAL * (beta_kl - FOUR_THIRDS * mul * alpha_kl / kappal) * scale_kl
+            2._CUSTOM_REAL * (beta_kl - FOUR_THIRDS * mul / kappal * alpha_kl) * scale_kl
           alpha_kl_crust_mantle(i,j,k,ispec) = &
             2._CUSTOM_REAL * (1 +  FOUR_THIRDS * mul / kappal) * alpha_kl * scale_kl
 
@@ -1998,6 +2003,19 @@
     open(unit=IOUT,file=trim(prname)//'hess_kernel.bin',status='unknown',form='unformatted',action='write')
     write(IOUT) hess_kl_crust_mantle
     close(IOUT)
+
+    open(unit=IOUT,file=trim(prname)//'hess_rho_kernel.bin',status='unknown',form='unformatted',action='write')
+    write(IOUT) hess_rho_kl_crust_mantle
+    close(IOUT)
+
+    open(unit=IOUT,file=trim(prname)//'hess_kappa_kernel.bin',status='unknown',form='unformatted',action='write')
+    write(IOUT) hess_kappa_kl_crust_mantle
+    close(IOUT)
+
+    open(unit=IOUT,file=trim(prname)//'hess_mu_kernel.bin',status='unknown',form='unformatted',action='write')
+    write(IOUT) hess_mu_kl_crust_mantle
+    close(IOUT)
+
   endif
 
   end subroutine save_kernels_Hessian

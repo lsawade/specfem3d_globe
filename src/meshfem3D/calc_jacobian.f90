@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -199,6 +199,10 @@
           ! note: the mesh can have ellipticity, thus the geocentric colatitude might differ from the geographic one
           !
           ! converts position to geocentric coordinates
+          print *
+          print *,'Mesh becomes invalid due to distorted elements!'
+          print *,'Please check your mesh setup (NEX, topography, etc.) and try re-running the mesher.'
+          print *
           print *,'Error Jacobian rank:',myrank,'has invalid Jacobian ',jacobian
           print *,'  Jacobian: ',jacobian,'xxi/eta/gamma',xxi,xeta,xgamma,'yxi/eta/gamma',yxi,yeta,ygamma,'zxi',zxi/zeta,zgamma
           print *,'  location x/y/z: ',xstore(i,j,k,ispec),ystore(i,j,k,ispec),zstore(i,j,k,ispec)

@@ -5,8 +5,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -100,7 +100,6 @@ void compute_element_strain_undoatt(const int ispec, const int ijk_ispec, const 
   int K;\n\
   int J;\n\
   int I;\n\
-  int l;\n\
   int offset;\n\
   float tempx1l;\n\
   float tempx2l;\n\
@@ -149,7 +148,7 @@ void compute_element_strain_undoatt(const int ispec, const int ijk_ispec, const 
   tempz2l = 0.0f;\n\
   tempz3l = 0.0f;\n\
 \n\
-  for (l = 0; l <= NGLLX - (1); l += 1) {\n\
+  for (int l = 0; l < NGLLX; l += 1) {\n\
     fac1 = sh_hprime_xx[(l) * (NGLLX) + I];\n\
     tempx1l = tempx1l + (s_dummyx_loc[(K) * (NGLL2) + (J) * (NGLLX) + l]) * (fac1);\n\
     tempy1l = tempy1l + (s_dummyy_loc[(K) * (NGLL2) + (J) * (NGLLX) + l]) * (fac1);\n\
@@ -223,9 +222,7 @@ __kernel void compute_strain_kernel(const __global float * d_displ, const __glob
   if (ispec < NSPEC) {\n\
     compute_element_strain_undoatt(ispec, ijk_ispec, d_ibool, s_dummyx_loc, s_dummyy_loc, s_dummyz_loc, d_xix, d_xiy, d_xiz, d_etax, d_etay, d_etaz, d_gammax, d_gammay, d_gammaz, sh_hprime_xx, epsdev,  &eps_trace_over_3);\n\
 \n\
-    if (NSPEC_STRAIN_ONLY == 1) {\n\
-      epsilon_trace_over_3[tx] = eps_trace_over_3;\n\
-    } else {\n\
+    if (NSPEC_STRAIN_ONLY > 1) {\n\
       epsilon_trace_over_3[ijk_ispec] = eps_trace_over_3;\n\
     }\n\
     epsilondev_xx[ijk_ispec] = epsdev[0];\n\

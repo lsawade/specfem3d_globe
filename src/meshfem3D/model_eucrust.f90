@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -81,7 +81,7 @@
   ! EUcrust07 Vp crustal structure
   if (myrank == 0 ) call read_EuCrust()
 
-  ! broadcasts arrays from master to all others
+  ! broadcasts arrays from main to all others
   call bcast_all_dp(eucrust_lat,num_eucrust)
   call bcast_all_dp(eucrust_lon,num_eucrust)
   call bcast_all_dp(eucrust_vp_uppercrust,num_eucrust)

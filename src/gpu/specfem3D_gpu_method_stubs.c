@@ -1,8 +1,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -124,13 +124,13 @@ void FC_FUNC_ (compute_add_sources_adjoint_gpu,
 void FC_FUNC_(transfer_adj_to_device,
               TRANSFER_ADJ_TO_DEVICE)(long* Mesh_pointer_f,
                                       int* h_nrec,
-                                      realw* h_source_adjoint,
+                                      realw* h_stf_array_adjoint,
                                       int* h_islice_selected_rec) {}
 
 void FC_FUNC_(transfer_adj_to_device_async,
               TRANSFER_ADJ_TO_DEVICE_ASYNC)(long *Mesh_pointer_f,
                                             int *h_nrec,
-                                            realw *h_source_adjoint,
+                                            realw *h_stf_array_adjoint,
                                             int *h_islice_selected_rec) {}
 
 
@@ -166,6 +166,7 @@ void FC_FUNC_ (compute_coupling_ocean_gpu,
 void FC_FUNC_ (compute_forces_crust_mantle_gpu,
                COMPUTE_FORCES_CRUST_MANTLE_GPU) (long *Mesh_pointer_f,
                                                  int *iphase,
+                                                 realw *alpha_lddrk_f, realw *beta_lddrk_f,
                                                  int *FORWARD_OR_ADJOINT_f) {}
 
 
@@ -176,6 +177,7 @@ void FC_FUNC_ (compute_forces_crust_mantle_gpu,
 void FC_FUNC_ (compute_forces_inner_core_gpu,
                COMPUTE_FORCES_INNER_CORE_GPU) (long *Mesh_pointer_f,
                                                int *iphase,
+                                               realw *alpha_lddrk_f, realw *beta_lddrk_f,
                                                int *FORWARD_OR_ADJOINT_f) {}
 
 
@@ -187,6 +189,7 @@ void FC_FUNC_ (compute_forces_outer_core_gpu,
                COMPUTE_FORCES_OUTER_CORE_GPU) (long *Mesh_pointer_f,
                                                int *iphase,
                                                realw *timeval_f,
+                                               realw *alpha_lddrk_f,realw *beta_lddrk_f,
                                                int *FORWARD_OR_ADJOINT_f) {}
 
 
@@ -210,7 +213,7 @@ void FC_FUNC_ (compute_kernels_strength_noise_gpu,
 
 void FC_FUNC_ (compute_kernels_hess_gpu,
                COMPUTE_KERNELS_HESS_GPU) (long *Mesh_pointer_f,
-                                          realw *deltat_f) {}
+                                          realw *deltat_f, int *USE_SOURCE_RECEIVER_HESSIAN_f) {}
 
 void FC_FUNC_ (resort_array,
                RESORT_ARRAY) (long *Mesh_pointer_f) {}
@@ -237,17 +240,14 @@ void FC_FUNC_ (compute_seismograms_gpu,
 
 void FC_FUNC_ (compute_stacey_acoustic_gpu,
                COMPUTE_STACEY_ACOUSTIC_GPU) (long *Mesh_pointer_f,
-                                             realw *absorb_potential,
-                                             int *itype) {}
+                                             realw *absorb_potential) {}
 
 void FC_FUNC_ (compute_stacey_acoustic_backward_gpu,
                COMPUTE_STACEY_ACOUSTIC_BACKWARD_GPU) (long *Mesh_pointer_f,
-                                                      realw *absorb_potential,
-                                                      int *itype) {}
+                                                      realw *absorb_potential) {}
 
 void FC_FUNC_ (compute_stacey_acoustic_undoatt_gpu,
-               COMPUTE_STACEY_ACOUSTIC_UNDOATT_GPU) (long *Mesh_pointer_f,
-                                                     int *itype) {}
+               COMPUTE_STACEY_ACOUSTIC_UNDOATT_GPU) (long *Mesh_pointer_f) {}
 
 
 //
@@ -256,17 +256,14 @@ void FC_FUNC_ (compute_stacey_acoustic_undoatt_gpu,
 
 void FC_FUNC_ (compute_stacey_elastic_gpu,
                COMPUTE_STACEY_ELASTIC_GPU) (long *Mesh_pointer_f,
-                                            realw *absorb_field,
-                                            int *itype) {}
+                                            realw *absorb_field) {}
 
 void FC_FUNC_ (compute_stacey_elastic_backward_gpu,
                COMPUTE_STACEY_ELASTIC_BACKWARD_GPU) (long *Mesh_pointer_f,
-                                                     realw *absorb_field,
-                                                     int *itype) {}
+                                                     realw *absorb_field) {}
 
 void FC_FUNC_ (compute_stacey_elastic_undoatt_gpu,
-               COMPUTE_STACEY_ELASTIC_UNDOATT_GPU) (long *Mesh_pointer_f,
-                                                    int *itype) {}
+               COMPUTE_STACEY_ELASTIC_UNDOATT_GPU) (long *Mesh_pointer_f) {}
 
 
 //
@@ -289,6 +286,9 @@ void FC_FUNC_ (compute_strain_gpu,
 void FC_FUNC_ (pause_for_debug,
                PAUSE_FOR_DEBUG) () {}
 
+void FC_FUNC_ (allocate_gpu_buffer,
+               ALLOCATE_GPU_BUFFER) (realw** buffer_f, int* total_size) {}
+
 
 //
 // src/gpu/initialize_gpu.c
@@ -296,10 +296,13 @@ void FC_FUNC_ (pause_for_debug,
 
 void FC_FUNC_ (initialize_gpu_device,
                INITIALIZE_GPU_DEVICE) (int *runtime_f, char *platform_f, char *device_f, int *myrank_f, int *nb_devices) {
- fprintf(stderr,"ERROR: GPU_MODE enabled without GPU/CUDA/OpenCL Support. "
-                "To enable GPU support, reconfigure with --with-gpu and/or --with-opencl flag.\n");
+ fprintf(stderr,"ERROR: GPU_MODE enabled without CUDA/OpenCL/HIP Support. "
+                "To enable GPU support, reconfigure with --with-cuda and/or --with-opencl and/or --with-hip flag.\n");
  exit(1);
 }
+
+void FC_FUNC_ (check_cuda_aware_mpi,
+               CHECK_CUDA_AWARE_MPI) (int* has_cuda_aware_mpi_f) {}
 
 
 //
@@ -310,11 +313,11 @@ void FC_FUNC_ (noise_transfer_surface_to_host,
                NOISE_TRANSFER_SURFACE_TO_HOST) (long *Mesh_pointer_f,
                                                 realw *h_noise_surface_movie) {}
 
-void FC_FUNC_ (noise_add_source_master_rec_gpu,
-               NOISE_ADD_SOURCE_MASTER_REC_GPU) (long *Mesh_pointer_f,
-                                                 int *it_f,
-                                                 int *irec_master_noise_f,
-                                                 int *islice_selected_rec) {}
+void FC_FUNC_ (noise_add_source_main_rec_gpu,
+               NOISE_ADD_SOURCE_MAIN_REC_GPU) (long *Mesh_pointer_f,
+                                               int *it_f,
+                                               int *irec_main_noise_f,
+                                               int *h_islice_selected_rec) {}
 
 void FC_FUNC_ (noise_add_surface_movie_gpu,
                NOISE_ADD_SURFACE_MOVIE_GPU) (long *Mesh_pointer_f,
@@ -359,7 +362,8 @@ void FC_FUNC_ (prepare_constants_device,
                                           realw *deltat_f,
                                           int *GPU_ASYNC_COPY_f,
                                           double * h_hxir_store,double * h_hetar_store,double * h_hgammar_store,double * h_nu,
-                                          int *SAVE_SEISMOGRAMS_STRAIN_f) {}
+                                          int *SAVE_SEISMOGRAMS_STRAIN_f,
+                                          int *CUSTOM_REAL_f) {}
 
 void FC_FUNC_ (prepare_constants_adjoint_device,
                PREPARE_CONSTANTS_ADJOINT_DEVICE) (long *Mesh_pointer_f,
@@ -419,7 +423,8 @@ void FC_FUNC_ (prepare_fields_attenuat_device,
                                                 realw *factor_common_inner_core,
                                                 realw *one_minus_sum_beta_inner_core,
                                                 realw *alphaval, realw *betaval, realw *gammaval,
-                                                realw *b_alphaval, realw *b_betaval, realw *b_gammaval) {}
+                                                realw *b_alphaval, realw *b_betaval, realw *b_gammaval,
+                                                int *N_SLS_f) {}
 
 void FC_FUNC_ (prepare_fields_strain_device,
                PREPARE_FIELDS_STRAIN_DEVICE) (long *Mesh_pointer_f,
@@ -450,31 +455,19 @@ void FC_FUNC_ (prepare_fields_strain_device,
 
 void FC_FUNC_ (prepare_fields_absorb_device,
                PREPARE_FIELDS_ABSORB_DEVICE) (long *Mesh_pointer_f,
-                                              int *nspec2D_xmin_crust_mantle, int *nspec2D_xmax_crust_mantle,
-                                              int *nspec2D_ymin_crust_mantle, int *nspec2D_ymax_crust_mantle,
-                                              int *NSPEC2DMAX_XMIN_XMAX_CM, int *NSPEC2DMAX_YMIN_YMAX_CM,
-                                              int *nimin_crust_mantle, int *nimax_crust_mantle,
-                                              int *njmin_crust_mantle, int *njmax_crust_mantle,
-                                              int *nkmin_xi_crust_mantle, int *nkmin_eta_crust_mantle,
-                                              int *ibelm_xmin_crust_mantle, int *ibelm_xmax_crust_mantle,
-                                              int *ibelm_ymin_crust_mantle, int *ibelm_ymax_crust_mantle,
-                                              realw *normal_xmin_crust_mantle, realw *normal_xmax_crust_mantle,
-                                              realw *normal_ymin_crust_mantle, realw *normal_ymax_crust_mantle,
-                                              realw *jacobian2D_xmin_crust_mantle, realw *jacobian2D_xmax_crust_mantle,
-                                              realw *jacobian2D_ymin_crust_mantle, realw *jacobian2D_ymax_crust_mantle,
-                                              realw *rho_vp_crust_mantle,
-                                              realw *rho_vs_crust_mantle,
-                                              int *nspec2D_xmin_outer_core, int *nspec2D_xmax_outer_core,
-                                              int *nspec2D_ymin_outer_core, int *nspec2D_ymax_outer_core,
-                                              int *nspec2D_zmin_outer_core,
-                                              int *NSPEC2DMAX_XMIN_XMAX_OC, int *NSPEC2DMAX_YMIN_YMAX_OC,
-                                              int *nimin_outer_core, int *nimax_outer_core,
-                                              int *njmin_outer_core, int *njmax_outer_core,
-                                              int *nkmin_xi_outer_core, int *nkmin_eta_outer_core,
-                                              int *ibelm_xmin_outer_core, int *ibelm_xmax_outer_core,
-                                              int *ibelm_ymin_outer_core, int *ibelm_ymax_outer_core,
-                                              realw *jacobian2D_xmin_outer_core, realw *jacobian2D_xmax_outer_core,
-                                              realw *jacobian2D_ymin_outer_core, realw *jacobian2D_ymax_outer_core,
+                                              int* num_abs_boundary_faces_crust_mantle,
+                                              int* abs_boundary_ispec_crust_mantle,
+                                              int* abs_boundary_npoin_crust_mantle,
+                                              int* abs_boundary_ijk_crust_mantle,
+                                              realw* abs_boundary_jacobian2Dw_crust_mantle,
+                                              realw* abs_boundary_normal_crust_mantle,
+                                              realw* rho_vp_crust_mantle,
+                                              realw* rho_vs_crust_mantle,
+                                              int* num_abs_boundary_faces_outer_core,
+                                              int* abs_boundary_ispec_outer_core,
+                                              int* abs_boundary_npoin_outer_core,
+                                              int* abs_boundary_ijk_outer_core,
+                                              realw* abs_boundary_jacobian2Dw_outer_core,
                                               realw *vp_outer_core) {}
 
 void FC_FUNC_ (prepare_mpi_buffers_device,
@@ -490,7 +483,8 @@ void FC_FUNC_ (prepare_mpi_buffers_device,
                                             int *num_interfaces_outer_core,
                                             int *max_nibool_interfaces_oc,
                                             int *nibool_interfaces_outer_core,
-                                            int *ibool_interfaces_outer_core) {}
+                                            int *ibool_interfaces_outer_core,
+                                            int *USE_CUDA_AWARE_MPI_f) {}
 
 void FC_FUNC_ (prepare_fields_noise_device,
                PREPARE_FIELDS_NOISE_DEVICE) (long *Mesh_pointer_f,
@@ -512,7 +506,8 @@ void FC_FUNC_ (prepare_oceans_device,
                                        realw *h_normal_ocean_load) {}
 
 void FC_FUNC_ (prepare_lddrk_device,
-               PREPARE_LDDRK_DEVICE) (long *Mesh_pointer_f) {}
+               PREPARE_LDDRK_DEVICE) (long *Mesh_pointer_f,
+                                      realw *tau_sigmainvval) {}
 
 void FC_FUNC_ (prepare_crust_mantle_device,
                PREPARE_CRUST_MANTLE_DEVICE) (long *Mesh_pointer_f,
@@ -602,6 +597,37 @@ void FC_FUNC_ (prepare_cleanup_device,
 //
 // src/gpu/save_and_compare_cpu_vs_gpu.c
 //
+
+
+//
+// src/gpu/smooth_gpu.c
+//
+
+void FC_FUNC_(prepare_smooth_gpu,
+              PREPARE_SMOOTH_GPU)(long * Container,
+                                  realw * xstore_me,
+                                  realw * ystore_me,
+                                  realw * zstore_me,
+                                  realw * sigma_h2,
+                                  realw * sigma_v2,
+                                  realw * sigma_h3,
+                                  realw * sigma_v3,
+                                  int * nspec_me,
+                                  int * nker){}
+
+void FC_FUNC_(compute_smooth_gpu,
+              COMPUTE_SMOOTH_GPU)(long * smooth_pointer,
+                                  realw * data_other,
+                                  realw * integ_factor,
+                                  realw * xstore_other,
+                                  realw * ystore_other,
+                                  realw * zstore_other,
+                                  const int * nspec_other_f,
+                                  const int * use_vector_distance_f){}
+
+void FC_FUNC_(get_smooth_gpu,
+              GET_SMOOTH_GPU)(long * smooth_pointer,
+                              realw * data_smooth) {}
 
 
 //
@@ -834,6 +860,9 @@ void FC_FUNC_(transfer_kernels_noise_to_host,
 void FC_FUNC_(transfer_kernels_hess_cm_tohost,
               TRANSFER_KERNELS_HESS_CM_TOHOST)(long *Mesh_pointer_f,
                                                realw *h_hess_kl,
+                                               realw *h_hess_rho_kl,
+                                               realw *h_hess_kappa_kl,
+                                               realw *h_hess_mu_kl,
                                                int *NSPEC) {}
 
 void FC_FUNC_(register_host_array,
@@ -841,6 +870,25 @@ void FC_FUNC_(register_host_array,
 
 void FC_FUNC_(unregister_host_array,
               UNREGISTER_HOST_ARRAY)(realw *h_array) {}
+
+
+//
+// src/gpu/update_displacement_LDDRK_gpu.c
+//
+
+void FC_FUNC_ (update_displ_lddrk_gpu,
+               UPDATE_DISPL_LDDRK_GPU) (long *Mesh_pointer_f,
+                                        int *FORWARD_OR_ADJOINT) {}
+
+void FC_FUNC_ (update_elastic_lddrk_gpu,
+               UPDATE_ELASTIC_LDDRK_GPU) (long *Mesh_pointer_f,
+                                          realw *alpha_lddrk_f, realw *beta_lddrk_f,
+                                          int *FORWARD_OR_ADJOINT) {}
+
+void FC_FUNC_ (update_acoustic_lddrk_gpu,
+               UPDATE_ACOUSTIC_LDDRK_GPU) (long *Mesh_pointer_f,
+                                           realw *alpha_lddrk_f, realw *beta_lddrk_f,
+                                           int *FORWARD_OR_ADJOINT) {}
 
 
 //

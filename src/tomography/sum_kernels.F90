@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -56,8 +56,8 @@ program sum_kernels_globe
 
   implicit none
 
-  character(len=MAX_STRING_LEN) :: kernel_list(MAX_KERNEL_PATHS), sline
-  character(len=MAX_STRING_LEN) :: kernel_name
+  character(len=MAX_STRING_LEN),dimension(:),allocatable :: kernel_list
+  character(len=MAX_STRING_LEN) :: kernel_name,sline
   integer :: nker,iker
   integer :: ier,i
 
@@ -121,19 +121,24 @@ program sum_kernels_globe
     write(*,*) 'reading kernel list: ',trim(kernel_file_list)
   endif
 
+  ! allocates array
+  allocate(kernel_list(MAX_KERNEL_PATHS),stat=ier)
+  if (ier /= 0) stop 'Error allocating kernel_list array'
+  kernel_list(:) = ''
+
   ! reads in event list
   nker = 0
   open(unit=IIN,file=trim(kernel_file_list),status='old',action='read',iostat=ier)
   if (ier /= 0) then
-     print *,'Error opening ',trim(kernel_file_list),myrank
-     stop 1
+    print *,'Error opening ',trim(kernel_file_list),myrank
+    stop 1
   endif
   do while (1 == 1)
-     read(IIN,'(a)',iostat=ier) sline
-     if (ier /= 0) exit
-     nker = nker+1
-     if (nker > MAX_KERNEL_PATHS) stop 'Error number of kernels exceeds MAX_KERNEL_PATHS'
-     kernel_list(nker) = sline
+    read(IIN,'(a)',iostat=ier) sline
+    if (ier /= 0) exit
+    nker = nker+1
+    if (nker > MAX_KERNEL_PATHS) stop 'Error number of kernels exceeds MAX_KERNEL_PATHS'
+    kernel_list(nker) = sline
   enddo
   close(IIN)
   if (myrank == 0) then
@@ -142,6 +147,23 @@ program sum_kernels_globe
   endif
   ! check
   if (nker == 0) stop 'No event kernel directories found, please check...'
+
+  ! reads mesh parameters
+  if (myrank == 0) then
+    ! reads mesh_parameters.bin file from topo/
+    LOCAL_PATH = INPUT_DATABASES_DIR        ! 'topo/' should hold mesh_parameters.bin file
+    call read_mesh_parameters()
+  endif
+  ! broadcast parameters to all processes
+  call bcast_mesh_parameters()
+
+  ! user output
+  if (myrank == 0) then
+    print *,'mesh parameters (from topo/ directory):'
+    print *,'  NSPEC_CRUST_MANTLE = ',NSPEC_CRUST_MANTLE
+    print *,'  NPROCTOT           = ',NPROCTOT_VAL
+    print *
+  endif
 
   ! checks if number of MPI process as specified
   if (sizeprocs /= NPROCTOT_VAL) then
@@ -178,7 +200,7 @@ program sum_kernels_globe
   call initialize_adios()
 
   ! opens file for summed kernel result
-  call open_sum_file(adios_kl_names)
+  call open_sum_file_adios(adios_kl_names)
 #endif
 
   ! synchronizes
@@ -247,7 +269,7 @@ program sum_kernels_globe
   ! ADIOS
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
   ! closes summed kernel file
-  call close_sum_file()
+  call close_sum_file_adios()
   ! finalizes adios
   call finalize_adios()
 #endif
@@ -314,16 +336,18 @@ end program sum_kernels_globe
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
     ! ADIOS
     ! reads existing event kernel file
-    write(file_name,'(a,a)') 'INPUT_KERNELS/'//trim(kernel_list(iker)),'/kernels.bp'
+    write(file_name,'(a,a)') 'INPUT_KERNELS/'//trim(kernel_list(iker)),'/kernels'
+    file_name = get_adios_filename(trim(file_name))
+
     ! debug
-    !print *,'adios file: ',trim(file_name)
-    !print *,'adios kernel: ',kernel_name
+    !print *,'debug: ',myrank,'adios file  : ',trim(file_name)
+    !print *,'debug: ',myrank,'adios kernel: ',trim(kernel_name)
 
     ! reads adios file
     call open_file_adios_read_and_init_method(myadios_file,myadios_group,file_name)
 
     ! gets kernel value
-    call read_adios_array(myadios_file,myadios_group,myrank,NSPEC_CRUST_MANTLE,trim(kernel_name),kernel(:,:,:,:))
+    call read_adios_array(myadios_file,myadios_group,myrank,NSPEC_CRUST_MANTLE,trim(kernel_name),kernel)
 
     ! closes read file
     call close_file_adios_read_and_finalize_method(myadios_file)
@@ -342,6 +366,7 @@ end program sum_kernels_globe
       print *,'  norm kernel: ',sqrt(norm_sum)
       print *
     endif
+    call synchronize_all()
 
     ! source mask
     if (USE_SOURCE_MASK) then
@@ -360,10 +385,11 @@ end program sum_kernels_globe
 
   ! user output
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
-  if (myrank == 0) write(*,*) 'writing out summed kernel for: ',trim(kernel_name),' into file kernels_sum.bp'
+  if (myrank == 0) write(*,*) 'writing out summed kernel for: ',trim(kernel_name),' into file adios kernels_sum file'
 #else
   if (myrank == 0) write(*,*) 'writing out summed kernel for: ',trim(kernel_name)
 #endif
+  call synchronize_all()
 
   ! stores summed kernels
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
@@ -384,6 +410,7 @@ end program sum_kernels_globe
     write(*,*) '  slice rank 0 has min/max value = ',minval(total_kernel(:,:,:,:)),"/",maxval(total_kernel(:,:,:,:))
     write(*,*)
   endif
+  call synchronize_all()
 
   ! frees memory
   deallocate(kernel,total_kernel)
@@ -464,7 +491,7 @@ end program sum_kernels_globe
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
 ! ADIOS only
 
-  subroutine open_sum_file(adios_kl_names)
+  subroutine open_sum_file_adios(adios_kl_names)
 
   use tomography_par
 
@@ -476,11 +503,17 @@ end program sum_kernels_globe
   character(len=MAX_STRING_LEN),dimension(10), intent(in) :: adios_kl_names
 
   ! local parameters
-  integer :: is,ie,iker
+  integer :: is,ie,iker,ier
   integer(kind=8) :: local_dim
   integer(kind=8) :: group_size_inc
   character(len=MAX_STRING_LEN) :: file_name
-  real(kind=CUSTOM_REAL), dimension(1,1,1,1) :: val_dummy
+  character(len=MAX_STRING_LEN) :: writer_group_name
+  real(kind=CUSTOM_REAL), dimension(:,:,:,:),allocatable :: dummy_real4d
+
+  ! dummy for definitions
+  allocate(dummy_real4d(NGLLX,NGLLY,NGLLZ,NSPEC_CRUST_MANTLE),stat=ier)
+  if (ier /= 0) stop 'Error allocating dummy array'
+  dummy_real4d(:,:,:,:) = 0.0
 
   ! ADIOS
   ! start setting up full file group size
@@ -488,7 +521,8 @@ end program sum_kernels_globe
   call init_adios_group(myadios_group,"KernelReader")
 
   ! i/o group to write out summed kernel values
-  call init_adios_group(myadios_val_group,"KERNELS_GROUP")
+  writer_group_name = "KERNELS_GROUP"
+  call init_adios_group(myadios_val_group,writer_group_name)
 
   ! defines variables and group size
   group_size_inc = 0
@@ -508,12 +542,15 @@ end program sum_kernels_globe
   endif
   do iker = is,ie
     local_dim = NGLLX * NGLLY * NGLLZ * NSPEC_CRUST_MANTLE
-    call define_adios_global_array1D(myadios_val_group, group_size_inc, local_dim, '', trim(adios_kl_names(iker)), val_dummy)
+    call define_adios_global_array1D(myadios_val_group, group_size_inc, local_dim, '', trim(adios_kl_names(iker)), dummy_real4d)
   enddo
 
+  deallocate(dummy_real4d)
+
   ! opens new adios model file
-  write(file_name,'(a)') 'OUTPUT_SUM/' // 'kernels_sum.bp'
-  call open_file_adios_write(myadios_val_file,myadios_val_group,file_name,"KERNELS_GROUP")
+  file_name = get_adios_filename('OUTPUT_SUM/' // 'kernels_sum')
+
+  call open_file_adios_write(myadios_val_file,myadios_val_group,file_name,writer_group_name)
 
   call set_adios_group_size(myadios_val_file,group_size_inc)
 
@@ -521,11 +558,11 @@ end program sum_kernels_globe
   call write_adios_scalar(myadios_val_file,myadios_val_group,"NSPEC",NSPEC_CRUST_MANTLE)
   call write_adios_scalar(myadios_val_file,myadios_val_group,"reg1/nspec",NSPEC_CRUST_MANTLE)
 
-  end subroutine open_sum_file
+  end subroutine open_sum_file_adios
 
 !-------------------------------------------------------------------------------------------------
 
-  subroutine close_sum_file()
+  subroutine close_sum_file_adios()
 
   use manager_adios
 
@@ -534,7 +571,7 @@ end program sum_kernels_globe
   ! closes summed kernel file
   call close_file_adios(myadios_val_file)
 
-  end subroutine close_sum_file
+  end subroutine close_sum_file_adios
 
 !-------------------------------------------------------------------------------------------------
 

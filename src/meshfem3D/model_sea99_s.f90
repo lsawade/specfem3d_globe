@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -82,10 +82,10 @@
            stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating sea99 arrays')
 
-  ! master proc reads in values
+  ! main proc reads in values
   if (myrank == 0) call read_sea99_s_model()
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_singlei(sea99_ndep)
   call bcast_all_singlei(sea99_nlat)
   call bcast_all_singlei(sea99_nlon)

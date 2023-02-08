@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -29,7 +29,7 @@
 
   use constants
   use shared_parameters, only: R_PLANET
-  use meshfem3D_par, only: R220,R400,R670,R771
+  use meshfem_par, only: R220,R400,R670,R771
 
   implicit none
 
@@ -134,7 +134,7 @@
 
   ! debug
   if (DEBUG_STATISTICS) then
-    ! collects min/max on master
+    ! collects min/max on main
     call min_all_cr(min_410,min_410_all)
     call max_all_cr(max_410,max_410_all)
     call min_all_cr(min_650,min_650_all)
@@ -164,7 +164,7 @@
 
   use constants
   use shared_parameters, only: R_PLANET
-  use meshfem3D_par, only: R220,R400,R670,R771
+  use meshfem_par, only: R220,R400,R670,R771
 
   implicit none
 

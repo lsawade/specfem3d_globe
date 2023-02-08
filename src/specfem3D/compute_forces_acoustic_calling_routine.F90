@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -41,6 +41,10 @@
   !              iphase = 2 is for computing inner elements in the outer core (former icall parameter)
   integer :: iphase
 
+  ! checks if anything to do
+  ! for regional mesh cut-offs, there are no outer core elements
+  if (NSPEC_OUTER_CORE == 0) return
+
   ! compute internal forces in the fluid region
 
   ! current simulated time
@@ -71,15 +75,15 @@
     if (.not. GPU_MODE) then
       ! on CPU
       call compute_forces_outer_core(timeval,deltat,two_omega_earth, &
-                                         NSPEC_OUTER_CORE_ROTATION,NGLOB_OUTER_CORE, &
-                                         A_array_rotation,B_array_rotation, &
-                                         A_array_rotation_lddrk,B_array_rotation_lddrk, &
-                                         displ_outer_core,accel_outer_core, &
-                                         div_displ_outer_core,iphase)
+                                     NSPEC_OUTER_CORE_ROTATION,NGLOB_OUTER_CORE, &
+                                     A_array_rotation,B_array_rotation, &
+                                     A_array_rotation_lddrk,B_array_rotation_lddrk, &
+                                     displ_outer_core,accel_outer_core, &
+                                     div_displ_outer_core,iphase)
     else
       ! on GPU
       ! includes FORWARD_OR_ADJOINT == 1
-      call compute_forces_outer_core_gpu(Mesh_pointer,iphase,timeval,1)
+      call compute_forces_outer_core_gpu(Mesh_pointer,iphase,timeval,ALPHA_LDDRK(istage),BETA_LDDRK(istage),1)
 
       ! initiates asynchronous MPI transfer
       if (NPROCTOT_VAL > 1) then
@@ -89,11 +93,11 @@
           call sync_copy_from_device(Mesh_pointer,iphase,buffer_send_scalar_outer_core,IREGION_OUTER_CORE,1)
           ! sends MPI buffers
           call assemble_MPI_scalar_send_gpu(NPROCTOT_VAL, &
-                                             buffer_send_scalar_outer_core,buffer_recv_scalar_outer_core, &
-                                             num_interfaces_outer_core,max_nibool_interfaces_oc, &
-                                             nibool_interfaces_outer_core, &
-                                             my_neighbors_outer_core, &
-                                             request_send_scalar_oc,request_recv_scalar_oc)
+                                            buffer_send_scalar_outer_core,buffer_recv_scalar_outer_core, &
+                                            num_interfaces_outer_core,max_nibool_interfaces_oc, &
+                                            nibool_interfaces_outer_core, &
+                                            my_neighbors_outer_core, &
+                                            request_send_scalar_oc,request_recv_scalar_oc)
         endif
       endif
     endif
@@ -140,11 +144,11 @@
             ! for synchronous transfers, sending over MPI can directly proceed
             ! outer core
             call assemble_MPI_scalar_send_gpu(NPROCTOT_VAL, &
-                                               buffer_send_scalar_outer_core,buffer_recv_scalar_outer_core, &
-                                               num_interfaces_outer_core,max_nibool_interfaces_oc, &
-                                               nibool_interfaces_outer_core, &
-                                               my_neighbors_outer_core, &
-                                               request_send_scalar_oc,request_recv_scalar_oc)
+                                              buffer_send_scalar_outer_core,buffer_recv_scalar_outer_core, &
+                                              num_interfaces_outer_core,max_nibool_interfaces_oc, &
+                                              nibool_interfaces_outer_core, &
+                                              my_neighbors_outer_core, &
+                                              request_send_scalar_oc,request_recv_scalar_oc)
           endif
         endif
       else
@@ -174,10 +178,10 @@
 
           ! waits for MPI send/receive requests to be completed and assembles values
           call assemble_MPI_scalar_write_gpu(Mesh_pointer,NPROCTOT_VAL, &
-                                              buffer_recv_scalar_outer_core, &
-                                              num_interfaces_outer_core,max_nibool_interfaces_oc, &
-                                              request_send_scalar_oc,request_recv_scalar_oc, &
-                                              1) ! -- 1 == fwd accel
+                                             buffer_recv_scalar_outer_core, &
+                                             num_interfaces_outer_core,max_nibool_interfaces_oc, &
+                                             request_send_scalar_oc,request_recv_scalar_oc, &
+                                             1) ! -- 1 == fwd accel
         endif
       endif ! iphase == 1
     endif
@@ -229,6 +233,9 @@
 
   ! checks
   if (SIMULATION_TYPE /= 3 ) return
+
+  ! checks if anything to do
+  if (NSPEC_OUTER_CORE == 0) return
 
   ! compute internal forces in the fluid region
 
@@ -298,7 +305,7 @@
     else
       ! on GPU
       ! includes FORWARD_OR_ADJOINT == 3
-      call compute_forces_outer_core_gpu(Mesh_pointer,iphase,b_timeval,3)
+      call compute_forces_outer_core_gpu(Mesh_pointer,iphase,b_timeval,ALPHA_LDDRK(istage),BETA_LDDRK(istage),3)
 
       ! initiates asynchronous MPI transfer
       if (GPU_ASYNC_COPY .and. iphase == 2) then

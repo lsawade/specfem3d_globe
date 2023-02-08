@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -31,7 +31,7 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  module meshfem3D_models_par
+  module meshfem_models_par
 
 !---
 !
@@ -42,16 +42,24 @@
   use constants, only: NR_DENSITY,N_SLS, &
     PI,PI_OVER_TWO,ZERO,ONE,DEGREES_TO_RADIANS,RADIANS_TO_DEGREES, &
     IREGION_CRUST_MANTLE,IREGION_INNER_CORE,IREGION_OUTER_CORE, &
-    ICRUST_CRUST1,ICRUST_CRUST2,ICRUST_CRUSTMAPS,ICRUST_EPCRUST,ICRUST_CRUST_SH,ICRUST_EUCRUST, &
     GLL_REFERENCE_MODEL,USE_1D_REFERENCE, &
     ATTENUATION_1D_WITH_3D_STORAGE
 
   ! 1D reference models
   use constants, only: &
-    REFERENCE_MODEL_PREM,REFERENCE_MODEL_1066A,REFERENCE_MODEL_AK135F_NO_MUD, &
+    REFERENCE_MODEL_PREM,REFERENCE_MODEL_PREM2, &
+    REFERENCE_MODEL_1066A,REFERENCE_MODEL_AK135F_NO_MUD, &
     REFERENCE_MODEL_1DREF,REFERENCE_MODEL_SEA1D,REFERENCE_MODEL_IASP91,REFERENCE_MODEL_JP1D, &
-    REFERENCE_MODEL_SOHL,REFERENCE_MODEL_CASE65TAY, &
+    REFERENCE_MODEL_CCREM, &
+    REFERENCE_MODEL_SOHL,REFERENCE_MODEL_CASE65TAY,REFERENCE_MODEL_MARS_1D, &
     REFERENCE_MODEL_VPREMOON
+
+  ! crustal model
+  use constants, only: &
+    ICRUST_CRUST1,ICRUST_CRUST2, &
+    ICRUST_CRUSTMAPS,ICRUST_EPCRUST,ICRUST_CRUST_SH, &
+    ICRUST_EUCRUST,ICRUST_SGLOBECRUST,ICRUST_BKMNS_GLAD, &
+    ICRUST_SPIRAL,ICRUST_SH_MARS
 
   ! 3D models
   use constants, only: &
@@ -60,6 +68,9 @@
     THREE_D_MODEL_S362ANI,THREE_D_MODEL_S362WMANI,THREE_D_MODEL_S362ANI_PREM,THREE_D_MODEL_S29EA, &
     THREE_D_MODEL_PPM,THREE_D_MODEL_GAPP2,THREE_D_MODEL_SGLOBE,THREE_D_MODEL_SGLOBE_ISO, &
     THREE_D_MODEL_ANISO_MANTLE,THREE_D_MODEL_GLL, &
+    THREE_D_MODEL_BKMNS_GLAD, &
+    THREE_D_MODEL_SPIRAL,THREE_D_MODEL_HETEROGEN_PREM, &
+    THREE_D_MODEL_SH_MARS, &
     THREE_D_MODEL_INNER_CORE_ISHII
 
   use shared_input_parameters, only: &
@@ -86,7 +97,7 @@
   double precision,dimension(NR_DENSITY) :: rspl,ellipicity_spline,ellipicity_spline2
   integer :: nspl
 
-  end module meshfem3D_models_par
+  end module meshfem_models_par
 
 
 !
@@ -94,7 +105,7 @@
 !
 
 
-  module meshfem3D_par
+  module meshfem_par
 
 ! main parameter module for specfem simulations
 
@@ -170,6 +181,8 @@
              NSPEC_CRUST_MANTLE_STACEY,NSPEC_OUTER_CORE_STACEY, &
              NGLOB_CRUST_MANTLE_OCEANS,NSPEC_OUTER_CORE_ROTATION
 
+  integer :: NT_DUMP_ATTENUATION_optimal
+
   ! this for the different corners of the slice (which are different if the superbrick is cut)
   ! 1 : xi_min, eta_min
   ! 2 : xi_max, eta_min
@@ -205,7 +218,7 @@
   ! number of global GLL points (in current region)
   integer :: nglob
 
-  end module meshfem3D_par
+  end module meshfem_par
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -227,7 +240,10 @@
 
   ! 3D shape functions and their derivatives
   double precision, dimension(NGNOD,NGLLX,NGLLY,NGLLZ) :: shape3D
-  double precision, dimension(NDIM,NGNOD,NGLLX,NGLLY,NGLLZ) :: dershape3D
+
+  ! note: having an array size > 64k, which is the stack default limit on MacOS, it would lead to compilation
+  !       warnings/issues with newer gcc version 10.x; using allocatable array instead
+  double precision, dimension(:,:,:,:,:),allocatable :: dershape3D
 
   ! 2D shape functions and their derivatives
   double precision, dimension(NGNOD2D,NGLLY,NGLLZ) :: shape2D_x
@@ -248,8 +264,6 @@
   use constants, only: CUSTOM_REAL,N_SLS,MAX_STRING_LEN
 
   implicit none
-
-  integer :: nspec_actually,nspec_att
 
   integer :: ifirst_region,ilast_region
   integer, dimension(:), allocatable :: perm_layer
@@ -310,21 +324,30 @@
   integer :: nspec_stacey
   real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: rho_vp,rho_vs
 
+  ! absorbing boundary arrays
+  integer :: num_abs_boundary_faces
+  integer, dimension(:), allocatable :: abs_boundary_ispec
+  integer, dimension(:), allocatable :: abs_boundary_npoin
+  integer, dimension(:,:,:), allocatable :: abs_boundary_ijk
+  real(kind=CUSTOM_REAL), dimension(:,:,:), allocatable :: abs_boundary_normal
+  real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: abs_boundary_jacobian2Dw
+
   ! attenuation
   real(kind=CUSTOM_REAL), dimension(:,:,:,:),   allocatable :: Qmu_store
   real(kind=CUSTOM_REAL), dimension(:,:,:,:,:), allocatable :: tau_e_store
   double precision, dimension(N_SLS) :: tau_s_store
 
   ! element layers
-  integer :: NUMBER_OF_MESH_LAYERS,layer_shift, &
-    first_layer_aniso,last_layer_aniso
+  integer :: NUMBER_OF_MESH_LAYERS
+  integer :: first_layer_aniso,last_layer_aniso
   logical :: USE_ONE_LAYER_SB
 
   ! layer stretching
   double precision, dimension(:,:), allocatable :: stretch_tab
 
   ! Boundary kernel Mesh
-  integer :: NSPEC2D_MOHO,NSPEC2D_400,NSPEC2D_670,nex_eta_moho
+  integer :: NSPEC2D_MOHO,NSPEC2D_400,NSPEC2D_670,NSPEC2D_CMB,NSPEC2D_ICB
+  integer :: nex_eta_moho
   integer, dimension(:), allocatable :: ibelm_moho_top,ibelm_moho_bot,ibelm_400_top,ibelm_400_bot, &
     ibelm_670_top,ibelm_670_bot
   real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: normal_moho,normal_400,normal_670
@@ -375,7 +398,7 @@
   ! communication pattern for faces between chunks
   integer, dimension(:),allocatable :: iprocfrom_faces,iprocto_faces,imsg_type
   ! communication pattern for corners between chunks
-  integer, dimension(:),allocatable :: iproc_master_corners,iproc_worker1_corners,iproc_worker2_corners
+  integer, dimension(:),allocatable :: iproc_main_corners,iproc_worker1_corners,iproc_worker2_corners
 
   ! indirect addressing for each corner of the chunks
   integer, dimension(:,:),allocatable :: iboolcorner

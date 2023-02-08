@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -29,7 +29,7 @@
 
   use constants, only: IMAIN
 
-  use meshfem3D_par
+  use meshfem_par
 
   implicit none
 
@@ -101,9 +101,12 @@
     ! internal topography
     write(IMAIN,*) 'internal topography 410/660:'
     if ((.not. SUPPRESS_INTERNAL_TOPOGRAPHY) .and. &
-        (THREE_D_MODEL == THREE_D_MODEL_S362ANI .or. THREE_D_MODEL == THREE_D_MODEL_S362WMANI &
-         .or. THREE_D_MODEL == THREE_D_MODEL_S362ANI_PREM .or. THREE_D_MODEL == THREE_D_MODEL_S29EA &
-         .or. THREE_D_MODEL == THREE_D_MODEL_MANTLE_SH)) then
+        (THREE_D_MODEL == THREE_D_MODEL_S362ANI &
+         .or. THREE_D_MODEL == THREE_D_MODEL_S362WMANI &
+         .or. THREE_D_MODEL == THREE_D_MODEL_S362ANI_PREM &
+         .or. THREE_D_MODEL == THREE_D_MODEL_S29EA &
+         .or. THREE_D_MODEL == THREE_D_MODEL_MANTLE_SH &
+         .or. THREE_D_MODEL == THREE_D_MODEL_SPIRAL)) then
       write(IMAIN,*) '  incorporating element stretching for 3-D internal surfaces'
     else
       write(IMAIN,*) '  no element stretching for 3-D internal surfaces'
@@ -130,9 +133,9 @@
   use constants, only: IMAIN,NGLLX,NGLLY,NGLLZ,NGNOD,NGNOD2D,N_SLS
   use shared_parameters, only: R_PLANET_KM
 
-  use meshfem3D_models_par
+  use meshfem_models_par
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     MODEL,NEX_XI,NEX_ETA, &
     NPROC_XI,NPROC_ETA,NPROC,NCHUNKS,NPROCTOT, &
     R_CENTRAL_CUBE

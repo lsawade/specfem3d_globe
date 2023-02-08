@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -64,9 +64,10 @@
 
   ! All of the following reads use the output parameters as their temporary arrays
   ! use the filename to determine the actual contents of the read
-  file_name = trim(LOCAL_PATH) // "/attenuation.bp"
+  file_name = get_adios_filename(trim(LOCAL_PATH) // "/attenuation")
 
   ! opens adios file
+  call init_adios_group(myadios_group,"AttenuationReader")
   call open_file_adios_read_and_init_method(myadios_file,myadios_group,file_name)
 
   call read_adios_scalar(myadios_file,myadios_group,myrank,trim(region_name) // "f_c_source",f_c_source)
@@ -103,5 +104,6 @@
 
   ! closes ADIOS handler to the restart file.
   call close_file_adios_read_and_finalize_method(myadios_file)
+  call delete_adios_group(myadios_group,"AttenuationReader")
 
   end subroutine read_attenuation_adios

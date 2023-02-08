@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -28,12 +28,14 @@
 
 module tomography_par
 
+  use constants, only: myrank
+
   use constants, only: &
     CUSTOM_REAL,MAX_STRING_LEN, &
     NGLLX,NGLLY,NGLLZ,IIN,IOUT, &
     FOUR_THIRDS,GAUSSALPHA,GAUSSBETA
 
-  use shared_parameters, only: R_PLANET_KM
+  use shared_parameters, only: R_PLANET_KM,LOCAL_PATH
 
   ! array dimensions for static compilation
   use constants_solver, only: &
@@ -56,8 +58,8 @@ module tomography_par
   ! model update length
   real(kind=CUSTOM_REAL) :: step_fac,step_length
 
-  ! MPI process
-  integer :: myrank,sizeprocs
+  ! MPI processes
+  integer :: sizeprocs
 
 end module tomography_par
 

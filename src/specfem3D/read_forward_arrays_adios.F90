@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -54,7 +54,7 @@
   integer(kind=8) :: sel
   integer(kind=8), dimension(1) :: start, count
 
-  file_name = trim(LOCAL_TMP_PATH) // "/dump_all_arrays_adios.bp"
+  file_name = get_adios_filename(trim(LOCAL_TMP_PATH) // "/dump_all_arrays_adios")
 
   group_name = "SPECFEM3D_GLOBE_FORWARD_ARRAYS_RESTART"
   call init_adios_group(myadios_group,group_name)
@@ -189,6 +189,7 @@
 
   ! closes ADIOS handler to the restart file.
   call close_file_adios_read_and_finalize_method(myadios_file)
+  call delete_adios_group(myadios_group,group_name)
 
   end subroutine read_intermediate_forward_arrays_adios
 
@@ -215,7 +216,7 @@
   integer(kind=8) :: sel
   integer(kind=8), dimension(1) :: start, count
 
-  file_name = trim(LOCAL_TMP_PATH) // "/save_forward_arrays.bp"
+  file_name = get_adios_filename(trim(LOCAL_TMP_PATH) // "/save_forward_arrays")
 
   group_name = "SPECFEM3D_GLOBE_FORWARD_ARRAYS"
   call init_adios_group(myadios_group,group_name)
@@ -345,6 +346,7 @@
 
   ! closes ADIOS handler to the restart file.
   call close_file_adios_read_and_finalize_method(myadios_file)
+  call delete_adios_group(myadios_group,group_name)
 
   end subroutine read_forward_arrays_adios
 
@@ -365,6 +367,7 @@
   implicit none
   ! Arguments
   integer, intent(in) :: iteration_on_subset_tmp
+
   ! Local parameters
   character(len=MAX_STRING_LEN) :: file_name,group_name
   ! ADIOS variables
@@ -385,30 +388,37 @@
   ! selections array
   sel_num = 0
 
-  ! iterations here go down from N to 1, but ADIOS files has steps 0..N-1
-  step = iteration_on_subset_tmp - 1
-
   ! file handling
   if (ADIOS_SAVE_ALL_SNAPSHOTS_IN_ONE_FILE) then
+    ! iterations here go down from N to 1, but ADIOS files has steps 0..N-1
+    step = iteration_on_subset_tmp - 1
+
     ! single file for all steps
     do_open_file = .false.
     do_close_file = .false.
 
     ! single file
-    file_name = trim(LOCAL_TMP_PATH) // "/save_forward_arrays_undoatt.bp"
+    file_name = get_adios_filename(trim(LOCAL_TMP_PATH) // "/save_forward_arrays_undoatt",ADIOS2_ENGINE_UNDO_ATT)
+
     group_name = "SPECFEM3D_GLOBE_FORWARD_ARRAYS_UNDOATT"
 
     ! open file at first call of this routine
     if (.not. is_initialized_fwd_group) do_open_file = .true.
     ! close at last step (step counting down from N-1 to 0)
     if (step == 0) do_close_file = .true.
+
   else
+    ! single ADIOS files for each subset with step 0 entry
+    step = 0
+
     ! for each step a single file
     do_open_file = .true.
     do_close_file = .true.
 
     ! files for each iteration step
-    write(file_name,'(a,a,i6.6,a)') trim(LOCAL_TMP_PATH), '/save_frame_at',iteration_on_subset_tmp,'.bp'
+    write(file_name,'(a,a,i6.6)') trim(LOCAL_TMP_PATH), '/save_frame_at',iteration_on_subset_tmp
+    file_name = get_adios_filename(trim(file_name))
+
     write(group_name, '(a, i6)') "SPECFEM3D_GLOBE_FORWARD_ARRAYS_UNDOATT", iteration_on_subset_tmp
   endif
 
@@ -437,8 +447,8 @@
   !
   ! checks if correct snapshot number of wavefields
   call read_adios_scalar(myadios_fwd_file,myadios_fwd_group,myrank,"iteration",t_tmp,step)
-  if (t_tmp /= step + 1) then
-    print *,'Error: invalid iteration step found in reading undoatt arrays: found ',t_tmp,' instead of ',step+1
+  if (t_tmp /= iteration_on_subset_tmp) then
+    print *,'Error: invalid iteration step found in reading undoatt arrays: found ',t_tmp,' instead of ',iteration_on_subset_tmp
     call exit_mpi(myrank,'Invalid iteration step read in read_forward_arrays_undoatt_adios() routine')
   endif
 
@@ -558,6 +568,8 @@
   ! note: for single file, only close at the very end
   if (do_close_file) then
     call close_file_adios_read_and_finalize_method(myadios_fwd_file)
+    call delete_adios_group(myadios_fwd_group,group_name)
+
     is_initialized_fwd_group = .false.
 
     ! debug
