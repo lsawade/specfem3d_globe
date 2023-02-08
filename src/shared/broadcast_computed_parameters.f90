@@ -34,10 +34,10 @@
 
   ! local parameters
   ! broadcast parameter arrays
-  integer, parameter :: nparam_i = 50
+  integer, parameter :: nparam_i = 51
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 73
+  integer, parameter :: nparam_l = 75
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 42
@@ -77,7 +77,8 @@
             GPU_RUNTIME,NUMBER_OF_SIMULTANEOUS_RUNS, &
             MODEL_GLL_TYPE,USER_NSTEP, &
             NSTEP_STEADY_STATE,NTSTEP_BETWEEN_OUTPUT_SAMPLE, &
-            USE_SOURCE_DERIVATIVE_DIRECTION /)
+            USE_SOURCE_DERIVATIVE_DIRECTION, &
+            NUMBER_OF_BUFFER_ELEMENTS /)
 
     bcast_logical = (/ &
             TRANSVERSE_ISOTROPY,ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE, &
@@ -110,7 +111,9 @@
             USE_MONOCHROMATIC_CMT_SOURCE, ABSORB_USING_GLOBAL_SPONGE, &
             OUTPUT_SEISMOS_3D_ARRAY, &
             REGIONAL_MESH_CUTOFF,REGIONAL_MESH_ADD_2ND_DOUBLING, &
-            USE_SOURCE_DERIVATIVE /)
+            USE_SOURCE_DERIVATIVE, &
+            SAVE_GREEN_FUNCTIONS, &
+            USE_BUFFER_ELEMENTS /)
 
     bcast_double_precision = (/ &
             DT, &
@@ -273,6 +276,7 @@
     NSTEP_STEADY_STATE = bcast_integer(48)
     NTSTEP_BETWEEN_OUTPUT_SAMPLE = bcast_integer(49)
     USE_SOURCE_DERIVATIVE_DIRECTION = bcast_integer(50)
+    NUMBER_OF_BUFFER_ELEMENTS = bcast_integer(51)
 
     ! logicals
     TRANSVERSE_ISOTROPY = bcast_logical(1)
@@ -348,6 +352,8 @@
     REGIONAL_MESH_CUTOFF = bcast_logical(71)
     REGIONAL_MESH_ADD_2ND_DOUBLING = bcast_logical(72)
     USE_SOURCE_DERIVATIVE = bcast_logical(73)
+    SAVE_GREEN_FUNCTIONS = bcast_logical(74)
+    USE_BUFFER_ELEMENTS = bcast_logical(75)
 
     ! double precisions
     DT = bcast_double_precision(1)

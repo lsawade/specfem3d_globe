@@ -250,6 +250,7 @@
 
 ! flag to display detailed information about location of stations
   logical, parameter :: DISPLAY_DETAILS_STATIONS = .false.
+  logical, parameter :: DISPLAY_DETAILS_GREEN_FUNCTIONS = .true.
 
 ! maximum length of station and network name for receivers
   integer, parameter :: MAX_LENGTH_STATION_NAME = 32
@@ -264,6 +265,7 @@
 ! maximum number of sources and receivers to locate simultaneously
   integer, parameter :: NSOURCES_SUBSET_MAX = 100
   integer, parameter :: NREC_SUBSET_MAX = 200
+  integer, parameter :: NGF_SUBSET_MAX = 200
 
 ! use this t0 as earliest starting time rather than the automatically calculated one
 ! (must be positive and bigger than the automatically one to be effective;
@@ -276,7 +278,7 @@
 
 ! This parameter flags whether or not we will use an external source
 ! time function. Set to false by default.
-  logical, parameter :: EXTERNAL_SOURCE_TIME_FUNCTION = .false.
+  logical, parameter :: EXTERNAL_SOURCE_TIME_FUNCTION = .true.
 
 ! This parameter determines the taper length of monochromatic source time function in seconds
   double precision, parameter :: TAPER_MONOCHROMATIC_SOURCE = 200.0d0
@@ -447,7 +449,7 @@
   !character(len=*), parameter :: ADIOS_COMPRESSION_MODE_VALUE = '9,threshold=4096'
 
 ! size of the ADIOS buffer to use
-  integer, parameter :: ADIOS_BUFFER_SIZE_IN_MB = 400
+  integer, parameter :: ADIOS_BUFFER_SIZE_IN_MB = 1500
 
 ! ADIOS transport methods (see ADIOS manual for details)
 !! MPI (default)
@@ -470,6 +472,11 @@
 !! MPI_LUSTRE
 !  character(len=*), parameter :: ADIOS_TRANSPORT_METHOD_UNDO_ATT = "MPI_LUSTRE"
 !  character(len=*), parameter :: ADIOS_METHOD_PARAMS_UNDO_ATT =  "stripe_count=16,stripe_size=4194304,block_size=4194304"
+
+! ADIOS transport methods for Green function save_frame** data files
+!! MPI (default) -> Used values form the UNDO ATT definition
+  character(len=*), parameter :: ADIOS_TRANSPORT_METHOD_GF= "MPI"
+  character(len=*), parameter :: ADIOS_METHOD_PARAMS_GF =  ""
 
 !!-----------------------------------------------------------
 !!
@@ -499,6 +506,9 @@
 
   character(len=*), parameter :: ADIOS2_ENGINE_UNDO_ATT = "BP4"
   character(len=*), parameter :: ADIOS2_ENGINE_PARAMS_UNDO_ATT = "" ! add "SubStreams=64,MaxBufferSize=800Mb" for larger runs
+
+  character(len=*), parameter :: ADIOS2_ENGINE_GF = "BP4"
+  character(len=*), parameter :: ADIOS2_ENGINE_PARAMS_GF = "" ! add "SubStreams=64,MaxBufferSize=800Mb" for larger runs
 
 
 !!-----------------------------------------------------------
@@ -1015,7 +1025,7 @@
   integer, parameter :: NUM_ITER = 5
 
 ! number of hours per day for rotation rate of the Earth
-  double precision, parameter :: EARTH_HOURS_PER_DAY = 24.d0
+  double precision, parameter :: EARTH_HOURS_PER_DAY = -24.d0
   double precision, parameter :: EARTH_SECONDS_PER_HOUR = 3600.d0
 
 ! for lookup table for gravity every 100 m in radial direction of Earth model

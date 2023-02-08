@@ -254,6 +254,19 @@
       call it_update_vtkwindow()
     endif
 
+    ! Transfer back the arrays from the GPU every x-th timestep
+    if (SAVE_GREEN_FUNCTIONS) then
+      ! The first timestep is 1 this assures that no matter the number
+      ! of NTSTEP_BETWEEN_FRAMES it will always save the zeroth timestep
+      if (mod(it-1, NTSTEP_BETWEEN_FRAMES) == 0) then
+        if (GPU_MODE) then
+          call it_transfer_from_GPU()
+          call save_forward_arrays_GF_adios()
+        endif
+      endif
+    endif
+
+
   !
   !---- end of time iteration loop
   !
@@ -328,6 +341,23 @@
         call transfer_rmemory_ic_from_device(Mesh_pointer,R_xx_inner_core,R_yy_inner_core,R_xy_inner_core, &
                                              R_xz_inner_core,R_yz_inner_core)
       endif
+    endif
+
+    if (SAVE_GREEN_FUNCTIONS) then
+
+        ! Get the fields from the GPU
+        call transfer_fields_cm_from_device(NDIM*NGLOB_CRUST_MANTLE, &
+                                            displ_crust_mantle,veloc_crust_mantle,accel_crust_mantle,Mesh_pointer)
+
+        ! Get the strains from the GPU
+        call transfer_strain_cm_from_device(Mesh_pointer,eps_trace_over_3_crust_mantle, &
+                                            epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle, &
+                                            epsilondev_xy_crust_mantle,epsilondev_xz_crust_mantle, &
+                                            epsilondev_yz_crust_mantle)
+
+        if (ROTATION_VAL) then
+          call transfer_rotation_from_device(Mesh_pointer,A_array_rotation,B_array_rotation)
+        endif
     endif
 
   else if (SIMULATION_TYPE == 3) then

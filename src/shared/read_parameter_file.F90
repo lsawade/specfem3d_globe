@@ -247,6 +247,14 @@
   call read_value_logical(PRINT_SOURCE_TIME_FUNCTION, 'PRINT_SOURCE_TIME_FUNCTION', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: PRINT_SOURCE_TIME_FUNCTION'
 
+  ! Green function stuff
+  call read_value_logical(SAVE_GREEN_FUNCTIONS, 'SAVE_GREEN_FUNCTIONS', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: SAVE_GREEN_FUNCTIONS'
+  call read_value_logical(USE_BUFFER_ELEMENTS, 'USE_BUFFER_ELEMENTS', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_BUFFER_ELEMENTS'
+  call read_value_integer(NUMBER_OF_BUFFER_ELEMENTS, 'NUMBER_OF_BUFFER_ELEMENTS', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: NUMBER_OF_BUFFER_ELEMENTS'
+
   ! adjoint kernels
   call read_value_integer(NTSTEP_BETWEEN_READ_ADJSRC, 'NTSTEP_BETWEEN_READ_ADJSRC', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: NTSTEP_BETWEEN_READ_ADJSRC'

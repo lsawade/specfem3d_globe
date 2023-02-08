@@ -142,6 +142,7 @@
 
   end subroutine save_forward_arrays_adios
 
+
 !-------------------------------------------------------------------------------
 !> \brief Write selected forward arrays in an ADIOS file.
 !!
@@ -312,8 +313,189 @@
     !                         ' handle ',myadios_fwd_file
   endif
 
-  end subroutine save_forward_arrays_undoatt_adios
+  end subroutine
 
+!-------------------------------------------------------------------------------
+!> \brief Write selected forward arrays in an ADIOS file.
+!!
+!! This subroutine is only used for forward simulations when
+!! SAVE_FORWARD is set to .true. It dumps the same arrays than
+!! save_intermediate_forward_arrays_adios() except than some arrays
+!! are only dumped if ROTATION and ATTENUATION are set to .true.
+
+  subroutine save_forward_arrays_GF_adios()
+
+  use specfem_par
+  use specfem_par_crustmantle
+  use specfem_par_innercore
+  use specfem_par_outercore
+  use shared_parameters, only: OUTPUT_FILES
+
+  use adios_helpers_mod
+  use manager_adios
+
+  implicit none
+
+  ! Local parameters
+  integer :: iteration_on_subset_tmp
+  character(len=MAX_STRING_LEN) :: file_name
+  integer(kind=8),save :: group_size_inc
+
+  ! ADIOS variables
+  character(len=MAX_STRING_LEN) :: group_name
+  ! multiple/single file for storage of snapshots
+  logical :: do_open_file,do_close_file,do_init_group
+
+  ! current subset iteration
+  ! iteration_on_subset_tmp = iteration_on_subset
+
+  ! file handling
+  if (ADIOS_SAVE_ALL_SNAPSHOTS_IN_ONE_FILE) then
+    ! single file for all steps
+    do_open_file = .false.
+    do_close_file = .false.
+    do_init_group = .false.
+
+    ! single file
+    file_name = get_adios_filename(trim(OUTPUT_FILES) // "/save_forward_arrays_GF", ADIOS2_ENGINE_GF)
+
+    group_name = "SPECFEM3D_GLOBE_FORWARD_ARRAYS_GF"
+
+    ! open file at first call of this routine
+    if (is_adios_version1) then
+      ! adds steps by appending to file
+      do_open_file = .true.
+      do_close_file = .true.
+      if (it == 1) do_init_group = .true. ! only needs to initialize group once
+    else
+      ! adds steps by commands
+      if (.not. is_initialized_fwd_group) then
+        do_open_file = .true.
+        do_init_group = .true.
+      endif
+    endif
+  else
+    ! for each step a single file
+    do_open_file = .true.
+    do_close_file = .true.
+    do_init_group = .true.
+
+    ! files for each iteration step
+    write(file_name,'(a, a, i6.6)') trim(OUTPUT_FILES), '/save_frame_at', it
+    file_name = get_adios_filename(trim(file_name))
+
+    write(group_name, '(a, i6)') "SPECFEM3D_GLOBE_FORWARD_ARRAYS_GF", it
+  endif
+
+  ! debug
+  !if (myrank == 0) print *,'debug: undoatt adios: save forward step iteration_on_subset_tmp = ',iteration_on_subset_tmp, &
+  !                         'open/close file',do_open_file,do_close_file,do_init_group
+
+  ! opens file for writing
+  if (do_open_file) then
+    ! prepares group & metadata
+    !
+    ! note, see adios manual:
+    ! "These routines prepare ADIOS metadata construction,
+    ! for example, setting up groups, variables, attributes and IO transport method,
+    ! and hence must be called before any other ADIOS I/O operations,
+    ! i.e., adios_open, adios_group_size, adios_write, adios_close."
+    if (do_init_group) then
+      call init_adios_group_gf(myadios_fwd_group,group_name)
+
+      ! adds wavefield compression
+      if (ADIOS_COMPRESSION_ALGORITHM /= 0) then
+        ! sets adios flag to add compression operation for the following define_adios_** function calls
+        call define_adios_compression()
+      endif
+
+      ! defines ADIOS variables
+      group_size_inc = 0
+      ! iteration number
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "iteration", it)
+
+      ! wavefields (displ/veloc/accel) for all regions
+      call define_green_function_forward_arrays_adios(group_size_inc)
+      ! ! rotation arrays
+      ! if (ROTATION_VAL) call define_rotation_forward_arrays_adios(group_size_inc)
+      ! ! attenuation memory variables
+      ! if (ATTENUATION_VAL) call define_attenuation_forward_arrays_adios(group_size_inc)
+
+      ! ! re-sets compression flag (in case other routines will call the define_adios_** function calls)
+      if (ADIOS_COMPRESSION_ALGORITHM /= 0) use_adios_compression = .false.
+    endif
+
+    ! Open an ADIOS handler to the restart file.
+    if (is_adios_version1) then
+      ! checks if we open for first time or append
+      if (it == 1) then
+        ! creates new file
+        call open_file_adios_write(myadios_fwd_file,myadios_fwd_group,file_name,group_name)
+      else
+        ! append to existing file
+        call open_file_adios_write_append(myadios_fwd_file,myadios_fwd_group,file_name,group_name)
+
+        ! debug: note, do not call as the inquiry on the appended file handle will seg-fault
+        ! call show_adios_file_variables(myadios_fwd_file,myadios_fwd_group,file_name)
+      endif
+
+      ! debug
+      !if (myrank == 0) print *,'debug: undoatt adios: save forward step = ',iteration_on_subset_tmp,' handle ',myadios_fwd_file
+
+    else
+      ! version 2, only opens once at beginning
+      call open_file_adios_write(myadios_fwd_file,myadios_fwd_group,file_name,group_name)
+    endif
+
+    call set_adios_group_size(myadios_fwd_file,group_size_inc)
+
+    ! sets flag
+    is_initialized_fwd_group = .true.
+  endif
+
+  ! indicate new step section
+  if (ADIOS_SAVE_ALL_SNAPSHOTS_IN_ONE_FILE) call write_adios_begin_step(myadios_fwd_file)
+
+  ! iteration number
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "iteration", it)
+
+  ! Issue the order to write the green function forward arrays that
+  ! need to be written once only if the saving Green function has not be
+  ! issued yet.
+  if (GREEN_FUNCTION_ADIOS_FILE_NOT_INITIALIZED) call write_one_time_green_function_forward_arrays_adios()
+
+  ! Issue the order to write the previously defined variable to the ADIOS file
+  call write_each_time_green_function_forward_arrays_adios()
+
+  call synchronize_all()
+
+  ! perform writing
+  if (ADIOS_SAVE_ALL_SNAPSHOTS_IN_ONE_FILE) then
+    ! end step to indicate output is completed. ADIOS2 can do I/O
+    call write_adios_end_step(myadios_fwd_file)
+  else
+    ! Reset the path to its original value to avoid bugs and write out arrays.
+    call write_adios_perform(myadios_fwd_file)
+  endif
+
+  ! Close ADIOS handler to the restart file.
+  if (do_close_file) then
+    ! flushes all engines (makes sure i/o is all written out)
+    call flush_adios_group_all(myadios_fwd_group)
+    ! closes file
+    call close_file_adios(myadios_fwd_file)
+    ! re-sets flag
+    is_initialized_fwd_group = .false.
+
+    ! debug
+    !if (myrank == 0) print *,'debug: undoatt adios: close file save forward step = ',iteration_on_subset_tmp, &
+    !                         ' handle ',myadios_fwd_file
+  endif
+
+  ! Set this flag to false since the first call of this function initializes this
+  GREEN_FUNCTION_ADIOS_FILE_NOT_INITIALIZED = .false.
+
+  end subroutine save_forward_arrays_GF_adios
 
 !-------------------------------------------------------------------------------
 !> Define ADIOS forward arrays that are always dumped.
@@ -356,6 +538,701 @@
   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(accel_outer_core))
 
   end subroutine define_common_forward_arrays_adios
+
+!-------------------------------------------------------------------------------
+! Define ADIOS arrays relevant for saving a Green Function database
+!
+
+  subroutine define_green_function_forward_arrays_adios(group_size_inc)
+
+  use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ
+
+  use specfem_par, only: ngf, ngf_unique, ngf_unique_local, &
+    deltat, &
+    islice_selected_gf_loc,ispec_selected_gf_loc, &
+    islice_out_gf_loc,ispec_out_gf_loc, &
+    xi_gf_loc,eta_gf_loc,gamma_gf_loc, &
+    gf_loc_lat,gf_loc_lon,gf_loc_depth, nu_gf_loc, &
+    ibool_GF, NGLOB_GF, iglob_cm2gf, ispec_cm2gf, &
+    rspl,ellipicity_spline,ellipicity_spline2,nspl,ibathy_topo, &
+    ELLIPTICITY_VAL, TOPOGRAPHY, RECEIVERS_CAN_BE_BURIED, NDIM, &
+    Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
+    Mrr,Mtt,Mpp,Mrt,Mrp,Mtp,Mw,M0, &
+    nsources_local, &
+    xi_source,eta_source,gamma_source, &
+    USE_FORCE_POINT_SOURCE, &
+    ibathy_topo, scale_displ, &
+    myrank, NPROCTOT_VAL, &
+    num_neighbors_all_gf, xadj_gf, adjncy_gf, &
+    USE_BUFFER_ELEMENTS
+  use specfem_par_crustmantle, only: &
+    displ_crust_mantle, veloc_crust_mantle, accel_crust_mantle, &
+    xstore_crust_mantle,ystore_crust_mantle,zstore_crust_mantle, &
+    epsilondev_xx_crust_mantle, epsilondev_yy_crust_mantle, &
+    epsilondev_xy_crust_mantle, epsilondev_xz_crust_mantle, &
+    epsilondev_yz_crust_mantle, eps_trace_over_3_crust_mantle
+  use shared_parameters, only: NX_BATHY, NY_BATHY, RESOLUTION_TOPO_FILE
+  use adios_helpers_mod
+  use manager_adios
+
+  implicit none
+
+  integer(kind=8), intent(inout) :: group_size_inc
+
+  ! local parameters
+  integer(kind=8) :: local_dim
+
+  ! X, Y, Z coordinates -> in form of r(3, NGLOB) (r, theta, phi)
+  real(kind=CUSTOM_REAL), dimension(NGLOB_GF) :: x
+  real(kind=CUSTOM_REAL), dimension(NGLOB_GF) :: y
+  real(kind=CUSTOM_REAL), dimension(NGLOB_GF) :: z
+  real(kind=CUSTOM_REAL), dimension(NGLOB_GF) :: z_fake
+
+  ! Receiver location and rotation for testing
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_latitude
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_longitude
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_depth
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_xi
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_eta
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_gamma
+  integer, dimension(ngf) :: rec_spec
+  integer, dimension(ngf) :: rec_slice
+  real(kind=CUSTOM_REAL), dimension(NDIM,NDIM,ngf) :: rec_rotation
+
+  ! Source location for the reverse simulation
+
+
+  ! Wavefield parameters
+  real(kind=CUSTOM_REAL), dimension(NDIM,NGLOB_GF) :: displacement
+  ! real(kind=CUSTOM_REAL), dimension(NDIM,NGLOB_GF) :: velocity
+  ! real(kind=CUSTOM_REAL), dimension(NDIM,NGLOB_GF) :: acceleration
+
+  real(kind=CUSTOM_REAL), dimension(4) :: fake_array
+
+  ! Strain parameters
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_xx
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_yy
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_zz
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_xy
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_xz
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_yz
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_fake
+
+  ! -------
+  ! Variables to be written once
+  !--------
+  character(len=1024) :: rankname
+  character(len=1024) :: format_string
+
+
+  ! ---------------------------------
+  ! Get max array sizes
+  ! ---------------------------------
+
+  integer :: ngf_max, nsources_local_max, ngf_unique_local_max, NGLOB_GF_max, num_neighbors_all_gf_max
+  integer, parameter :: num_vars = 5
+  integer, dimension(num_vars) :: max_global_values
+
+
+  max_global_values(1) = ngf
+  max_global_values(2) = nsources_local
+  max_global_values(3) = ngf_unique_local
+  max_global_values(4) = NGLOB_GF
+  max_global_values(5) = num_neighbors_all_gf
+
+  call max_allreduce_i(max_global_values,num_vars)
+
+  ngf_max = max_global_values(1)
+  nsources_local_max  = max_global_values(2)
+  ngf_unique_local_max = max_global_values(3)
+  NGLOB_GF_max = max_global_values(4)
+  num_neighbors_all_gf_max = max_global_values(5)
+
+  ! Green function elements
+  rec_latitude = real(gf_loc_lat, kind=CUSTOM_REAL)
+  rec_longitude = real(gf_loc_lon, kind=CUSTOM_REAL)
+  rec_depth = real(gf_loc_depth, kind=CUSTOM_REAL)
+  rec_xi = real(xi_gf_loc, kind=CUSTOM_REAL)
+  rec_eta = real(eta_gf_loc, kind=CUSTOM_REAL)
+  rec_gamma = real(gamma_gf_loc, kind=CUSTOM_REAL)
+  rec_rotation = real(nu_gf_loc, kind=CUSTOM_REAL)
+  rec_spec = ispec_out_gf_loc
+  rec_slice = ispec_out_gf_loc
+
+  ! parameters needed for reading.
+  call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "PROC", myrank)
+  call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NPROC", NPROCTOT_VAL)
+  call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NGLOB", NGLOB_GF)
+  call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NGF", ngf)
+  call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NGF_UNIQUE", ngf_unique)
+  call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NGF_UNIQUE_LOCAL", ngf_unique_local)
+
+  ! Neighbors
+  if (USE_BUFFER_ELEMENTS) then
+    call define_adios_scalar(myadios_fwd_group, group_size_inc, '', 'USE_BUFFER_ELEMENTS', 1)
+    call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NUM_NEIGHBORS", num_neighbors_all_gf)
+  else
+    call define_adios_scalar(myadios_fwd_group, group_size_inc, '', 'USE_BUFFER_ELEMENTS', 0)
+  endif
+
+
+
+  ! The topography/bathymetry info does not have to be written by all all processors
+  if (myrank == 0) then
+
+    ! Variables that are only needed on a single core
+    call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NGLLX", NGLLX)
+    call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NGLLY", NGLLY)
+    call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "NGLLZ", NGLLZ)
+    call define_adios_scalar(myadios_fwd_group, group_size_inc, '', "DT", deltat)
+
+  ! Topography and bathymetry for source Location
+    if (TOPOGRAPHY) then
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', 'TOPOGRAPHY', 1)
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', STRINGIFY_VAR(NX_BATHY))
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', STRINGIFY_VAR(NY_BATHY))
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', STRINGIFY_VAR(RESOLUTION_TOPO_FILE))
+      local_dim = NX_BATHY * NY_BATHY
+      call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(ibathy_topo))
+    else
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', 'TOPOGRAPHY', 0)
+    endif
+
+    ! Ellipticity for source location
+    if (ELLIPTICITY_VAL) then
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', 'ELLIPTICITY', 1)
+      local_dim = nspl
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', STRINGIFY_VAR(nspl))
+      call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rspl))
+      call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(ellipicity_spline))
+      call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(ellipicity_spline2))
+    else
+      call define_adios_scalar(myadios_fwd_group, group_size_inc, '', 'ELLIPTICITY', 0)
+    endif
+
+  endif
+
+
+  ! !  Green locations
+  ! local_dim = ngf_max
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_latitude))
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_longitude))
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_depth))
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_xi))
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_eta))
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_gamma))
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_spec))
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_slice))
+
+  ! ! ! Rotation matrix has different size than the rest of the parameters.
+  ! local_dim = NDIM * NDIM * ngf_max
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', STRINGIFY_VAR(rec_rotation))
+
+  ! Check whether there are multiple source idn this slice
+  ! if (nsources_local /= 0) then
+  !   local_dim = nsources_local_max
+
+  !   ! Moment tensor in cartesian
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'Myy', Myy)
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'Mxx', Mxx)
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'Mzz', Mzz)
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'Mxy', Mxy)
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'Mxz', Mxz)
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'Myz', Myz)
+
+  !   ! ! Source location
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                         'xi_source', xi_source  )
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                         'eta_source', eta_source  )
+  !   call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                         'gamma_source', gamma_source)
+
+  ! endif
+
+  ! Exit if there are no elements to be saved for this bit since all variables
+  ! below require the elements to be saved
+  if (ngf_unique_local == 0) return
+
+  ! Addressing
+  local_dim = NGLLX * NGLLY * NGLLZ * ngf_unique_local_max
+  call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'ibool_GF', ibool_GF)
+
+
+  ! Neighbors
+  if (USE_BUFFER_ELEMENTS) then
+
+    local_dim = ngf_unique_local_max + 1
+    call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'xadj_gf', xadj_gf)
+
+    local_dim = num_neighbors_all_gf_max
+    call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'adjncy_gf', adjncy_gf)
+
+  endif
+
+  ! ! ! Coordinates
+  x = real(xstore_crust_mantle(iglob_cm2gf), kind=CUSTOM_REAL)
+  y = real(ystore_crust_mantle(iglob_cm2gf), kind=CUSTOM_REAL)
+  z = real(zstore_crust_mantle(iglob_cm2gf), kind=CUSTOM_REAL)
+
+  local_dim = NGLOB_GF_max
+  call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'x', x)
+  call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'y', y)
+  call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', 'z', z)
+
+  ! Parameters
+  call define_adios_scalar(myadios_fwd_group, group_size_inc, '', STRINGIFY_VAR(scale_displ))
+
+  ! -------
+  ! Variables to be written at each step
+  !--------
+
+  ! crust/mantle displacement, velocity, and acceleration
+  ! Arrays to be saved
+  displacement = displ_crust_mantle(:, iglob_cm2gf)
+  ! velocity = veloc_crust_mantle(:, iglob_cm2gf)
+  ! acceleration = accel_crust_mantle(:, iglob_cm2gf)
+
+  local_dim = NDIM * NGLOB_GF_max
+  call define_adios_global_array1D(myadios_fwd_group, group_size_inc, &
+    local_dim, '', 'displacement', displacement)
+
+  local_dim = 4
+  fake_array(:) = 0.0
+  call define_adios_global_array1D(myadios_fwd_group, group_size_inc, &
+    local_dim, '', 'fake_array', fake_array)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, &
+  !   local_dim, '', 'velocity', velocity)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, &
+  !    local_dim, '', 'acceleration', acceleration)
+
+  ! crust/mantle
+  ! Reconstructing the true strain
+  ! epsilon_xx(:,:,:,:) = 0.d0
+  ! epsilon_yy(:,:,:,:) = 0.d0
+  ! epsilon_zz(:,:,:,:) = 0.d0
+  ! epsilon_xy(:,:,:,:) = 0.d0
+  ! epsilon_xz(:,:,:,:) = 0.d0
+  ! epsilon_yz(:,:,:,:) = 0.d0
+  ! epsilon_fake(:,:,:,:) = 0.d0
+
+  ! epsilon_xx(:,:,:,:) = epsilondev_xx_crust_mantle(:,:,:,ispec_cm2gf) &
+  !            + eps_trace_over_3_crust_mantle(:,:,:,ispec_cm2gf)
+  ! epsilon_yy(:,:,:,:) = epsilondev_yy_crust_mantle(:,:,:,ispec_cm2gf) &
+  !            + eps_trace_over_3_crust_mantle(:,:,:,ispec_cm2gf)
+  ! epsilon_zz(:,:,:,:) = 3*eps_trace_over_3_crust_mantle(:,:,:,ispec_cm2gf) &
+  !            - epsilon_xx - epsilon_yy
+  ! epsilon_xy(:,:,:,:) = epsilondev_xy_crust_mantle(:,:,:,ispec_cm2gf)
+  ! epsilon_xz(:,:,:,:) = epsilondev_xz_crust_mantle(:,:,:,ispec_cm2gf)
+  ! epsilon_yz(:,:,:,:) = epsilondev_yz_crust_mantle(:,:,:,ispec_cm2gf)
+
+  ! epsilon_fake(:,:,:,:) = epsilon_xz(:,:,:,:)
+
+  ! local_dim = NGLLX * NGLLY * NGLLZ * ngf_unique_local_max
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                                  'epsilon_xx', epsilon_xx)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                                  'epsilon_yy', epsilon_yy)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                                  'epsilon_zz', epsilon_zz)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                                  'epsilon_xy', epsilon_xy)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                                  'epsilon_yz', epsilon_yz)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                                  'epsilon_xz', epsilon_xz)
+  ! call define_adios_global_array1D(myadios_fwd_group, group_size_inc, local_dim, '', &
+  !                                  'epsilon_fake', epsilon_fake)
+
+  end subroutine define_green_function_forward_arrays_adios
+
+!--------------------------------------------------------------------------
+! The following routine writes the parameters that have to be written once, such
+! as: coordinates, receiver parameters, topography, ellipticity splines, etc.
+
+subroutine write_one_time_green_function_forward_arrays_adios()
+
+  use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ
+
+  use specfem_par, only: ngf, ngf_unique, ngf_unique_local, &
+    deltat, &
+    islice_selected_gf_loc,ispec_selected_gf_loc, &
+    islice_out_gf_loc,ispec_out_gf_loc, &
+    xi_gf_loc,eta_gf_loc,gamma_gf_loc, &
+    gf_loc_lat,gf_loc_lon,gf_loc_depth, nu_gf_loc, &
+    ibool_GF, NGLOB_GF, iglob_cm2gf, ispec_cm2gf, &
+    rspl,ellipicity_spline,ellipicity_spline2,nspl,ibathy_topo, &
+    ELLIPTICITY_VAL, TOPOGRAPHY, RECEIVERS_CAN_BE_BURIED, NDIM, &
+    Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
+    Mrr,Mtt,Mpp,Mrt,Mrp,Mtp,Mw,M0, &
+    nsources_local, &
+    xi_source,eta_source,gamma_source, &
+    USE_FORCE_POINT_SOURCE, &
+    ibathy_topo, scale_displ, &
+    myrank, NPROCTOT_VAL, &
+    num_neighbors_all_gf, xadj_gf, adjncy_gf, &
+    USE_BUFFER_ELEMENTS
+  use specfem_par_crustmantle, only: &
+    rstore_crust_mantle, &
+    displ_crust_mantle, veloc_crust_mantle, accel_crust_mantle, &
+    xstore_crust_mantle, ystore_crust_mantle, zstore_crust_mantle, &
+    epsilondev_xx_crust_mantle, epsilondev_yy_crust_mantle, &
+    epsilondev_xy_crust_mantle, epsilondev_xz_crust_mantle, &
+    epsilondev_yz_crust_mantle
+
+  use shared_parameters, only: NX_BATHY, NY_BATHY, RESOLUTION_TOPO_FILE
+  use adios_helpers_mod
+  use manager_adios
+
+  implicit none
+
+  ! local parameters
+  integer(kind=8) :: local_dim
+
+  ! X, Y, Z coordinates
+  real(kind=CUSTOM_REAL), dimension(NGLOB_GF) :: x
+  real(kind=CUSTOM_REAL), dimension(NGLOB_GF) :: y
+  real(kind=CUSTOM_REAL), dimension(NGLOB_GF) :: z
+  real(kind=CUSTOM_REAL), dimension(4) :: fake_array
+
+  ! Receiver location and rotation for testing
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_latitude
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_longitude
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_depth
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_xi
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_eta
+  real(kind=CUSTOM_REAL), dimension(ngf) :: rec_gamma
+  integer, dimension(ngf) :: rec_spec
+  integer, dimension(ngf) :: rec_slice
+  real(kind=CUSTOM_REAL), dimension(3,3,ngf) :: rec_rotation
+  integer :: i
+  ! Ellipticity parameters
+  ! real(kind=CUSTOM_REAL) :: ellipticity
+
+  character(len=1024) :: rankname
+  character(len=1024) :: format_string
+
+  ! ---------------------------------
+  ! Get max array sizes
+  ! ---------------------------------
+
+  integer :: ngf_max, nsources_local_max, ngf_unique_local_max, NGLOB_GF_max, num_neighbors_all_gf_max
+  integer, parameter :: num_vars = 5
+  integer, dimension(num_vars) :: max_global_values
+
+
+  max_global_values(1) = ngf
+  max_global_values(2) = nsources_local
+  max_global_values(3) = ngf_unique_local
+  max_global_values(4) = NGLOB_GF
+  max_global_values(5) = num_neighbors_all_gf
+
+  call max_allreduce_i(max_global_values,num_vars)
+
+  ngf_max = max_global_values(1)
+  nsources_local_max  = max_global_values(2)
+  ngf_unique_local_max = max_global_values(3)
+  NGLOB_GF_max = max_global_values(4)
+  num_neighbors_all_gf_max = max_global_values(5)
+
+  ! Green function elements
+  rec_latitude = real(gf_loc_lat, kind=CUSTOM_REAL)
+  rec_longitude = real(gf_loc_lon, kind=CUSTOM_REAL)
+  rec_depth = real(gf_loc_depth, kind=CUSTOM_REAL)
+  rec_xi = real(xi_gf_loc, kind=CUSTOM_REAL)
+  rec_eta = real(eta_gf_loc, kind=CUSTOM_REAL)
+  rec_gamma = real(gamma_gf_loc, kind=CUSTOM_REAL)
+  rec_rotation = real(nu_gf_loc, kind=CUSTOM_REAL)
+  rec_spec = ispec_out_gf_loc
+  rec_slice = ispec_out_gf_loc
+
+  ! Scalars
+  ! parameters needed for reading.
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "PROC", myrank)
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NPROC", NPROCTOT_VAL)
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NGLOB", NGLOB_GF)
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NGF", ngf)
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NGF_UNIQUE", ngf_unique)
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NGF_UNIQUE_LOCAL", ngf_unique_local)
+
+  if (USE_BUFFER_ELEMENTS) then
+    call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, 'USE_BUFFER_ELEMENTS', 1)
+    call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NUM_NEIGHBORS", num_neighbors_all_gf)
+  else
+    call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, 'USE_BUFFER_ELEMENTS', 0)
+  endif
+
+
+  if (myrank == 0) then
+
+    call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NGLLX", NGLLX)
+    call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NGLLY", NGLLY)
+    call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "NGLLZ", NGLLZ)
+    call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, "DT", deltat)
+
+    ! Topography and bathymetry for source Location
+    if (TOPOGRAPHY) then
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, 'TOPOGRAPHY', 1)
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, STRINGIFY_VAR(NX_BATHY))
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, STRINGIFY_VAR(NY_BATHY))
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, STRINGIFY_VAR(RESOLUTION_TOPO_FILE))
+      local_dim = NX_BATHY * NY_BATHY
+      call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+        sizeprocs_adios, local_dim, STRINGIFY_VAR(ibathy_topo))
+    else
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, 'TOPOGRAPHY', 0)
+    endif
+
+    ! Ellipticity for source location
+    if (ELLIPTICITY_VAL) then
+
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, 'ELLIPTICITY', 1)
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, STRINGIFY_VAR(nspl))
+      local_dim = nspl
+      call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, STRINGIFY_VAR(rspl))
+      call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim,STRINGIFY_VAR(ellipicity_spline))
+      call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+              sizeprocs_adios, local_dim,STRINGIFY_VAR(ellipicity_spline2))
+    else
+      call write_adios_scalar(myadios_fwd_file, myadios_fwd_group,'ELLIPTICITY', 0)
+    endif
+
+  endif
+
+  ! if (nsources_local /= 0) then
+
+  !   local_dim = nsources_local_max
+
+  !   ! Moment tensor in cartesian
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'Mxx', Mxx)
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'Myy', Myy)
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'Mzz', Mzz)
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'Mxy', Mxy)
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'Mxz', Mxz)
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'Myz', Myz)
+  !   ! ! Source location
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'xi_source', xi_source)
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'eta_source', eta_source)
+  !   call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !                                      sizeprocs_adios, local_dim, 'gamma_source', gamma_source)
+
+  ! endif
+
+  ! !
+  ! ! Exit if there are no elements to be saved for this bit since all variables
+  ! ! below require the elements to be saved
+  if (ngf_unique_local == 0) return
+
+  ! ! Green locations
+  ! local_dim = ngf_max
+
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_latitude))
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_longitude))
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_depth))
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_xi))
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_eta))
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_gamma))
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_spec))
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_slice))
+
+  ! ! Rotation matrix has different size than the rest of the parameters.
+  ! local_dim = NDIM * NDIM * ngf_max
+
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, STRINGIFY_VAR(rec_rotation))
+
+  ! Addressing
+  local_dim = NGLLX * NGLLY * NGLLZ * ngf_unique_local_max
+  call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, 'ibool_GF', ibool_GF)
+
+  if (USE_BUFFER_ELEMENTS) then
+
+    ! Neighbors
+    local_dim = ngf_unique_local_max + 1
+    call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group, myrank, &
+      sizeprocs_adios, local_dim, 'xadj_gf', xadj_gf)
+
+    local_dim = num_neighbors_all_gf_max
+    call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group, myrank, &
+      sizeprocs_adios, local_dim, 'adjncy_gf', adjncy_gf)
+
+  endif
+
+  ! Coordinates
+  x = real(xstore_crust_mantle(iglob_cm2gf), kind=CUSTOM_REAL)
+  y = real(ystore_crust_mantle(iglob_cm2gf), kind=CUSTOM_REAL)
+  z = real(zstore_crust_mantle(iglob_cm2gf), kind=CUSTOM_REAL)
+
+  ! Write Coords
+  local_dim = NGLOB_GF_max
+  fake_array(:) = 0.0
+  call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, 'x', x)
+  call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, 'y', y)
+  call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, 'z', z)
+
+  local_dim = 4
+  fake_array(:) = 0.0
+  call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, 'fake_array', fake_array)
+
+  ! ! Parameters
+  call write_adios_scalar(myadios_fwd_file, myadios_fwd_group, STRINGIFY_VAR(scale_displ))
+
+  end subroutine write_one_time_green_function_forward_arrays_adios
+
+!--------------------------------------------------------------------------
+! The following routine writes the parameters that have to be written once, such
+! as: coordinates, receiver parameters, topography, ellipticity splines, etc.
+
+subroutine write_each_time_green_function_forward_arrays_adios()
+
+  use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ
+
+  use specfem_par, only: ngf, ngf_unique, ngf_unique_local, &
+    islice_selected_gf_loc,ispec_selected_gf_loc, &
+    islice_out_gf_loc,ispec_out_gf_loc, &
+    xi_gf_loc,eta_gf_loc,gamma_gf_loc, &
+    gf_loc_lat,gf_loc_lon,gf_loc_depth, nu_gf_loc, &
+    ibool_GF, NGLOB_GF, iglob_cm2gf, ispec_cm2gf, &
+    rspl,ellipicity_spline,ellipicity_spline2,nspl,ibathy_topo, &
+    ELLIPTICITY_VAL, TOPOGRAPHY, RECEIVERS_CAN_BE_BURIED, NDIM, &
+    ibathy_topo, &
+    nsources_local, &
+    myrank, NGLOB_CRUST_MANTLE, NPROCTOT_VAL
+  use specfem_par_crustmantle, only: &
+    xstore_crust_mantle, ystore_crust_mantle, zstore_crust_mantle, &
+    displ_crust_mantle, veloc_crust_mantle, accel_crust_mantle, &
+    epsilondev_xx_crust_mantle, epsilondev_yy_crust_mantle, &
+    epsilondev_xy_crust_mantle, epsilondev_xz_crust_mantle, &
+    epsilondev_yz_crust_mantle, eps_trace_over_3_crust_mantle
+  use shared_parameters, only: NX_BATHY, NY_BATHY
+  use adios_helpers_mod
+  use manager_adios
+
+  implicit none
+
+  ! local parameters
+  integer(kind=8) :: local_dim
+
+  ! Wavefield parameters
+  real(kind=CUSTOM_REAL), dimension(NDIM,NGLOB_GF) :: displacement
+  ! real(kind=CUSTOM_REAL), dimension(NDIM,NGLOB_GF) :: velocity
+  ! real(kind=CUSTOM_REAL), dimension(NDIM,NGLOB_GF) :: acceleration
+  real(kind=CUSTOM_REAL), dimension(4) :: fake_array
+
+  ! Strain parameters
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_xx
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_yy
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_zz
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_xy
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_xz
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_yz
+  ! real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,ngf_unique_local) :: epsilon_fake
+  character(len=1024) :: rankname
+  character(len=1024) :: format_string
+
+  ! ---------------------------------
+  ! Get max array sizes
+  ! ---------------------------------
+  integer :: ngf_max, nsources_local_max, ngf_unique_local_max, NGLOB_GF_max
+  integer, parameter :: num_vars = 4
+  integer, dimension(num_vars) :: max_global_values
+
+  max_global_values(1) = ngf
+  max_global_values(2) = nsources_local
+  max_global_values(3) = ngf_unique_local
+  max_global_values(4) = NGLOB_GF
+
+  call max_allreduce_i(max_global_values,num_vars)
+
+  ngf_max = max_global_values(1)
+  nsources_local_max  = max_global_values(2)
+  ngf_unique_local_max = max_global_values(3)
+  NGLOB_GF_max = max_global_values(4)
+
+  ! Exit if there are no elements to be saved for this bit.
+  if (ngf_unique_local == 0) return
+
+  ! -------
+  ! Variables to be written at each step
+  !--------
+  ! ! Arrays to be saved
+  displacement = displ_crust_mantle(:, iglob_cm2gf)
+  ! velocity = veloc_crust_mantle(:, iglob_cm2gf)
+  ! acceleration = accel_crust_mantle(:, iglob_cm2gf)
+
+  ! ! crust/mantle displacement, velocity, and acceleration
+  local_dim = NDIM * NGLOB_GF_max
+  call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, 'displacement', displacement)
+
+  fake_array(:) = 0.0
+  call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+    sizeprocs_adios, local_dim, 'fake_array', fake_array)
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, 'velocity', velocity)
+  ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  !   sizeprocs_adios, local_dim, 'acceleration', acceleration)
+
+  ! Reconstructing the true strain
+  ! epsilon_xx(:,:,:,:) = 0.d0
+  ! epsilon_yy(:,:,:,:) = 0.d0
+  ! epsilon_zz(:,:,:,:) = 0.d0
+  ! epsilon_xy(:,:,:,:) = 0.d0
+  ! epsilon_xz(:,:,:,:) = 0.d0
+  ! epsilon_yz(:,:,:,:) = 0.d0
+
+  ! ! epsilon_xx(:,:,:,:) = epsilondev_xx_crust_mantle(:,:,:,ispec_cm2gf) &
+  ! !            + eps_trace_over_3_crust_mantle(:,:,:,ispec_cm2gf)
+  ! ! epsilon_yy(:,:,:,:) = epsilondev_yy_crust_mantle(:,:,:,ispec_cm2gf) &
+  ! !            + eps_trace_over_3_crust_mantle(:,:,:,ispec_cm2gf)
+  ! ! epsilon_zz(:,:,:,:) = 3*eps_trace_over_3_crust_mantle(:,:,:,ispec_cm2gf) &
+  ! !            - epsilon_xx - epsilon_yy
+  ! ! epsilon_xy(:,:,:,:) = epsilondev_xy_crust_mantle(:,:,:,ispec_cm2gf)
+  ! ! epsilon_xz(:,:,:,:) = epsilondev_xz_crust_mantle(:,:,:,ispec_cm2gf)
+  ! ! epsilon_yz(:,:,:,:) = epsilondev_yz_crust_mantle(:,:,:,ispec_cm2gf)
+  ! ! epsilon_fake(:,:,:,:) = epsilon_yz
+
+  ! ! ! crust/mantle
+  ! ! local_dim = NGLLX * NGLLY * NGLLZ * ngf_unique_local_max
+  ! ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  ! !   sizeprocs_adios, local_dim, 'epsilon_xx', epsilon_xx)
+  ! ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  ! !   sizeprocs_adios, local_dim, 'epsilon_yy', epsilon_yy)
+  ! ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  ! !   sizeprocs_adios, local_dim, 'epsilon_zz', epsilon_zz)
+  ! ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  ! !   sizeprocs_adios, local_dim, 'epsilon_xy', epsilon_xy)
+  ! ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  ! !   sizeprocs_adios, local_dim, 'epsilon_yz', epsilon_yz)
+  ! ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  ! !   sizeprocs_adios, local_dim, 'epsilon_xz', epsilon_xz)
+  ! ! call write_adios_global_1d_array(myadios_fwd_file, myadios_fwd_group,myrank, &
+  ! !   sizeprocs_adios, local_dim, 'epsilon_fake', epsilon_fake)
+
+  end subroutine write_each_time_green_function_forward_arrays_adios
 
 
 !-------------------------------------------------------------------------------

@@ -30,7 +30,9 @@
   use specfem_par, only: myrank,IMAIN,NSOURCES,NSTEP, &
     theta_source,phi_source,depth_source, &
     TOPOGRAPHY,ibathy_topo, &
-    USE_DISTANCE_CRITERION,xyz_midpoints,xadj,adjncy
+    USE_DISTANCE_CRITERION,xyz_midpoints,xadj,adjncy, &
+    SAVE_GREEN_FUNCTIONS, &
+    ispec_selected_rec, ispec_cm2gf, hxir_store, hetar_store, hgammar_store
 
   use kdtree_search, only: kdtree_delete,kdtree_nodes_location,kdtree_nodes_index
 
@@ -44,6 +46,13 @@
 
   ! reads in stations file and locates receivers
   call setup_receivers()
+
+  ! setup green function location arrays
+  ! This function resets the KDTree that is used for the source location and
+  ! should therefore only ever be used after all other kdtree calls are done
+  if (SAVE_GREEN_FUNCTIONS) then
+    call setup_green_locations()
+  endif
 
   ! write source and receiver VTK files for Paraview
   call setup_sources_receivers_VTKfile()
@@ -69,7 +78,9 @@
 
   ! topography array no more needed
   if (TOPOGRAPHY) then
-    if (allocated(ibathy_topo) ) deallocate(ibathy_topo)
+    if (SAVE_GREEN_FUNCTIONS .eqv. .false.) then
+      if (allocated(ibathy_topo) ) deallocate(ibathy_topo)
+    endif
   endif
 
   ! frees memory
@@ -631,6 +642,404 @@
 
   end subroutine setup_adjacency_neighbors
 
+! -------------------------------------------------------------------------
+
+! subroutine setup_adjacency_neighbors_gf()
+! ! The routine `setup_adjacency_neighbors_gf()` is used to compute the
+! ! neighbours of the subselected elements, so that source location can be done
+! ! using the neighbors of the spectral elements as well.
+
+!   use constants, only: &
+!     NDIM,NGLLX,NGLLY,NGLLZ,MIDX,MIDY,MIDZ,IMAIN, &
+!     USE_DISTANCE_CRITERION, CUSTOM_REAL
+
+!   use shared_parameters, only: R_PLANET_KM
+
+!   use specfem_par, only: &
+!     myrank, &
+!     iglob_cm2gf, &
+!     nspec => ngf_unique_local, &
+!     nglob => NGLOB_GF, &
+!     ibool => ibool_GF
+
+
+!   use specfem_par_crustmantle, only: xstore_crust_mantle, &
+!     ystore_crust_mantle, zstore_crust_mantle
+
+!   ! for point search
+!   use specfem_par, only: element_size,typical_size_squared, &
+!     xadj_gf,adjncy_gf,num_neighbors_all_gf
+
+!   use kdtree_search, only: kdtree_setup,kdtree_delete, &
+!     kdtree_nodes_location,kdtree_nodes_index,kdtree_num_nodes, &
+!     kdtree_count_nearest_n_neighbors,kdtree_get_nearest_n_neighbors, &
+!     kdtree_search_index,kdtree_search_num_nodes
+
+!   implicit none
+!   integer :: num_neighbors,num_neighbors_max
+
+!   integer,dimension(8) :: iglob_corner,iglob_corner2
+!   integer :: ispec_ref,ispec,iglob,icorner,ier !,jj
+
+!   real(kind=CUSTOM_REAL), dimension(nglob) :: xstore
+!   real(kind=CUSTOM_REAL), dimension(nglob) :: ystore
+!   real(kind=CUSTOM_REAL), dimension(nglob) :: zstore
+!   real(kind=CUSTOM_REAL), dimension(nglob,3) :: xyz_midpoints
+
+!   ! temporary
+!   integer,parameter :: MAX_NEIGHBORS = 50   ! maximum number of neighbors (around 37 should be sufficient for crust/mantle)
+!   integer,dimension(:),allocatable :: tmp_adjncy ! temporary adjacency
+!   integer :: inum_neighbor
+
+!   ! timer MPI
+!   double precision :: time1,tCPU
+!   double precision, external :: wtime
+
+!   ! kd-tree search
+!   integer :: ielem,inodes
+!   integer :: nsearch_points
+!   integer :: num_elements,num_elements_max
+!   integer :: ielem_counter,num_elements_actual_max
+!   !integer, parameter :: max_search_points = 2000
+
+!   double precision :: r_search
+!   double precision :: xyz_target(NDIM)
+!   double precision :: dist_squared,dist_squared_max
+
+!   logical :: is_neighbor
+!   logical,parameter :: DO_BRUTE_FORCE_SEARCH = .false.
+
+!   if (myrank == 0) then
+!     write(IMAIN,*) 'SGT Element adjacency:'
+!     write(IMAIN,*) '  total number of tagged elements in this slice = ',nspec
+!     write(IMAIN,*)
+!     call flush_IMAIN()
+!   endif
+
+!   ! get MPI starting time
+!   time1 = wtime()
+
+!   ! Get local GF global coordinates
+!   write(*,*) 'rank', myrank, 'xstore', xstore_crust_mantle(1)
+!   write(*,*) 'rank', myrank, 'iglob', iglob_cm2gf(1)
+!   xstore = xstore_crust_mantle(iglob_cm2gf)
+!   ystore = ystore_crust_mantle(iglob_cm2gf)
+!   zstore = zstore_crust_mantle(iglob_cm2gf)
+
+!   ! Get local GF element midpoints
+!   xyz_midpoints(:, 1) = xstore(ibool(MIDX,MIDY,MIDZ,:))
+!   xyz_midpoints(:, 2) = ystore(ibool(MIDX,MIDY,MIDZ,:))
+!   xyz_midpoints(:, 3) = zstore(ibool(MIDX,MIDY,MIDZ,:))
+!   ! adjacency arrays
+!   !
+!   ! how to use:
+!   !  num_neighbors = xadj(ispec+1)-xadj(ispec)
+!   !  do i = 1,num_neighbors
+!   !    ! get neighbor
+!   !    ispec_neighbor = adjncy(xadj(ispec) + i)
+!   !    ..
+!   !  enddo
+!   allocate(xadj_gf(nspec + 1),stat=ier)
+!   if (ier /= 0) stop 'Error allocating xadj'
+!   allocate(tmp_adjncy(MAX_NEIGHBORS*nspec),stat=ier)
+!   if (ier /= 0) stop 'Error allocating tmp_adjncy'
+!   xadj_gf(:) = 0
+!   tmp_adjncy(:) = 0
+
+!   ! kd-tree search
+!   if (.not. DO_BRUTE_FORCE_SEARCH) then
+!     ! kd-tree search
+
+!     ! search radius around element midpoints
+!     !
+!     ! note: typical search size is using 10 times the size of a surface element;
+!     !       we take here 6 times the surface element size
+!     !       - since at low resolutions NEX < 64 and large element sizes, this search radius needs to be large enough, and,
+!     !       - due to doubling layers (elements at depth will become bigger, however radius shrinks)
+!     !
+!     !       the search radius r_search given as routine argument must be non-squared
+!     r_search = 6.0 * element_size
+
+!     ! user output
+!     if (myrank == 0) then
+!       write(IMAIN,*) '  using kd-tree search radius = ',r_search * R_PLANET_KM,'(km)'
+!       write(IMAIN,*)
+!       call flush_IMAIN()
+!     endif
+
+!     ! kd-tree setup for adjacency search
+!     !
+!     ! uses only element midpoint location
+!     kdtree_num_nodes = nspec
+
+!     write (*,*) 'rank', myrank, 'kdtree_num_nodes', kdtree_num_nodes
+!     write (*,*) 'rank', myrank, 'nspec', nspec
+
+!     write (*,*) 'rank', myrank, 'node_locash', kdtree_nodes_location(1,1)
+!     ! allocates tree arrays
+!     allocate(kdtree_nodes_location(NDIM,kdtree_num_nodes),stat=ier)
+!     if (ier /= 0) stop 'Error allocating kdtree_nodes_location arrays'
+!     allocate(kdtree_nodes_index(kdtree_num_nodes),stat=ier)
+!     if (ier /= 0) stop 'Error allocating kdtree_nodes_index arrays'
+
+!     ! prepares search arrays, each element takes its internal GLL points for tree search
+!     kdtree_nodes_index(:) = 0
+!     kdtree_nodes_location(:,:) = 0.0
+!     ! adds tree nodes
+!     inodes = 0
+!     do ispec = 1,nspec
+!       ! sets up tree nodes
+!       iglob = ibool(MIDX,MIDY,MIDZ,ispec)
+
+!       ! counts nodes
+!       inodes = inodes + 1
+!       if (inodes > kdtree_num_nodes ) stop 'Error index inodes bigger than kdtree_num_nodes'
+
+!       ! adds node index (index points to same ispec for all internal GLL points)
+!       kdtree_nodes_index(inodes) = ispec
+
+!       ! adds node location
+!       kdtree_nodes_location(1,inodes) = xstore(iglob)
+!       kdtree_nodes_location(2,inodes) = ystore(iglob)
+!       kdtree_nodes_location(3,inodes) = zstore(iglob)
+!     enddo
+!     if (inodes /= kdtree_num_nodes ) stop 'Error index inodes does not match nnodes_local'
+
+!     ! alternative: to avoid allocating/deallocating search index arrays, though there is hardly a speedup
+!     !allocate(kdtree_search_index(max_search_points),stat=ier)
+!     !if (ier /= 0) stop 'Error allocating array kdtree_search_index'
+
+!     ! creates kd-tree for searching
+!     call kdtree_setup()
+!   endif
+
+!   ! gets maximum number of neighbors
+!   inum_neighbor = 0
+!   num_neighbors_max = 0
+!   num_neighbors_all_gf = 0
+
+!   num_elements_max = 0
+!   num_elements_actual_max = 0
+!   dist_squared_max = 0.d0
+
+!   do ispec_ref = 1,nspec
+
+!     ! the eight corners of the current element
+!     iglob_corner(1) = ibool(1,1,1,ispec_ref)
+!     iglob_corner(2) = ibool(NGLLX,1,1,ispec_ref)
+!     iglob_corner(3) = ibool(NGLLX,NGLLY,1,ispec_ref)
+!     iglob_corner(4) = ibool(1,NGLLY,1,ispec_ref)
+!     iglob_corner(5) = ibool(1,1,NGLLZ,ispec_ref)
+!     iglob_corner(6) = ibool(NGLLX,1,NGLLZ,ispec_ref)
+!     iglob_corner(7) = ibool(NGLLX,NGLLY,NGLLZ,ispec_ref)
+!     iglob_corner(8) = ibool(1,NGLLY,NGLLZ,ispec_ref)
+
+!     ! midpoint for search radius
+!     iglob = ibool(MIDX,MIDY,MIDZ,ispec_ref)
+!     xyz_target(1) = xstore(iglob)
+!     xyz_target(2) = ystore(iglob)
+!     xyz_target(3) = zstore(iglob)
+
+!     if (DO_BRUTE_FORCE_SEARCH) then
+!       ! loops over all other elements to find closest neighbors
+!       num_elements = nspec
+!     else
+!       ! looks only at elements in kd-tree search radius
+
+!       ! gets number of tree points within search radius
+!       ! (within search sphere)
+!       call kdtree_count_nearest_n_neighbors(xyz_target,r_search,nsearch_points)
+
+!       ! debug
+!       !print *,'  total number of search elements: ',nsearch_points,'ispec',ispec_ref
+
+!       ! alternative: limits search results
+!       !if (nsearch_points > max_search_points) nsearch_points = max_search_points
+
+!       ! sets number of search nodes to get
+!       kdtree_search_num_nodes = nsearch_points
+
+!       ! allocates search index
+!       allocate(kdtree_search_index(kdtree_search_num_nodes),stat=ier)
+!       if (ier /= 0) stop 'Error allocating array kdtree_search_index'
+
+!       ! gets closest n points around target (within search sphere)
+!       call kdtree_get_nearest_n_neighbors(xyz_target,r_search,nsearch_points)
+
+!       ! loops over search radius
+!       num_elements = nsearch_points
+!     endif
+
+!     ! statistics
+!     if (num_elements > num_elements_max) num_elements_max = num_elements
+!     ielem_counter = 0
+
+!     ! counts number of neighbors
+!     num_neighbors = 0
+
+!     do ielem = 1,num_elements
+
+!       ! gets element index
+!       if (DO_BRUTE_FORCE_SEARCH) then
+!         ispec = ielem
+!       else
+!         ! kd-tree search radius
+!         ! gets search point/element index
+!         ispec = kdtree_search_index(ielem)
+!         ! checks index
+!         if (ispec < 1 .or. ispec > nspec) stop 'Error element index is invalid'
+!       endif
+
+!       ! skip reference element
+!       if (ispec == ispec_ref) cycle
+
+!       ! distance to reference element
+!       dist_squared = (xyz_target(1) - xyz_midpoints(1,ispec))*(xyz_target(1) - xyz_midpoints(1,ispec)) &
+!                    + (xyz_target(2) - xyz_midpoints(2,ispec))*(xyz_target(2) - xyz_midpoints(2,ispec)) &
+!                    + (xyz_target(3) - xyz_midpoints(3,ispec))*(xyz_target(3) - xyz_midpoints(3,ispec))
+
+!       ! exclude elements that are too far from target
+!       if (USE_DISTANCE_CRITERION) then
+!         !  we compare squared distances instead of distances themselves to significantly speed up calculations
+!         if (dist_squared > typical_size_squared) cycle
+!       endif
+
+!       ielem_counter = ielem_counter + 1
+
+!       ! checks if element has a corner iglob from reference element
+!       is_neighbor = .false.
+
+!       iglob_corner2(1) = ibool(1,1,1,ispec)
+!       iglob_corner2(2) = ibool(NGLLX,1,1,ispec)
+!       iglob_corner2(3) = ibool(NGLLX,NGLLY,1,ispec)
+!       iglob_corner2(4) = ibool(1,NGLLY,1,ispec)
+!       iglob_corner2(5) = ibool(1,1,NGLLZ,ispec)
+!       iglob_corner2(6) = ibool(NGLLX,1,NGLLZ,ispec)
+!       iglob_corner2(7) = ibool(NGLLX,NGLLY,NGLLZ,ispec)
+!       iglob_corner2(8) = ibool(1,NGLLY,NGLLZ,ispec)
+
+!       do icorner = 1,8
+!         ! checks if corner also has reference element
+!         if (any(iglob_corner(:) == iglob_corner2(icorner))) then
+!           is_neighbor = .true.
+!           exit
+!         endif
+!         ! alternative: (slightly slower with 12.4s compared to 11.4s with any() intrinsic function)
+!         !do jj = 1,8
+!         !  if (iglob == iglob_corner(jj)) then
+!         !    is_neighbor = .true.
+!         !    exit
+!         !  endif
+!         !enddo
+!         !if (is_neighbor) exit
+!       enddo
+
+!       ! counts neighbors to reference element
+!       if (is_neighbor) then
+!         ! adds to adjacency
+!         inum_neighbor = inum_neighbor + 1
+!         ! checks
+!         if (inum_neighbor > MAX_NEIGHBORS*nspec) stop 'Error maximum neighbors exceeded'
+!         ! adds element
+!         tmp_adjncy(inum_neighbor) = ispec
+
+!         ! for statistics
+!         num_neighbors = num_neighbors + 1
+
+!         ! maximum distance to reference element
+!         if (dist_squared > dist_squared_max) dist_squared_max = dist_squared
+!       endif
+!     enddo ! ielem
+
+!     ! checks if neighbors were found
+!     if (num_neighbors == 0) then
+!       print *, 'element', ispec_ref, 'has not neighbors'
+!       print *,'This is ok if there is no buffer element, but that has to be check'
+!       ! print *,'Error: rank ',myrank,' - element ',ispec_ref,'has no neighbors!'
+!       ! print *,'  element midpoint location: ',xyz_target(:)*R_PLANET_KM
+!       ! print *,'  typical element size     : ',element_size*R_PLANET_KM,'(km)'
+!       ! print *,'  brute force search       : ',DO_BRUTE_FORCE_SEARCH
+!       ! print *,'  distance criteria        : ',USE_DISTANCE_CRITERION
+!       ! print *,'  typical search distance  : ',typical_size_squared*R_PLANET_KM,'(km)'
+!       ! print *,'  kd-tree r_search         : ',r_search*R_PLANET_KM,'(km)'
+!       ! print *,'  search elements          : ',num_elements
+!       ! call exit_MPI(myrank,'Error adjacency invalid')
+!       cycle
+!     endif
+
+!     ! statistics
+!     if (num_neighbors > num_neighbors_max) num_neighbors_max = num_neighbors
+!     if (ielem_counter > num_elements_actual_max) num_elements_actual_max = ielem_counter
+
+!     ! adjacency indexing
+!     xadj_gf(ispec_ref + 1) = inum_neighbor
+!     ! how to use:
+!     !num_neighbors = xadj(ispec+1)-xadj(ispec)
+!     !do i = 1,num_neighbors
+!     !  ! get neighbor
+!     !  ispec_neighbor = adjncy(xadj(ispec) + i)
+!     !enddo
+
+!     ! frees kdtree search array
+!     if (.not. DO_BRUTE_FORCE_SEARCH) then
+!       deallocate(kdtree_search_index)
+!     endif
+
+!   enddo ! ispec_ref
+
+!   ! total number of neighbors
+!   num_neighbors_all_gf = inum_neighbor
+
+!   ! allocates compacted array
+!   if (num_neighbors_all_gf > 0) then
+!   !   cycle
+!     allocate(adjncy_gf(num_neighbors_all_gf),stat=ier)
+!     if (ier /= 0) stop 'Error allocating tmp_adjncy'
+
+!     adjncy_gf(1:num_neighbors_all_gf) = tmp_adjncy(1:num_neighbors_all_gf)
+
+!     ! checks
+!     if (minval(adjncy_gf(:)) < 1 .or. maxval(adjncy_gf(:)) > nspec) stop 'Invalid adjncy array'
+!   endif
+
+!   ! frees temporary array
+!   deallocate(tmp_adjncy)
+
+!   if (.not. DO_BRUTE_FORCE_SEARCH) then
+!     ! frees current tree memory
+!     ! deletes tree arrays
+!     deallocate(kdtree_nodes_location)
+!     deallocate(kdtree_nodes_index)
+!     ! deletes search tree nodes
+!     call kdtree_delete()
+!   endif
+
+!   if (myrank == 0) then
+!     ! elapsed time since beginning of neighbor detection
+!     tCPU = wtime() - time1
+!     write(IMAIN,*) '  maximum search elements                                      = ',num_elements_max
+!     write(IMAIN,*) '  maximum of actual search elements (after distance criterion) = ',num_elements_actual_max
+!     write(IMAIN,*)
+!     write(IMAIN,*) '  estimated typical element size at surface = ',element_size*R_PLANET_KM,'(km)'
+!     write(IMAIN,*) '  maximum distance between neighbor centers = ',sqrt(dist_squared_max)*R_PLANET_KM,'(km)'
+!     if (.not. DO_BRUTE_FORCE_SEARCH) then
+!       if (sqrt(dist_squared_max) > r_search - 0.5*element_size) then
+!           write(IMAIN,*) '***'
+!           write(IMAIN,*) '*** Warning: consider increasing the kd-tree search radius to improve this neighbor setup ***'
+!           write(IMAIN,*) '***'
+!       endif
+!     endif
+!     write(IMAIN,*)
+!     write(IMAIN,*) '  maximum neighbors found per element = ',num_neighbors_max,'(should be 37 for globe meshes)'
+!     write(IMAIN,*) '  total number of neighbors           = ',num_neighbors_all_gf
+!     write(IMAIN,*)
+!     write(IMAIN,*) '  Elapsed time for detection of neighbors in seconds = ',tCPU
+!     write(IMAIN,*)
+!     call flush_IMAIN()
+!   endif
+
+!   end subroutine setup_adjacency_neighbors_gf
+
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -1041,7 +1450,8 @@
            xi_receiver(nrec), &
            eta_receiver(nrec), &
            gamma_receiver(nrec), &
-           nu_rec(NDIM,NDIM,nrec),stat=ier)
+           nu_rec(NDIM,NDIM,nrec), &
+           stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating receiver arrays')
   ! initializes arrays
   islice_selected_rec(:) = -1
@@ -1140,7 +1550,7 @@
   call sum_all_i(nrec_local,nrec_tot_found)
   if (myrank == 0) then
     write(IMAIN,*)
-    write(IMAIN,*) 'found a total of ',nrec_tot_found,' receivers in all slices'
+    write(IMAIN,*) 'found a total of ', nrec_tot_found,' receivers in all slices'
     ! checks for number of receivers
     ! note: for 1-chunk simulations, nrec_simulations is the number of receivers/sources found in this chunk
     if (nrec_tot_found /= nrec_simulation) then
@@ -1333,6 +1743,7 @@
 
   end subroutine setup_receivers
 
+
 !
 !-------------------------------------------------------------------------------------------------
 !
@@ -1345,7 +1756,6 @@
   ! local parameters
   character(len=MAX_STRING_LEN) :: filename,filename_new
   character(len=MAX_STRING_LEN) :: command
-
   ! user output
   if (myrank == 0) then
 
@@ -1383,6 +1793,702 @@
   endif
 
   end subroutine setup_sources_receivers_VTKfile
+
+
+!-------------------------------------------------------------------------------------------------
+
+
+  subroutine unique_inverse(A, Nin, unique, unique_idx, inv, Nout)
+
+    ! This subroutine computes the uniqe array of integers contained in an
+    ! integer array. The function is not performance optimized. So it may be
+    ! slow for large arrays. I use it below in setup_green_locations, to compute
+    ! a new, subset ibool array, to get only the tagged elements.
+    ! Note that you have to grab the unqiue values likeso:
+    ! >> uniq     = unique(1:Nout)
+    ! >> uniq_idx = unique_idx(1:Nout)
+
+    implicit none
+
+    ! In
+    integer, intent(in) :: Nin
+    integer, dimension(Nin), intent(in) :: A
+
+    ! out
+    integer, intent(out) :: Nout
+    ! integer, dimension(:), intent(out), allocatable :: unique, unique_idx
+
+    ! Local
+    integer :: i
+    integer, dimension(:), allocatable :: idx
+    integer, dimension(Nin), intent(out) :: unique
+    integer, dimension(Nin), intent(out) :: unique_idx
+    integer, dimension(Nin), intent(out) :: inv
+
+    Nout = 0
+
+    unique(:) = 0
+
+    do i=1,Nin
+
+      if (any( A(i) == unique) .eqv. .false.) then
+        Nout = Nout + 1
+        unique(Nout) = A(i)
+        unique_idx(Nout) = i
+
+        inv(i) = Nout
+
+
+      ! If the value is already in bigunique, check where it is using minloc
+      else
+        idx = minloc(abs(unique(1:Nout)-A(i)))
+        inv(i) = idx(1)
+      endif
+    enddo
+
+    ! allocate(unique(Nout), unique_idx(Nout))
+
+    ! unique(:) = big_unique(1:Nout)
+    ! unique_idx(:) = big_unique_idx(1:Nout)
+
+  end subroutine
+!-------------------------------------------------------------------------------------------------
+
+  subroutine setup_green_locations()
+
+  use specfem_par
+  use specfem_par_crustmantle
+
+  implicit none
+
+  character(len=MAX_STRING_LEN) :: filename
+  ! check for imbalance of distribution of receivers or of adjoint sources
+  logical, parameter :: CHECK_FOR_IMBALANCE = .false.
+
+  ! local parameters
+  integer :: igf, ngf_tot_found,ier,ix
+  integer :: i,j,k,l, ispec
+  integer, dimension(:), allocatable :: idx
+  integer :: inum_neighbor,MAX_NEIGHBORS
+  integer :: igllx, iglly, igllz, ispec_sub, ibel, counter,ispec_neighbor, num_neighbors
+  integer :: iglob, iglob_counter, igf_counter
+  integer :: ngf_simulation
+  integer,dimension(0:NPROCTOT_VAL-1) :: tmp_gf_local_all
+  double precision :: sizeval
+  integer, dimension(NGLLX, NGLLY, NGLLZ) :: checkarray
+  integer, dimension(:,:), allocatable :: islicespec_selected_gf_loc
+  integer, dimension(:), allocatable :: iglob_tmp
+  logical, dimension(:), allocatable :: mask
+  integer, dimension(:), allocatable :: rmask
+  integer, dimension(:), allocatable :: index_vector
+  integer, dimension(:), allocatable :: ispec_unique_gf_loc_local
+  integer, dimension(:), allocatable :: islice_unique_gf_loc_local
+  integer, dimension(:), allocatable :: ibool_flat, inv, iglob_cm2gf_tmp
+  integer, dimension(NSPEC_CRUST_MANTLE) :: ispec_mask, islice_mask
+  integer, dimension(NPROCTOT_VAL) :: ngf_unique_array, offset
+  integer, dimension(:), allocatable :: tmp_adjacency
+
+  ! timer MPI
+  double precision :: time1,tCPU
+  double precision, external :: wtime
+
+  MAX_NEIGHBORS=50
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*)
+    write(IMAIN,*) 'Green function locations:'
+    call flush_IMAIN()
+  endif
+  ! write(*,*) 'myrank', myrank, 'nspec', NSPEC_CRUST_MANTLE
+
+
+  ! allocate memory for green function arrays
+  allocate(xi_gf_loc(ngf), &
+           eta_gf_loc(ngf), &
+           gamma_gf_loc(ngf),stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating green function arrays 0.0')
+
+  allocate(nu_gf_loc(NDIM,NDIM,ngf),stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating green function arrays 0.1')
+
+  allocate(islice_selected_gf_loc(ngf), &
+           ispec_selected_gf_loc(ngf), &
+           islicespec_selected_gf_loc(2,ngf), &
+           stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating green function arrays 1')
+
+  ! initializes arrays
+  islice_selected_gf_loc(:) = -1
+  ispec_selected_gf_loc(:) = 0
+  islicespec_selected_gf_loc(:,:) = 0
+  xi_gf_loc(:) = 0.d0; eta_gf_loc(:) = 0.d0; gamma_gf_loc(:) = 0.d0
+  nu_gf_loc(:,:,:) = 0.0d0
+
+  allocate(gf_loc_lat(ngf), &
+           gf_loc_lon(ngf), &
+           gf_loc_depth(ngf),stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating green function arrays 1 arrays')
+  gf_loc_lat(:) = 0.d0; gf_loc_lon(:) = 0.d0; gf_loc_depth(:) = 0.d0
+
+  !  Green Function locations
+  if (myrank == 0) then
+    write(IMAIN,*)
+    write(IMAIN,*) 'Total number of green function locations = ', ngf
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
+  if (myrank == 0) then
+  ! write source and receiver VTK files for Paraview
+    filename = trim(OUTPUT_FILES)//'/gf_tmp.vtk'
+    open(IOUT_VTK,file=trim(filename),status='unknown',iostat=ier)
+    if (ier /= 0 ) call exit_MPI(myrank,'Error opening temporary file gf_tmp.vtk in setup_sources_reveivers.')
+    write(IOUT_VTK,'(a)') '# vtk DataFile Version 2.0'
+    write(IOUT_VTK,'(a)') 'Green Function Locations VTK file'
+    write(IOUT_VTK,'(a)') 'ASCII'
+    write(IOUT_VTK,'(a)') 'DATASET UNSTRUCTURED_GRID'
+    !  LQY -- won't be able to know NSOURCES+nrec at this point...
+    write(IOUT_VTK, '(a,i6,a)') 'POINTS ', NSOURCES, ' float'
+    ! closing file, rest of information will be appended later on
+    close(IOUT_VTK)
+  endif
+
+  ! locate receivers in the crust in the mesh
+  call locate_green_locations()
+
+! Create column array of slice and spectral element combinations
+  islicespec_selected_gf_loc(1,:) = islice_selected_gf_loc
+  islicespec_selected_gf_loc(2,:) = ispec_selected_gf_loc
+
+  ! count number of receivers located in this slice
+  ngf_local = 0
+  ngf_simulation = ngf
+
+  do igf = 1,ngf
+    if (myrank == islice_selected_gf_loc(igf)) ngf_local = ngf_local + 1
+  enddo
+
+  ! check that the sum of the number of receivers in each slice is nrec (or nsources for adjoint simulations)
+  call sum_all_i(ngf_local,ngf_tot_found)
+
+  if (myrank==0) then
+      ! outputs info
+      write(IMAIN,*)
+      write(IMAIN,*) 'Getting unique elements from Green function locations...'
+      ! get MPI starting time
+      time1 = wtime()
+      call flush_IMAIN()
+  endif
+
+
+  ! Get unique number of elements and allocate new array of slices and sources
+  if (myrank == 0) then
+
+    allocate( &
+      mask(ngf), &
+      rmask(ngf), stat=ier)
+    if (ier /= 0 ) call exit_MPI(myrank,'Error allocating mask and rmask')
+
+    mask(:) = .true.
+
+    do ix = ngf,2,-1
+      mask(ix) = .not.(any(&
+        islicespec_selected_gf_loc(1,:ix-1)==islicespec_selected_gf_loc(1,ix).and.&
+        islicespec_selected_gf_loc(2,:ix-1)==islicespec_selected_gf_loc(2,ix)))
+    enddo
+
+    ! Get total number of unique elements (IMPORTANT FOR ADIOS FILE ALLOCATION)
+    rmask(:) = 0
+
+    where(mask) rmask = 1
+    ngf_unique = sum(rmask)
+
+  endif
+
+  ! Broadcast the total number of unique elements
+  call bcast_all_singlei(ngf_unique)
+
+  ! Make an index vector
+  allocate(index_vector(ngf_unique), stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating mask index array')
+  index_vector(:) = 0
+
+  ! Now copy the unique elements of the slice and spec arrays into the unique arrays
+  allocate(islice_unique_gf_loc(ngf_unique), stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating unique slice array')
+
+  allocate(ispec_unique_gf_loc(ngf_unique), stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating unique element array')
+
+  if (myrank==0) then
+    index_vector = pack([(ix, ix=1,ngf)],mask)
+    deallocate(mask, rmask)
+  endif
+
+  call synchronize_all()
+  call bcast_all_i(index_vector, ngf_unique)
+
+  do igf=1,ngf_unique
+    islice_unique_gf_loc(igf) = islice_selected_gf_loc(index_vector(igf))
+    ispec_unique_gf_loc(igf) = ispec_selected_gf_loc(index_vector(igf))
+  enddo
+
+  call synchronize_all()
+
+  if (myrank==0) then
+    tCPU = wtime() - time1
+    ! outputs info
+    write(IMAIN,*)
+    write(IMAIN,*) 'Found a total of ', ngf_unique, 'tagged elements.'
+    write(IMAIN,*) 'Buffering took', tCPU, ' seconds.'
+    call flush_IMAIN()
+  endif
+
+  ! This section is adding a neighbouring elements by brute-force checking the
+  ! number of overlapping points
+  ispec_mask(:) = 0
+  islice_mask(:) = 9999
+  ibel=0
+
+  ! If Use buffer elements create buffer around elements
+  if (USE_BUFFER_ELEMENTS) then
+
+    if (myrank==0) then
+      ! outputs info
+      write(IMAIN,*)
+      write(IMAIN,*) 'Computing element buffer for ...'
+      ! get MPI starting time
+      time1 = wtime()
+      call flush_IMAIN()
+    endif
+
+
+    ! Expand 1 buffer element at a time (this is a very exponential loop)
+    do ibel=1,NUMBER_OF_BUFFER_ELEMENTS
+
+      if (myrank==0) then
+        write(IMAIN,*) '    ---> ', ibel, 'element.'
+      endif
+
+      ! Loop over unique elements
+      do igf=1, ngf_unique
+
+        ! Check whether element is in current slice
+        if (islice_unique_gf_loc(igf)==myrank) then
+
+          ! Get element
+          ispec = ispec_unique_gf_loc(igf)
+
+          ! Get number of neighbors from adjacency offset vector
+          num_neighbors = xadj(ispec+1)-xadj(ispec)
+
+          ! Loop over number of neighbors and add to mask
+          ispec_mask(ispec) = 1
+          islice_mask(ispec) = myrank
+
+          do i = 1,num_neighbors
+            ! Get neighbor element index
+            ispec_neighbor = adjncy(xadj(ispec) + i)
+
+            ! Set index of mask to true.
+            ispec_mask(ispec_neighbor) = 1
+            islice_mask(ispec_neighbor) = myrank
+
+          enddo
+
+        endif
+
+      enddo
+
+      call synchronize_all()
+
+      ! We can deallocate all of the variables since ispec_mask (a local array)
+      ! should contain all necessary info
+      deallocate(ispec_unique_gf_loc, islice_unique_gf_loc, stat=ier)
+      if (ier /= 0 ) call exit_MPI(myrank,'Error deallocating ispec_unique_gf_loc, islice_unique_gf_loc.')
+
+      ! Get total number of local elements
+      ngf_unique_local = sum(ispec_mask)
+
+      ! Allocate local ispec, and slice
+      allocate(&
+          ispec_unique_gf_loc_local(ngf_unique_local), &
+          islice_unique_gf_loc_local(ngf_unique_local), &
+          stat=ier)
+      if (ier /= 0 ) call exit_MPI(myrank,'Error allocating array when getting buffer elements')
+
+      ispec_unique_gf_loc_local(:) = 0
+      islice_unique_gf_loc_local(:) = 0
+
+      ! Get elements
+      counter = 1
+
+      ! Loop over elements
+      do ispec=1,NSPEC_CRUST_MANTLE
+        if (ispec_mask(ispec)==1) then
+          ! if in mask is true add element and slice.
+          ispec_unique_gf_loc_local(counter) = ispec
+          islice_unique_gf_loc_local(counter) = myrank
+          counter = counter + 1
+        endif
+      enddo
+
+      ! Get complete number of unique elements
+      ngf_unique = 0
+      call sum_all_i(ngf_unique_local, ngf_unique)
+      call bcast_all_singlei(ngf_unique)
+
+      ! Get array of unique elements on each proc at root
+      ngf_unique_array(:) = 0
+      call gather_all_singlei(ngf_unique_local, ngf_unique_array, NPROCTOT_VAL)
+      call bcast_all_i(ngf_unique_array, NPROCTOT_VAL)
+
+      ! Get ispecs and slices from all processes to root
+      allocate(ispec_unique_gf_loc(ngf_unique), islice_unique_gf_loc(ngf_unique), stat=ier)
+      if (ier /= 0 ) call exit_MPI(myrank,'Error allocating array when getting buffer elements 2')
+
+      call synchronize_all()
+
+      ! Set Gatherv displacements
+      offset(:) = 0
+      do i=2,NPROCTOT_VAL
+        offset(i) = offset(i-1) + ngf_unique_array(i-1)
+      enddo
+
+      ! Bringing back all info to the root process
+      call gatherv_all_i(&
+          ispec_unique_gf_loc_local, ngf_unique_local, &
+          ispec_unique_gf_loc, ngf_unique_array, offset, ngf_unique, NPROCTOT_VAL)
+
+      call gatherv_all_i(&
+          islice_unique_gf_loc_local, ngf_unique_local, &
+          islice_unique_gf_loc, ngf_unique_array, offset, ngf_unique, NPROCTOT_VAL)
+
+      ! Broadcasting it back to all processes
+      call bcast_all_i(ispec_unique_gf_loc, ngf_unique)
+      call bcast_all_i(islice_unique_gf_loc, ngf_unique)
+
+      deallocate(ispec_unique_gf_loc_local, islice_unique_gf_loc_local)
+
+    enddo
+
+    call synchronize_all()
+
+    if (myrank==0) then
+        tCPU = wtime() - time1
+        ! outputs info
+        write(IMAIN,*)
+        write(IMAIN,*) 'After computing buffer elements, we have ', ngf_unique, ' elements across all slices.'
+        write(IMAIN,*) 'Buffering took', tCPU, ' seconds.'
+
+        call flush_IMAIN()
+    endif
+
+
+  endif
+
+  ! main process broadcasts the results to all the slices
+  call bcast_all_singlei(ngf_unique)
+  call bcast_all_i(islice_unique_gf_loc, ngf_unique)
+  call bcast_all_i(ispec_unique_gf_loc, ngf_unique)
+
+  ! synchronizes to get right timing
+  call synchronize_all()
+
+  ! Get number of unique entries in a slice
+  ngf_unique_local = 0
+  do igf=1,ngf_unique
+    if (islice_unique_gf_loc(igf)==myrank) then
+      ngf_unique_local = ngf_unique_local + 1
+    endif
+  enddo
+
+  call synchronize_all()
+
+  ! ------------
+  ! This section is quite important since it sets up the global to local
+  ! addressing for the subset of elements.
+
+  allocate(islice_out_gf_loc(ngf), &
+           ispec_out_gf_loc(ngf), &
+           stat=ier)
+  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating islice/ispec_out')
+
+  if (myrank==0) then
+    ! outputs info
+    write(IMAIN,*)
+    write(IMAIN,*) 'Computing the unique values in the subset ibool array and the inverse'
+    write(IMAIN,*) 'of the unique indexing for readdressing ...'
+    ! get MPI starting time
+    time1 = wtime()
+    call flush_IMAIN()
+  endif
+
+  if (ngf_unique_local .gt. 0) then
+
+    ! Get ibool array for output Green function database
+    allocate(ibool_GF(NGLLX, NGLLY, NGLLZ, ngf_unique_local), &
+             ibool_flat(NGLLX*NGLLY*NGLLZ*ngf_unique_local), &
+             inv(NGLLX*NGLLY*NGLLZ*ngf_unique_local), &
+             ispec_cm2gf(ngf_unique_local), &
+             islice_cm2gf(ngf_unique_local), &
+             stat=ier)
+    if (ier /= 0 ) call exit_MPI(myrank,'Error allocating ibool_GF, or iglob_tmp array')
+
+    ! Conversion arrays from full crust_mantle element array to small
+    ! Green function array
+    ibool_GF(:,:,:,:) = 0
+    ispec_cm2gf(:) = 0
+    islice_cm2gf(:) = 0
+    islice_out_gf_loc(:) = 0
+    ispec_out_gf_loc(:) = 0
+
+    ! Initialize counters to count local elements and local coordinates
+    iglob_counter = 0
+    igf_counter = 0
+
+    do igf=1,ngf_unique
+      if (islice_unique_gf_loc(igf)==myrank) then
+
+        ! Count new elements
+        igf_counter = igf_counter + 1
+
+        ! For each element in the new local array get the element of
+        ! the original crust_mantle array
+        ispec_cm2gf(igf_counter) = ispec_unique_gf_loc(igf)
+      endif
+    enddo
+
+    ! Allocate temporary placeholder for unique, and unique,index array
+    allocate(iglob_cm2gf_tmp(size(ibool_GF)), iglob_tmp(size(ibool_GF)), stat=ier)
+    if (ier /= 0 ) call exit_MPI(myrank,'Error allocating unique temp arrays')
+
+    ! Flatten subset ibool array for unique-ing
+    ibool_flat = pack(ibool_crust_mantle(:,:,:,ispec_cm2gf), .true.)
+
+    ! Get unique values of ibool, indeces of those values, and inverse.
+    !                    array      arraysize       unique values, idx,    inverse, Nuniq
+    call unique_inverse(ibool_flat, size(ibool_GF), iglob_cm2gf_tmp, iglob_tmp, inv, iglob_counter)
+
+    ! Large array better deallocate quickly.
+    deallocate(ibool_flat, iglob_tmp, stat=ier) !!!!! REUSING iglob_tmp in next line because lazy
+    if (ier /= 0 ) call exit_MPI(myrank,'Error deallocating bool_flat, iglob_tmp')
+
+    ! Allocate array and placeholder array.
+    allocate(iglob_cm2gf(iglob_counter), iglob_tmp(iglob_counter), stat=ier)
+    if (ier /= 0 ) call exit_MPI(myrank,'Error allocating iglob_cm2gf')
+
+    ! Get subset of unique values
+    iglob_cm2gf(:) = iglob_cm2gf_tmp(1:iglob_counter)
+
+    ! Deallocate large array
+    deallocate(iglob_cm2gf_tmp, stat=ier)
+    if (ier /= 0 ) call exit_MPI(myrank,'Error deallocating iglob_cm2gf_tmp')
+
+    ! Create temporary sequence for ibool_GF creation
+    do i=1,iglob_counter
+      iglob_tmp(i) = i
+    enddo
+
+    ! Created ibool GF from inverse unique array
+    ibool_GF(:,:,:,:) = reshape(iglob_tmp(inv), shape(ibool_GF))
+
+    deallocate(inv, iglob_tmp, stat=ier)
+    if (ier /= 0 ) call exit_MPI(myrank,'Error deallocating iglob_tmp')
+
+    ! Total number of Green function coordinates in terms of elements
+    NGLOB_GF = iglob_counter
+
+
+    ! write(*,*) 'rank', myrank, 'ISPEC', ispec_cm2gf
+    ! write(*,*) 'rank', myrank, 'IGLOB', iglob_cm2gf
+    ! write (*,*)
+    ! write (*,*) ( &
+    !   xstore_crust_mantle(ibool_crust_mantle(:,:,:,ispec_cm2gf(1))) &
+    !   - xstore_crust_mantle(iglob_cm2gf(:))(ibool_GF(:,:,:,1)) &
+    ! )
+  endif
+
+  ! Get ibool array for  output Green function database
+  call synchronize_all()
+
+  if (myrank==0) then
+    tCPU = wtime() - time1
+    ! outputs info
+    write(IMAIN,*)
+    write(IMAIN,*) '    ... readdressing of the subset elements took ', tCPU, 'seconds.'
+    call flush_IMAIN()
+  endif
+
+  ! Convert crust mantle ispec to green function database ispec
+  do igf=1,ngf
+    if (islice_selected_gf_loc(igf)==myrank) then
+
+        islice_out_gf_loc(igf) = myrank
+
+        do i=1,ngf_unique_local
+          if (ispec_cm2gf(i)==ispec_selected_gf_loc(igf)) then
+            ispec_out_gf_loc(igf) = i
+          endif
+        enddo
+    endif
+  enddo
+
+
+  ! Collect the results on rank one
+  call synchronize_all()
+
+  do igf=1,ngf
+    if (islice_selected_gf_loc(igf) /= 0) then
+      if (islice_selected_gf_loc(igf) == myrank) then
+        call send_singlei(ispec_out_gf_loc(igf), 0, igf)
+        call send_singlei(islice_out_gf_loc(igf), 0, igf+ngf)
+      endif
+      if (myrank==0) then
+        call recv_singlei(ispec_out_gf_loc(igf), islice_selected_gf_loc(igf), igf)
+        call recv_singlei(islice_out_gf_loc(igf), islice_selected_gf_loc(igf), igf+ngf)
+      endif
+    endif
+  enddo
+
+  ! Get adjacency vectors for to enable source inversion arrays.
+  allocate(xadj_gf(ngf_unique_local + 1),stat=ier)
+  if (ier /= 0) stop 'Error allocating xadj'
+  allocate(tmp_adjacency(MAX_NEIGHBORS*ngf_unique_local),stat=ier)
+  if (ier /= 0) stop 'Error allocating temp adj'
+
+  ! Get neighbours.
+  xadj_gf(:) = 0
+  inum_neighbor = 0
+  tmp_adjacency(:) = 0
+
+  if (myrank==0) then
+    ! outputs info
+    write(IMAIN,*)
+    write(IMAIN,*) 'Gathering neighbors of the subset elements ... '
+    time1 = wtime()
+    call flush_IMAIN()
+  endif
+
+  if (ngf_unique_local .gt. 0) then
+
+
+    do igf=1,ngf_unique_local
+
+      ! Get element
+      ispec = ispec_cm2gf(igf)
+
+      ! Get neighbors
+      num_neighbors = xadj(ispec+1)-xadj(ispec)
+
+      ! Loop over neighbors in full mesh
+      do i = 1,num_neighbors
+
+        ! get neighbor from global adjacency
+        ispec_neighbor = adjncy(xadj(ispec) + i)
+
+        ! Check whether global neighbor is also a local neighbor.
+        if (any(ispec_neighbor==ispec_cm2gf)) then
+
+          ! If is neighbor increase total neighbor counter.
+          inum_neighbor = inum_neighbor + 1
+
+          ! Get indeces of neighbors
+          idx = pack([(ix,ix=1,size(ispec_cm2gf))],ispec_neighbor==ispec_cm2gf)
+
+          ! Add neighbor to adjacency vector
+          tmp_adjacency(inum_neighbor) = idx(1)
+
+        endif
+
+      enddo
+
+      ! Add total event counter to adjacency vetor
+      xadj_gf(igf+1) = inum_neighbor
+
+    enddo
+
+
+
+    ! Allocate final adjacency array
+    allocate(adjncy_gf(inum_neighbor),stat=ier)
+    if (ier /= 0) stop 'Error allocating temp adj'
+
+    ! Define final adjacency array
+    adjncy_gf(1:inum_neighbor) = tmp_adjacency(1:inum_neighbor)
+
+    ! Define neighbor counter
+    num_neighbors_all_gf = inum_neighbor
+
+    ! Deallocate tmp adjacency
+    deallocate(tmp_adjacency)
+  else
+    num_neighbors_all_gf = 0
+  endif
+
+  call synchronize_all()
+
+  if (myrank==0) then
+    tCPU = wtime() - time1
+    ! outputs info
+    write(IMAIN,*) '    ... took ', tCPU, ' seconds.'
+    call flush_IMAIN()
+  endif
+
+  call synchronize_all()
+
+  if (myrank == 0) then
+    write(IMAIN,*)
+    write(IMAIN,*) 'found a total of ',ngf_tot_found,' green function locations in all slices'
+    write(IMAIN,*) 'found a total of ',ngf_unique,' unique green function elements in all slices'
+
+    ! checks for number of receivers
+    ! note: for 1-chunk simulations, nrec_simulations is the number of receivers/sources found in this chunk
+    if (ngf_tot_found /= ngf_simulation) then
+      call exit_MPI(myrank,'problem when dispatching the receivers')
+    else
+      write(IMAIN,*) 'this total is okay'
+    endif
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
+  ! check that the sum of the number of receivers in each slice is ngf
+  if (myrank == 0 .and. ngf_tot_found /= ngf) then
+    call exit_MPI(myrank,'total number of green function slices is incorrect')
+  endif
+  ! synchronizes before info output
+  call synchronize_all()
+
+  ! seismograms
+  ! gather from secondary processes on main
+  tmp_gf_local_all(:) = 0
+  tmp_gf_local_all(0) = ngf_local
+  if (NPROCTOT_VAL > 1) then
+    call gather_all_singlei(ngf_local,tmp_gf_local_all,NPROCTOT_VAL)
+  endif
+
+  ! user output
+  if (myrank == 0) then
+    ! seismograms need seismograms(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS)
+    sizeval = dble(ngf) * dble(NGLLX * NGLLY * NGLLZ * CUSTOM_REAL / 1024. / 1024. )
+    ! outputs info
+    write(IMAIN,*) 'Green Function:'
+    ! NOTE: Needs to be edited in the future ACCOUNTING for total of SAVED steps
+    write(IMAIN,*) '  writing out Green functions at every NTSTEP_BETWEEN_OUTPUT_SEISMOS = ',NTSTEP_BETWEEN_OUTPUT_SEISMOS
+    write(IMAIN,*) '  Number of unique elements                 = ', ngf_unique
+    write(IMAIN,*) '  Storage per element per step (no overlap) = ', sngl(sizeval),'MB'
+    write(IMAIN,*) '                                            = ', sngl(sizeval/1024.d0),'GB'
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
+  ! synchronizes to get right timing
+  call synchronize_all()
+
+  end subroutine setup_green_locations
+
 
 !
 !-------------------------------------------------------------------------------------------------

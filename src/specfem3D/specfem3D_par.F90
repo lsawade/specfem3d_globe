@@ -346,6 +346,43 @@ module specfem_par
   real(kind=CUSTOM_REAL), dimension(:), allocatable :: stshift_der, shdur_der
   double precision, dimension(:,:), allocatable :: hpxir_store,hpetar_store,hpgammar_store
 
+  !-----------------------------------------------------------------
+  ! GREEN FUNCTION LOCATION paramaters
+  !-----------------------------------------------------------------
+
+  ! File containing the Green function locations to check
+  character(len=MAX_STRING_LEN) :: GF_LOCATIONS_FILE
+
+  ! Green Function number of locations to check
+  integer :: ngf, ngf_local
+
+  ! mesh parameters
+  integer, dimension(:,:,:,:), allocatable :: ibool_GF
+  integer, dimension(:), allocatable :: iglob_cm2gf, ispec_cm2gf, islice_cm2gf
+  integer :: NGLOB_GF
+
+  ! Locations allocatable
+  integer, dimension(:), allocatable :: islice_selected_gf_loc,ispec_selected_gf_loc
+  integer, dimension(:), allocatable :: islice_out_gf_loc,ispec_out_gf_loc
+  integer, dimension(:), allocatable :: islice_num_gf_loc_local
+  integer, dimension(:), allocatable :: islice_unique_gf_loc,ispec_unique_gf_loc
+  integer :: ngf_unique = 0
+  integer :: ngf_unique_local = 0
+
+  ! adjacency vectors for the source inversion
+  integer, dimension(:), allocatable :: xadj_gf, adjncy_gf
+  integer :: num_neighbors_all_gf
+
+  ! Parameters for the source interpolation at the GLL level
+  double precision, dimension(:), allocatable :: xi_gf_loc,eta_gf_loc,gamma_gf_loc
+  double precision, dimension(:,:,:), allocatable :: nu_gf_loc
+  double precision, allocatable, dimension(:) :: gf_loc_lat,gf_loc_lon,gf_loc_depth
+  double precision :: gf_final_distance_max
+
+  ! Final number of elements with Green Functions
+  integer :: nel_gf,nel_gf_local
+
+
 
   !-----------------------------------------------------------------
   ! seismograms
@@ -447,6 +484,7 @@ module specfem_par
   !-----------------------------------------------------------------
   ! adios file handle
   integer(kind=8) :: current_adios_handle
+  logical :: GREEN_FUNCTION_ADIOS_FILE_NOT_INITIALIZED = .true.
 
   !-----------------------------------------------------------------
   ! ASDF

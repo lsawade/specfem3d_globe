@@ -180,6 +180,7 @@
 
       close(IOUT)
     endif
+
   endif
 
   end subroutine save_forward_arrays
