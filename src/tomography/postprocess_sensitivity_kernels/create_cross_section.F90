@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -55,6 +55,8 @@
 
   program cross_section
 
+  use constants, only: myrank
+
   use constants, only: SIZE_INTEGER, &
     TWO_PI,R_UNIT_SPHERE, &
     NGNOD,CUSTOM_REAL,NGLLX,NGLLY,NGLLZ, &
@@ -62,7 +64,7 @@
     IIN,IOUT,MAX_STRING_LEN, &
     RADIANS_TO_DEGREES,SMALLVAL
 
-  use shared_parameters, only: R_PLANET_KM
+  use shared_parameters, only: R_PLANET_KM,LOCAL_PATH
 
   use postprocess_par, only: MAX_KERNEL_NAMES, &
     NCHUNKS_VAL,NPROC_XI_VAL,NPROC_ETA_VAL,NPROCTOT_VAL,NEX_XI_VAL, &
@@ -124,8 +126,8 @@
   character(len=MAX_STRING_LEN) :: m_file,filename
   character(len=MAX_STRING_LEN) :: solver_file
 
-  ! MPI parameters
-  integer :: sizeprocs,myrank
+  ! MPI processes
+  integer :: sizeprocs
 
   ! nodes search
   integer :: inodes
@@ -153,7 +155,7 @@
   ! cross-section infos
   integer :: section_type
   integer :: nsection_params
-  character(len=MAX_STRING_LEN),dimension(MAX_KERNEL_NAMES) :: param_args
+  character(len=MAX_STRING_LEN),dimension(:),allocatable :: param_args
 
   ! depth with respect to with topography
   logical :: TOPOGRAPHY
@@ -173,19 +175,6 @@
   call world_size(sizeprocs)
   call world_rank(myrank)
 
-  ! checks number of processes
-  ! note: must run with same number of process as new mesh was created
-  if (sizeprocs /= NPROCTOT_VAL) then
-    ! usage info
-    if (myrank == 0) then
-      print *, "this program must be executed in parallel with NPROCTOT_VAL = ",NPROCTOT_VAL,"processes"
-      print *, "Invalid number of processes used: ", sizeprocs, " procs"
-      print *
-      print *, "Please run: mpirun -np ",NPROCTOT_VAL," ./bin/xcreate_cross_section .."
-    endif
-    call abort_mpi()
-  endif
-
   ! checks program arguments
   if (myrank == 0) then
     do i = 1,8
@@ -195,7 +184,7 @@
         if (myrank == 0) then
           print *
           print *,' Usage: xcreate_cross_section param section-param mesh-dir/ model-dir/ output-dir/ ' // &
-                  'topoography-flag ellipticity-flag'
+                  'topography-flag ellipticity-flag'
           print *
           print *,' with'
           print *,'   param         - model parameter name (e.g. vpv)'
@@ -216,7 +205,7 @@
           print *,'   model-dir/    - directoy which holds model files (e.g. proc***_vpv.bin)'
           print *,'   output-dir/   - output directory with topology files (e.g. proc***_solver_data.bin)'
           print *
-          print *,'   topoography-flag - depth will be taken with respect to surface topography (0 == off / 1 == on);'
+          print *,'   topography-flag  - depth will be taken with respect to surface topography (0 == off / 1 == on);'
           print *,'                      if no topography is used, then depth is with respect to sea-level'
           print *,'   ellipticity-flag - depth will consider Earth ellipticity (0 == off / 1 == on);'
           print *,'                      if no ellipticity is used, Earth shape is assumed to be perfectly spherical'
@@ -227,6 +216,11 @@
     enddo
   endif
   call synchronize_all()
+
+  ! allocates arrays
+  allocate(param_args(MAX_KERNEL_NAMES),stat=ier)
+  if (ier /= 0) stop 'Error allocating param_args array'
+  param_args(:) = ''
 
   ! initializes cross section type
   section_type = 0
@@ -326,18 +320,52 @@
       stop 'Error cross-section type invalid'
     endif
     print *
+    print *,'model parameter: ',trim(fname)
+    print *
+    print *,'  mesh directory: ',trim(dir_topo)
+    print *,' model directory: ',trim(input_model_dir)
+    print *,'output directory: ',trim(output_dir)
+    print *
+  endif
+
+  ! reads mesh parameters
+  if (myrank == 0) then
+    ! reads mesh_parameters.bin file from input1dir/
+    LOCAL_PATH = dir_topo
+    call read_mesh_parameters()
+  endif
+  ! broadcast parameters to all processes
+  call bcast_mesh_parameters()
+
+  ! user output
+  if (myrank == 0) then
+    print *,'mesh parameters (from mesh directory):'
+    print *,'  NSPEC_CRUST_MANTLE = ',NSPEC_CRUST_MANTLE
+    print *,'  NPROCTOT           = ',NPROCTOT_VAL
+    print *
+  endif
+
+  ! checks number of processes
+  ! note: must run with same number of process as new mesh was created
+  if (sizeprocs /= NPROCTOT_VAL) then
+    ! usage info
+    if (myrank == 0) then
+      print *, "this program must be executed in parallel with NPROCTOT_VAL = ",NPROCTOT_VAL,"processes"
+      print *, "Invalid number of processes used: ", sizeprocs, " procs"
+      print *
+      print *, "Please run: mpirun -np ",NPROCTOT_VAL," ./bin/xcreate_cross_section .."
+    endif
+    call abort_mpi()
+  endif
+
+  ! console output
+  if (myrank == 0) then
     print *,'mesh:  '
     print *,'  processors = ',NPROCTOT_VAL
     print *,'  nproc_eta / nproc_xi = ',NPROC_ETA_VAL,NPROC_XI_VAL
     print *,'  nex        = ',NEX_XI_VAL
     print *,'  nspec      = ',NSPEC_CRUST_MANTLE
     print *,'  nglob      = ',NGLOB_CRUST_MANTLE
-    print *
-    print *,'model parameter: ',trim(fname)
-    print *
-    print *,'  mesh directory: ',trim(dir_topo)
-    print *,' model directory: ',trim(input_model_dir)
-    print *,'output directory: ',trim(output_dir)
     print *
     print *,'array size:'
     ! array size in bytes (note: the multiplication is split into two line to avoid integer arithmetic overflow)
@@ -689,7 +717,7 @@
     print *
   endif
 
-  ! collects best points on master
+  ! collects best points on main proc
   call collect_closest_point_values(myrank,NPROCTOT_VAL,nglob_target,model2,model_distance2)
 
   ! statistics
@@ -708,7 +736,7 @@
   endif
   call synchronize_all()
 
-  ! master process only
+  ! main process only
   if (myrank == 0) then
     ! allocates arrays for statistics
     allocate(model_diff(nglob_target), &
@@ -770,7 +798,7 @@
 ! creates point locations of horizontal cross-section points
 
   use constants, only: CUSTOM_REAL,NR_DENSITY,R_UNIT_SPHERE
-  use shared_parameters, only: ONE_CRUST,R_PLANET,NX_BATHY,NY_BATHY
+  use shared_parameters, only: R_PLANET,NX_BATHY,NY_BATHY
 
   implicit none
 
@@ -824,7 +852,7 @@
   ! make ellipticity
   if (ELLIPTICITY) then
     ! splines used for locating exact positions
-    call make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2,ONE_CRUST)
+    call make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2)
   endif
 
   ! read topography and bathymetry file
@@ -836,7 +864,7 @@
     ! initializes
     ibathy_topo(:,:) = 0
 
-    ! master reads file
+    ! main reads file
     if (myrank == 0) then
       ! user output
       print *,'topography:'
@@ -847,7 +875,7 @@
       print *,"  topography/bathymetry: min/max = ",minval(ibathy_topo),maxval(ibathy_topo)
     endif
 
-    ! broadcast the information read on the master to the nodes
+    ! broadcast the information read on the main node to all the nodes
     call bcast_all_i(ibathy_topo,NX_BATHY*NY_BATHY)
   endif
   call synchronize_all()
@@ -954,7 +982,7 @@
     DEGREES_TO_RADIANS,RADIANS_TO_DEGREES, &
     PI_OVER_TWO,TWO_PI,SMALLVAL
 
-  use shared_parameters, only: ONE_CRUST,R_PLANET,NX_BATHY,NY_BATHY
+  use shared_parameters, only: R_PLANET,NX_BATHY,NY_BATHY
 
   implicit none
 
@@ -1025,7 +1053,7 @@
   ! make ellipticity
   if (ELLIPTICITY) then
     ! splines used for locating exact positions
-    call make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2,ONE_CRUST)
+    call make_ellipticity(nspl,rspl,ellipicity_spline,ellipicity_spline2)
   endif
 
   ! read topography and bathymetry file
@@ -1037,7 +1065,7 @@
     ! initializes
     ibathy_topo(:,:) = 0
 
-    ! master reads file
+    ! main reads file
     if (myrank == 0) then
       ! user output
       print *,'topography:'
@@ -1048,7 +1076,7 @@
       print *,"  topography/bathymetry: min/max = ",minval(ibathy_topo),maxval(ibathy_topo)
     endif
 
-    ! broadcast the information read on the master to the nodes
+    ! broadcast the information read on the main node to all the nodes
     call bcast_all_i(ibathy_topo,NX_BATHY*NY_BATHY)
   endif
   call synchronize_all()
@@ -1217,11 +1245,11 @@
 
   integer, parameter :: itag = 11
 
-  ! master gets point distances
+  ! main gets point distances
   if (myrank == 0) then
-    ! master process collects info
+    ! main process collects info
     do iproc = 1,nproc - 1
-      ! gets buffer arrays from slave
+      ! gets buffer arrays from secondary procs
       call recv_cr(buffer, 2 * nglob_target, iproc, itag)
 
       ! checks if closer point found
@@ -1247,7 +1275,7 @@
       buffer(2,iglob) = model2(iglob)
     enddo
 
-    ! slave process sends its (distance,value) buffer to master
+    ! secondary process sends its (distance,value) buffer to main proc
     call send_cr(buffer, 2 * nglob_target, 0, itag)
   endif
 
@@ -1376,7 +1404,7 @@
   if (myrank == 0) then
     print *,'  using search radius: ',sngl(r_search * R_PLANET_KM),'(km)'
     print *
-    print *,'  points contained in master slice: ',nslice_points,' out of ',nglob_target
+    print *,'  points contained in main slice: ',nslice_points,' out of ',nglob_target
     print *
   endif
 
@@ -2155,7 +2183,7 @@
   ! factor
   FACTOR_TAN = 1.d0 / ONE_MINUS_F_SQUARED
 
-  ! note: only master rank is computing this on collected array values
+  ! note: only main rank is computing this on collected array values
   !
   ! user output
   print *,'cross-section statistics:'

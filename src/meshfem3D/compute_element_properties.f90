@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -32,18 +32,20 @@
                                         rmin,rmax, &
                                         xigll,yigll,zigll,ispec_is_tiso)
 
-  use constants, only: NGLLX,NGLLY,NGLLZ,NGNOD,CUSTOM_REAL, &
+  use constants, only: myrank,NGLLX,NGLLY,NGLLZ,NGNOD,CUSTOM_REAL, &
     IFLAG_220_80,IFLAG_670_220,IFLAG_80_MOHO,IFLAG_MANTLE_NORMAL,IFLAG_CRUST, &
     IFLAG_OUTER_CORE_NORMAL,IFLAG_IN_FICTITIOUS_CUBE, &
     IREGION_CRUST_MANTLE,SUPPRESS_INTERNAL_TOPOGRAPHY,USE_GLL
 
-  use meshfem3D_models_par, only: &
+  use shared_parameters, only: REGIONAL_MESH_CUTOFF,USE_LOCAL_MESH
+
+  use meshfem_models_par, only: &
     TOPOGRAPHY,ELLIPTICITY,CRUSTAL,CASE_3D, &
     THREE_D_MODEL,THREE_D_MODEL_MANTLE_SH,THREE_D_MODEL_S29EA, &
     THREE_D_MODEL_S362ANI,THREE_D_MODEL_S362WMANI,THREE_D_MODEL_S362ANI_PREM, &
+    THREE_D_MODEL_BKMNS_GLAD,THREE_D_MODEL_SPIRAL, &
     ibathy_topo,nspl,rspl,ellipicity_spline,ellipicity_spline2, &
     REGIONAL_MOHO_MESH
-
 
   use regions_mesh_par2, only: &
     xixstore,xiystore,xizstore, &
@@ -55,22 +57,22 @@
   ! correct number of spectral elements in each block depending on chunk type
   integer,intent(in) :: ispec,nspec
 
-! arrays with the mesh in double precision
+  ! arrays with the mesh in double precision
   double precision,dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(inout) :: xstore,ystore,zstore
 
-! code for the four regions of the mesh
+  ! code for the four regions of the mesh
   integer,intent(in) :: iregion_code
 
-! meshing phase
+  ! meshing phase
   integer,intent(in) :: ipass
 
-! 3D shape functions and their derivatives
+  ! 3D shape functions and their derivatives
   double precision, dimension(NGNOD,NGLLX,NGLLY,NGLLZ),intent(in) :: shape3D
 
   double precision, dimension(NGNOD),intent(inout) :: xelm,yelm,zelm
 
-! parameters needed to store the radii of the grid points
-! in the spherically symmetric Earth
+  ! parameters needed to store the radii of the grid points
+  ! in the spherically symmetric Earth
   integer,dimension(nspec),intent(in) :: idoubling
   double precision,intent(in) :: rmin,rmax
 
@@ -87,6 +89,9 @@
   ! flag for transverse isotropic elements
   logical :: elem_is_tiso
 
+  !debug
+  logical, parameter :: DEBUG_OUTPUT = .false.
+
 ! note: at this point, the mesh is still perfectly spherical
 
   ! flag if element completely in crust (all corners above moho)
@@ -94,10 +99,15 @@
   ! flag if element completely in mantle (all corners below moho)
   elem_in_mantle = .false.
 
+  !debug
+  if (DEBUG_OUTPUT) then
+    if (myrank == 0) print *,'element ',ispec,' properties:'
+  endif
+
   ! add topography of the Moho *before* adding the 3D crustal velocity model so that the stretched
   ! mesh gets assigned the right model values
   if (iregion_code == IREGION_CRUST_MANTLE) then
-    if (CRUSTAL .and. CASE_3D) then
+    if (CRUSTAL .and. CASE_3D .and. .not. (REGIONAL_MESH_CUTOFF .and. USE_LOCAL_MESH)) then
       ! 3D crustal models
       if (idoubling(ispec) == IFLAG_CRUST &
         .or. idoubling(ispec) == IFLAG_220_80 &
@@ -127,7 +137,10 @@
         elem_in_mantle = .true.
       endif
     endif
-
+    !debug
+    if (DEBUG_OUTPUT) then
+      if (myrank == 0) print *,'  in crust',elem_in_crust,' in mantle ',elem_in_mantle
+    endif
   endif ! IREGION_CRUST_MANTLE
 
   ! sets element tiso flag
@@ -136,9 +149,43 @@
   ! stores as element flags
   ispec_is_tiso(ispec) = elem_is_tiso
 
+  !debug
+  if (DEBUG_OUTPUT) then
+    if (myrank == 0) print *,'  tiso flag ',elem_is_tiso
+  endif
+
   ! interpolates and stores GLL point locations
   call compute_element_GLL_locations(xelm,yelm,zelm,ispec,nspec, &
                                      xstore,ystore,zstore,shape3D)
+
+  !debug
+  if (DEBUG_OUTPUT) then
+    if (myrank == 0) print *,'  locations done'
+  endif
+
+  ! block-mantle-spherical-harmonics expansion of GLAD model
+  ! the top block model assumes point locations with actual topography
+  if (THREE_D_MODEL == THREE_D_MODEL_BKMNS_GLAD) then
+    ! adds surface topography
+    if (TOPOGRAPHY) then
+      if (idoubling(ispec) == IFLAG_CRUST .or. &
+          idoubling(ispec) == IFLAG_220_80 .or. &
+          idoubling(ispec) == IFLAG_80_MOHO) then
+        ! stretches mesh between surface and R220 accordingly
+        if (USE_GLL) then
+          ! stretches every GLL point accordingly
+          call add_topography_gll(xstore,ystore,zstore,ispec,nspec,ibathy_topo)
+        else
+          ! stretches anchor points only, interpolates GLL points later on
+          call add_topography(xelm,yelm,zelm,ibathy_topo)
+          ! re-interpolates GLL point locations
+          ! needed for get_model(..) routine to consider stretched locations in xstore,.. arrays
+          call compute_element_GLL_locations(xelm,yelm,zelm,ispec,nspec, &
+                                             xstore,ystore,zstore,shape3D)
+        endif
+      endif
+    endif
+  endif
 
   ! computes velocity/density/... values for the chosen Earth model
   ! (only needed for second meshing phase)
@@ -147,7 +194,13 @@
                    xstore,ystore,zstore, &
                    rmin,rmax, &
                    elem_in_crust,elem_in_mantle)
+
+    !debug
+    if (DEBUG_OUTPUT) then
+      if (myrank == 0) print *,'  model properties done'
+    endif
   endif
+
 
   ! either use GLL points or anchor points to capture TOPOGRAPHY and ELLIPTICITY
   !
@@ -156,7 +209,9 @@
   !           problems with the Jacobian. using the anchors is therefore more robust.
 
   ! adds surface topography
-  if (TOPOGRAPHY) then
+  ! (by default we add topography after setting model values on the GLL points, assuming that the models provided are defined
+  !  for spherical locations and crustal structures give with depth, not absolute position or altitude above sea-level)
+  if (TOPOGRAPHY .and. .not. THREE_D_MODEL == THREE_D_MODEL_BKMNS_GLAD) then
     if (idoubling(ispec) == IFLAG_CRUST .or. &
         idoubling(ispec) == IFLAG_220_80 .or. &
         idoubling(ispec) == IFLAG_80_MOHO) then
@@ -169,13 +224,22 @@
         call add_topography(xelm,yelm,zelm,ibathy_topo)
       endif
     endif
+
+    !debug
+    if (DEBUG_OUTPUT) then
+      if (myrank == 0) print *,'  topography done'
+    endif
   endif
+
 
   ! adds topography on 410 km and 650 km discontinuity in model S362ANI
   if (.not. SUPPRESS_INTERNAL_TOPOGRAPHY) then
     ! s362ani internal topography
-    if (THREE_D_MODEL == THREE_D_MODEL_S362ANI .or. THREE_D_MODEL == THREE_D_MODEL_S362WMANI &
-      .or. THREE_D_MODEL == THREE_D_MODEL_S362ANI_PREM .or. THREE_D_MODEL == THREE_D_MODEL_S29EA) then
+    if (THREE_D_MODEL == THREE_D_MODEL_S362ANI .or. &
+        THREE_D_MODEL == THREE_D_MODEL_S362WMANI .or. &
+        THREE_D_MODEL == THREE_D_MODEL_S362ANI_PREM .or. &
+        THREE_D_MODEL == THREE_D_MODEL_S29EA .or. &
+        THREE_D_MODEL == THREE_D_MODEL_BKMNS_GLAD) then
       ! stretching between 220 and 770
       if (idoubling(ispec) == IFLAG_670_220 .or. &
           idoubling(ispec) == IFLAG_MANTLE_NORMAL) then
@@ -195,6 +259,7 @@
       ! stretching between 220 and 770
       if (idoubling(ispec) == IFLAG_670_220 .or. &
           idoubling(ispec) == IFLAG_MANTLE_NORMAL) then
+        ! stretches anchor points only, interpolates GLL points later on
         call add_topography_sh_mantle(xelm,yelm,zelm)
       endif
 
@@ -202,7 +267,19 @@
       ! stretching lower mantle/outer core
       if (idoubling(ispec) == IFLAG_MANTLE_NORMAL .or. &
           idoubling(ispec) == IFLAG_OUTER_CORE_NORMAL) then
+        ! stretches anchor points only, interpolates GLL points later on
         call add_topography_sh_cmb(xelm,yelm,zelm)
+      endif
+    endif
+
+    ! SPiral model
+    if (THREE_D_MODEL == THREE_D_MODEL_SPIRAL) then
+      ! 410/650 topography
+      ! stretching between 220 and 770
+      if (idoubling(ispec) == IFLAG_670_220 .or. &
+          idoubling(ispec) == IFLAG_MANTLE_NORMAL) then
+        ! stretches anchor points only, interpolates GLL points later on
+        call add_topography_mantle_spiral(xelm,yelm,zelm)
       endif
     endif
 
@@ -220,6 +297,11 @@
     ! .or. idoubling(ispec)==IFLAG_BOTTOM_CENTRAL_CUBE .or. idoubling(ispec)==IFLAG_TOP_CENTRAL_CUBE &
     ! .or. idoubling(ispec)==IFLAG_IN_FICTITIOUS_CUBE)) &
     !           call add_topography_icb(xelm,yelm,zelm)
+
+    !debug
+    if (DEBUG_OUTPUT) then
+      if (myrank == 0) print *,'  internal topography done'
+    endif
   endif
 
   ! make the Earth elliptical
@@ -232,6 +314,11 @@
       ! make the Earth's ellipticity, use element anchor points
       call get_ellipticity(xelm,yelm,zelm,nspl,rspl,ellipicity_spline,ellipicity_spline2)
     endif
+
+    !debug
+    if (DEBUG_OUTPUT) then
+      if (myrank == 0) print *,'  ellipticity done'
+    endif
   endif
 
   ! re-interpolates and creates the GLL point locations since the anchor points might have moved
@@ -242,6 +329,11 @@
   if (.not. USE_GLL) then
     call compute_element_GLL_locations(xelm,yelm,zelm,ispec,nspec, &
                                        xstore,ystore,zstore,shape3D)
+
+    !debug
+    if (DEBUG_OUTPUT) then
+      if (myrank == 0) print *,'  GLL locations done'
+    endif
   endif
 
   ! updates Jacobian
@@ -253,6 +345,11 @@
                                  xixstore,xiystore,xizstore, &
                                  etaxstore,etaystore,etazstore, &
                                  gammaxstore,gammaystore,gammazstore)
+    endif
+
+    !debug
+    if (DEBUG_OUTPUT) then
+      if (myrank == 0) print *,'  jacobian done'
     endif
   endif
 
@@ -322,7 +419,7 @@
     REFERENCE_MODEL_1DREF,REFERENCE_MODEL_1DREF, &
     THREE_D_MODEL_S362WMANI,THREE_D_MODEL_SGLOBE
 
-  use meshfem3D_models_par, only: &
+  use meshfem_models_par, only: &
     TRANSVERSE_ISOTROPY,USE_FULL_TISO_MANTLE,REFERENCE_1D_MODEL,THREE_D_MODEL
 
   implicit none
@@ -491,5 +588,8 @@
     continue
 
   end select
+
+  !debug
+  !if (myrank == 0) print *,'  element ',ispec,' tiso flag: ',elem_is_tiso
 
   end subroutine compute_element_tiso_flag

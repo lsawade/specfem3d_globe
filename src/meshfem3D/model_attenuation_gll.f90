@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -109,7 +109,7 @@
     write(IMAIN,*) 'model Qmu GLL:'
     call flush_IMAIN()
   endif
-  call print_min_max_all(MGLL_QMU_V%qmu_new,"qmu new")
+  call print_gll_min_max_all(MGLL_QMU_V%nspec,MGLL_QMU_V%qmu_new,"qmu new")
 
   call synchronize_all()
 

@@ -1,8 +1,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -180,11 +180,12 @@ achieved with 16 KB buffers: */
 //#define MAX_B 8192 // 8 KB
 
 // absorbing files: instead of passing file descriptor, we use the array index
-//                          first 0 - 3 indices for crust mantle files
-//                          last 4 - 8 indices for outer core files
-//                          index 9 - for NOISE_TOMOGRAPHY (SURFACE_MOVIE)
+//                          first 0  - 3 indices for crust mantle files
+//                          last 4   - 8 indices for outer core files
+//                          index 9  - for NOISE_TOMOGRAPHY (SURFACE_MOVIE)
 //                          index 10 - for topography file
-#define ABS_FILEID 11
+//                          index 11 - for model files
+#define ABS_FILEID 12
 
 // file points
 static FILE * fp_abs[ABS_FILEID];
@@ -288,6 +289,9 @@ void close_file_abs_fbin(int * fid) {
   fclose(fp_abs[*fid]);
 
   free(work_buffer[*fid]);
+
+  fp_abs[*fid] = NULL;
+  work_buffer[*fid] = NULL;
 }
 
 /* ----------------------------------------------------------------------------- */
@@ -618,6 +622,10 @@ void close_file_abs_map(int * fid) {
   /* Un-mmaping doesn't close the file, so we still need to do that.
    */
   close(map_fd_abs[*fid]);
+
+  map_abs[*fid] = NULL;
+  map_fd_abs[*fid] = 0;
+  filesize_abs[*fid] = 0;
 }
 
 /* ----------------------------------------------------------------------------- */
@@ -753,7 +761,7 @@ FC_FUNC_(read_abs,READ_ABS)(int *fid, char *buffer, int *length , int *index)
 }
 
 void
-FC_FUNC_(read_abs_shifted,READ_ABS)(int *fid, char *buffer, int *length , int *index, int *shift)
+FC_FUNC_(read_abs_shifted,READ_ABS_SHIFTED)(int *fid, char *buffer, int *length , int *index, int *shift)
 {
 #ifdef USE_MAP_FUNCTION
   read_abs_map(fid,buffer,length,index,shift);
@@ -761,6 +769,22 @@ FC_FUNC_(read_abs_shifted,READ_ABS)(int *fid, char *buffer, int *length , int *i
   read_abs_fbin(fid,buffer,length,index,shift);
 #endif
 }
+
+// extra *_int function to read in real values
+// note: MacOS compilation will complain if call read_abs_shifted(..) with an integer and real argument in same file...
+//       thus, we add here this extra *_int function which can use the same function calls with a char* buffer argument as above.
+//
+//       by default, the call real_abs_shifted(..) in model_topo_bathy.f90 uses integer values to read in for topo/bathy values of integer*2
+void
+FC_FUNC_(read_abs_shifted_int,READ_ABS_SHIFTED_INT)(int *fid, char *buffer, int *length , int *index, int *shift)
+{
+#ifdef USE_MAP_FUNCTION
+  read_abs_map(fid,buffer,length,index,shift);
+#else
+  read_abs_fbin(fid,buffer,length,index,shift);
+#endif
+}
+
 
 /* ----------------------------------------------------------------------------- */
 

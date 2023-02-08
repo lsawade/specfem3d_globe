@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -28,7 +28,7 @@
 
   subroutine setup_MPI_interfaces(iregion_code)
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     INCLUDE_CENTRAL_CUBE,myrank,NUMFACES_SHARED
 
   use MPI_interfaces_par
@@ -92,7 +92,7 @@
 
   ! frees arrays not needed any further
   deallocate(iprocfrom_faces,iprocto_faces,imsg_type)
-  deallocate(iproc_master_corners,iproc_worker1_corners,iproc_worker2_corners)
+  deallocate(iproc_main_corners,iproc_worker1_corners,iproc_worker2_corners)
   deallocate(buffer_send_chunkcorn_scalar,buffer_recv_chunkcorn_scalar)
   deallocate(buffer_send_chunkcorn_vector,buffer_recv_chunkcorn_vector)
 
@@ -129,13 +129,13 @@
   subroutine setup_MPI_interfaces_cm(MAX_NEIGHBORS,my_neighbors,nibool_neighbors, &
                                      max_nibool,ibool_neighbors)
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     myrank,iproc_xi,iproc_eta,ichunk,addressing,INCLUDE_CENTRAL_CUBE, &
     NPROC_XI,NPROC_ETA,NPROCTOT, &
     NGLOB1D_RADIAL,NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX,NCHUNKS, &
     OUTPUT_FILES,MAX_STRING_LEN
 
-  use meshfem3D_par, only: ibool,is_on_a_slice_edge,xstore_glob,ystore_glob,zstore_glob
+  use meshfem_par, only: ibool,is_on_a_slice_edge,xstore_glob,ystore_glob,zstore_glob
 
   use MPI_interfaces_par
   use MPI_crust_mantle_par
@@ -182,7 +182,7 @@
                                    npoin2D_faces_crust_mantle,npoin2D_xi_crust_mantle,npoin2D_eta_crust_mantle, &
                                    iboolfaces_crust_mantle,iboolcorner_crust_mantle, &
                                    iprocfrom_faces,iprocto_faces,imsg_type, &
-                                   iproc_master_corners,iproc_worker1_corners,iproc_worker2_corners, &
+                                   iproc_main_corners,iproc_worker1_corners,iproc_worker2_corners, &
                                    buffer_send_faces_scalar,buffer_received_faces_scalar,npoin2D_max_all_CM_IC, &
                                    buffer_send_chunkcorn_scalar,buffer_recv_chunkcorn_scalar, &
                                    NUMMSGS_FACES,NUM_MSG_TYPES,NCORNERSCHUNKS, &
@@ -200,12 +200,12 @@
 
     ! determines neighbor rank for shared faces
     call get_MPI_interfaces(myrank,NGLOB_CRUST_MANTLE,NSPEC_CRUST_MANTLE, &
-                              test_flag,my_neighbors,nibool_neighbors,ibool_neighbors, &
-                              num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                              max_nibool,MAX_NEIGHBORS, &
-                              ibool,is_on_a_slice_edge, &
-                              IREGION_CRUST_MANTLE,add_central_cube,dummy_i,INCLUDE_CENTRAL_CUBE, &
-                              xstore_glob,ystore_glob,zstore_glob,NPROCTOT)
+                            test_flag,my_neighbors,nibool_neighbors,ibool_neighbors, &
+                            num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                            max_nibool,MAX_NEIGHBORS, &
+                            ibool,is_on_a_slice_edge, &
+                            IREGION_CRUST_MANTLE,add_central_cube,dummy_i,INCLUDE_CENTRAL_CUBE, &
+                            xstore_glob,ystore_glob,zstore_glob,NPROCTOT)
 
     deallocate(test_flag)
     deallocate(dummy_i)
@@ -257,9 +257,9 @@
 
   ! checks addressing
   call test_MPI_neighbors(IREGION_CRUST_MANTLE, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           my_neighbors_crust_mantle,nibool_interfaces_crust_mantle, &
-                           ibool_interfaces_crust_mantle)
+                          num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                          my_neighbors_crust_mantle,nibool_interfaces_crust_mantle, &
+                          ibool_interfaces_crust_mantle)
 
   ! checks with assembly of test fields
   call test_MPI_cm()
@@ -273,13 +273,13 @@
   subroutine setup_MPI_interfaces_oc(MAX_NEIGHBORS,my_neighbors,nibool_neighbors, &
                                      max_nibool,ibool_neighbors)
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     myrank,iproc_xi,iproc_eta,ichunk,addressing,INCLUDE_CENTRAL_CUBE, &
     NPROC_XI,NPROC_ETA,NPROCTOT, &
     NGLOB1D_RADIAL,NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX,NCHUNKS, &
     OUTPUT_FILES,MAX_STRING_LEN
 
-  use meshfem3D_par, only: ibool,is_on_a_slice_edge,xstore_glob,ystore_glob,zstore_glob
+  use meshfem_par, only: ibool,is_on_a_slice_edge,xstore_glob,ystore_glob,zstore_glob
 
   use MPI_interfaces_par
   use MPI_outer_core_par
@@ -311,7 +311,7 @@
     call flush_IMAIN()
   endif
 
-  if (NPROCTOT > 1) then
+  if (NPROCTOT > 1 .and. NSPEC_OUTER_CORE > 0) then
     allocate(test_flag(NGLOB_OUTER_CORE),stat=ier)
     if (ier /= 0 ) call exit_mpi(myrank,'Error allocating test_flag outer core')
 
@@ -326,7 +326,7 @@
                                    npoin2D_faces_outer_core,npoin2D_xi_outer_core,npoin2D_eta_outer_core, &
                                    iboolfaces_outer_core,iboolcorner_outer_core, &
                                    iprocfrom_faces,iprocto_faces,imsg_type, &
-                                   iproc_master_corners,iproc_worker1_corners,iproc_worker2_corners, &
+                                   iproc_main_corners,iproc_worker1_corners,iproc_worker2_corners, &
                                    buffer_send_faces_scalar,buffer_received_faces_scalar,npoin2D_max_all_CM_IC, &
                                    buffer_send_chunkcorn_scalar,buffer_recv_chunkcorn_scalar, &
                                    NUMMSGS_FACES,NUM_MSG_TYPES,NCORNERSCHUNKS, &
@@ -400,9 +400,9 @@
 
   ! checks addressing
   call test_MPI_neighbors(IREGION_OUTER_CORE, &
-                              num_interfaces_outer_core,max_nibool_interfaces_oc, &
-                              my_neighbors_outer_core,nibool_interfaces_outer_core, &
-                              ibool_interfaces_outer_core)
+                          num_interfaces_outer_core,max_nibool_interfaces_oc, &
+                          my_neighbors_outer_core,nibool_interfaces_outer_core, &
+                          ibool_interfaces_outer_core)
 
   ! checks with assembly of test fields
   call test_MPI_oc()
@@ -416,13 +416,13 @@
   subroutine setup_MPI_interfaces_ic(MAX_NEIGHBORS,my_neighbors,nibool_neighbors, &
                                      max_nibool,ibool_neighbors)
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     myrank,iproc_xi,iproc_eta,ichunk,addressing,INCLUDE_CENTRAL_CUBE, &
     NPROC_XI,NPROC_ETA,NPROCTOT, &
     NGLOB1D_RADIAL,NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX,NCHUNKS, &
     OUTPUT_FILES,IFLAG_IN_FICTITIOUS_CUBE,NGLLX,NGLLY,NGLLZ,NSPEC2D_BOTTOM,MAX_STRING_LEN
 
-  use meshfem3D_par, only: ibool,idoubling,is_on_a_slice_edge,xstore_glob,ystore_glob,zstore_glob
+  use meshfem_par, only: ibool,idoubling,is_on_a_slice_edge,xstore_glob,ystore_glob,zstore_glob
 
   use MPI_interfaces_par
   use MPI_inner_core_par
@@ -454,7 +454,7 @@
     call flush_IMAIN()
   endif
 
-  if (NPROCTOT > 1) then
+  if (NPROCTOT > 1 .and. NSPEC_INNER_CORE > 0) then
     allocate(test_flag(NGLOB_INNER_CORE),stat=ier)
     if (ier /= 0 ) call exit_mpi(myrank,'Error allocating test_flag inner core')
 
@@ -482,7 +482,7 @@
                                    npoin2D_faces_inner_core,npoin2D_xi_inner_core,npoin2D_eta_inner_core, &
                                    iboolfaces_inner_core,iboolcorner_inner_core, &
                                    iprocfrom_faces,iprocto_faces,imsg_type, &
-                                   iproc_master_corners,iproc_worker1_corners,iproc_worker2_corners, &
+                                   iproc_main_corners,iproc_worker1_corners,iproc_worker2_corners, &
                                    buffer_send_faces_scalar,buffer_received_faces_scalar,npoin2D_max_all_CM_IC, &
                                    buffer_send_chunkcorn_scalar,buffer_recv_chunkcorn_scalar, &
                                    NUMMSGS_FACES,NUM_MSG_TYPES,NCORNERSCHUNKS, &
@@ -539,24 +539,24 @@
     !    ! gets new interfaces for inner_core without central cube yet
     !    ! determines neighbor rank for shared faces
     !    call get_MPI_interfaces(myrank,NGLOB_INNER_CORE,NSPEC_INNER_CORE, &
-    !                          test_flag,my_neighbors,nibool_neighbors,ibool_neighbors, &
-    !                          num_interfaces_inner_core,max_nibool_interfaces_ic, &
-    !                          max_nibool,MAX_NEIGHBORS, &
-    !                          ibool,is_on_a_slice_edge, &
-    !                          IREGION_INNER_CORE,add_central_cube,idoubling,INCLUDE_CENTRAL_CUBE, &
-    !                          xstore_glob,ystore_glob,zstore_glob,NPROCTOT)
+    !                            test_flag,my_neighbors,nibool_neighbors,ibool_neighbors, &
+    !                            num_interfaces_inner_core,max_nibool_interfaces_ic, &
+    !                            max_nibool,MAX_NEIGHBORS, &
+    !                            ibool,is_on_a_slice_edge, &
+    !                            IREGION_INNER_CORE,add_central_cube,idoubling,INCLUDE_CENTRAL_CUBE, &
+    !                            xstore_glob,ystore_glob,zstore_glob,NPROCTOT)
     !  endif
     !  call synchronize_all()
     !enddo
 
     ! determines neighbor rank for shared faces
     call get_MPI_interfaces(myrank,NGLOB_INNER_CORE,NSPEC_INNER_CORE, &
-                          test_flag,my_neighbors,nibool_neighbors,ibool_neighbors, &
-                          num_interfaces_inner_core,max_nibool_interfaces_ic, &
-                          max_nibool,MAX_NEIGHBORS, &
-                          ibool,is_on_a_slice_edge, &
-                          IREGION_INNER_CORE,add_central_cube,idoubling,INCLUDE_CENTRAL_CUBE, &
-                          xstore_glob,ystore_glob,zstore_glob,NPROCTOT)
+                            test_flag,my_neighbors,nibool_neighbors,ibool_neighbors, &
+                            num_interfaces_inner_core,max_nibool_interfaces_ic, &
+                            max_nibool,MAX_NEIGHBORS, &
+                            ibool,is_on_a_slice_edge, &
+                            IREGION_INNER_CORE,add_central_cube,idoubling,INCLUDE_CENTRAL_CUBE, &
+                            xstore_glob,ystore_glob,zstore_glob,NPROCTOT)
 
     deallocate(test_flag)
   else
@@ -606,9 +606,9 @@
 
   ! checks addressing
   call test_MPI_neighbors(IREGION_INNER_CORE, &
-                              num_interfaces_inner_core,max_nibool_interfaces_ic, &
-                              my_neighbors_inner_core,nibool_interfaces_inner_core, &
-                              ibool_interfaces_inner_core)
+                          num_interfaces_inner_core,max_nibool_interfaces_ic, &
+                          my_neighbors_inner_core,nibool_interfaces_inner_core, &
+                          ibool_interfaces_inner_core)
 
   ! checks with assembly of test fields
   call test_MPI_ic()

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -39,20 +39,19 @@ contains
 subroutine print_usage_adios()
 
   implicit none
-  print *, 'Usage: '
-  print *, '   xcombine_data slice_list varname var_file mesh_file ' // &
-           'output_dir high/low-resolution region'
+  print *, ' Usage: '
+  print *, '   xcombine_data slice_list varname var_file mesh_file output_dir high/low-resolution region'
   print *
-  print *, '* possible varnames are '
-  print *, '   rho, vp, vs, kappastore, mustore, alpha_kl, beta_kl, etc'
-  print *
-  print *, '   that are stored in the local directory as ' // &
-           'real(kind=CUSTOM_REAL) varname(NGLLX,NGLLY,NGLLZ,NSPEC)  '
-  print *, '   in a datafile var_file.bp'
-  print *
-  print *, '* mesh_files: are used to link variable to the topology (e.g. DATABASES_MPI/solver_data.bp)'
-  print *, '* output_dir: indicates where var_name.vtk will be written'
-  print *, '* give 0 for low resolution and 1 for high resolution'
+  print *, ' with'
+  print *, '   slice_list   - text file containing slice numbers to combine (or use name "all" for all slices)'
+  print *, '   varname      - possible varnames are: '
+  print *, '                    rho, vp, vs, kappastore, mustore, alpha_kl, beta_kl, etc.'
+  print *, '   var_file     - datafile that holds array, as real(kind=CUSTOM_REAL):: varname(NGLLX,NGLLY,NGLLZ,NSPEC),'
+  print *, '                  (e.g. OUTPUT_FILES/kernels.bp)'
+  print *, '   mesh_file    - are used to link variable to the topology (e.g. DATABASES_MPI/solver_data.bp)'
+  print *, '   output_dir   - indicates where var_name.vtk will be written'
+  print *, '   high/low res - give 0 for low resolution and 1 for high resolution'
+  print *, '   region       - (optional) region number, only use 1 == crust/mantle, 2 == outer core, 3 == inner core'
   print *
 
   stop ' Reenter command line options'
@@ -62,28 +61,19 @@ end subroutine print_usage_adios
 !=============================================================================
 !> Interpret command line arguments
 
-subroutine read_args_adios(arg, MAX_NUM_NODES, node_list, num_node, &
-                           var_name, value_file_name, mesh_file_name, &
-                           outdir, ires, irs, ire, NPROCTOT)
+subroutine read_args_adios(arg, var_name, value_file_name, mesh_file_name, slice_list_name, &
+                           outdir, ires, iregion)
 
   use constants, only: IIN,MAX_STRING_LEN
 
   implicit none
   ! Arguments
   character(len=*), intent(in) :: arg(:)
-  integer, intent(in) :: MAX_NUM_NODES
-  integer, intent(out) :: node_list(:)
-  integer, intent(out) :: num_node, ires, irs, ire
+  integer, intent(out) :: ires, iregion
   character(len=*), intent(out) :: var_name, value_file_name, mesh_file_name, &
-                                   outdir
-  integer, intent(in) :: NPROCTOT
-
-  ! Variables
-  character(len=MAX_STRING_LEN) :: sline,slice_list_name
-  integer :: i, ios, njunk, iregion
+                                   outdir, slice_list_name
 
   ! initializes
-  num_node = 0
   iregion = 0
 
   ! gets arguments
@@ -104,44 +94,6 @@ subroutine read_args_adios(arg, MAX_NUM_NODES, node_list, num_node, &
   !debug
   !print *,'debug: read adios: arguments: ',trim(slice_list_name),"|",trim(var_name),"|", &
   !        trim(value_file_name),"|",trim(mesh_file_name),"|",trim(outdir),"|",ires,"|",iregion
-
-  ! check
-  if (iregion > 3 .or. iregion < 0) stop 'Iregion must be = 0,1,2,3'
-
-  ! gets slice list
-  if (trim(slice_list_name) == 'all') then
-    ! combines all slices
-    do i = 0,NPROCTOT-1
-      num_node = num_node + 1
-      if (num_node > MAX_NUM_NODES ) stop 'Error number of slices exceeds MAX_NUM_NODES...'
-      node_list(num_node) = i
-    enddo
-  else
-    ! reads in slices file
-    open(unit = IIN, file = trim(slice_list_name), status = 'unknown',iostat = ios)
-    if (ios /= 0) then
-      print *,'Error opening slice file ',trim(slice_list_name)
-      stop
-    endif
-    do while ( 1 == 1)
-      read(IIN,'(a)',iostat=ios) sline
-      if (ios /= 0) exit
-      read(sline,*,iostat=ios) njunk
-      if (ios /= 0) exit
-      num_node = num_node + 1
-      if (num_node > MAX_NUM_NODES ) stop 'Error number of slices exceeds MAX_NUM_NODES...'
-      node_list(num_node) = njunk
-    enddo
-    close(IIN)
-  endif
-
-  if (iregion == 0) then
-    irs = 1
-    ire = 3
-  else
-    irs = iregion
-    ire = irs
-  endif
 
 end subroutine read_args_adios
 
@@ -310,7 +262,7 @@ subroutine read_values_adios(var_name, iproc, ir, nspec, data)
   ! Parameters
   character(len=*), intent(in) :: var_name
   integer, intent(in) :: iproc, ir, nspec
-  real(kind=CUSTOM_REAL), dimension(:,:,:,:), intent(inout) :: data
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec), intent(inout) :: data
   ! Variables
   integer(kind=8), dimension(1) :: start, count
   integer(kind=8) :: sel
@@ -369,11 +321,13 @@ subroutine read_values_adios(var_name, iproc, ir, nspec, data)
       ! example: alpha_kl_crust_mantle
       data_name = trim(var_name)
     endif
+    print *,'  kernel data name: ',trim(data_name)
   else
     ! for wavespeed name: rho,vp,..
     ! adds region name: var_name = "rho" -> reg1/rho
     write(reg_name,"('reg',i1,'/')") ir
     data_name = trim(reg_name) // trim(var_name)
+    print *,'  data name: ',trim(data_name)
   endif
 
   ! gets data values

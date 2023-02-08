@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -35,7 +35,7 @@
   use constants, only: myrank, &
     NGNOD,R_UNIT_SPHERE, &
     PI_OVER_TWO,RADIANS_TO_DEGREES,TINYVAL,SMALLVAL,ONE,USE_OLD_VERSION_5_1_5_FORMAT, &
-    SUPPRESS_MOHO_STRETCHING,ICRUST_CRUST_SH
+    SUPPRESS_MOHO_STRETCHING,ICRUST_CRUST_SH,ICRUST_SGLOBECRUST
 
   ! Earth
   use constants, only: EARTH_R,EARTH_R_KM
@@ -46,10 +46,10 @@
 
   use shared_parameters, only: PLANET_TYPE,IPLANET_EARTH,IPLANET_MARS,IPLANET_MOON,R_PLANET
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     RMOHO_FICTITIOUS_IN_MESHER,R220,RMIDDLE_CRUST,REFERENCE_CRUSTAL_MODEL
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     TOPOGRAPHY
 
   implicit none
@@ -60,25 +60,27 @@
   ! local parameters
   double precision :: r,theta,phi,lat,lon
   double precision :: vpvc,vphc,vsvc,vshc,etac,rhoc
+  double precision :: c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                      c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c
   double precision :: moho,sediment
   double precision :: elevation,gamma
   double precision :: x,y,z
   double precision :: R_moho,R_middlecrust
   integer :: ia,count_crust,count_mantle
-  logical :: found_crust
+  logical :: found_crust,moho_only
 
   double precision :: MOHO_MAXIMUM_DEFAULT,MOHO_MINIMUM_DEFAULT
   double precision :: MOHO_MAXIMUM,MOHO_MINIMUM
 
-  ! minimum/maximum allowed moho depths
+  ! default minimum/maximum allowed moho depths
   ! Earth  (5km/90km non-dimensionalized)
   double precision,parameter :: MOHO_MINIMUM_DEFAULT_EARTH = 5.0 / EARTH_R_KM
   double precision,parameter :: MOHO_MAXIMUM_DEFAULT_EARTH = 90.0 / EARTH_R_KM
   ! Mars
-  double precision,parameter :: MOHO_MINIMUM_DEFAULT_MARS = 5.0 / MARS_R_KM
+  double precision,parameter :: MOHO_MINIMUM_DEFAULT_MARS = 2.0 / MARS_R_KM
   double precision,parameter :: MOHO_MAXIMUM_DEFAULT_MARS = 150.0 / MARS_R_KM
   ! Moon - todo: needs better estimates
-  double precision,parameter :: MOHO_MINIMUM_DEFAULT_MOON = 5.0 / MOON_R_KM
+  double precision,parameter :: MOHO_MINIMUM_DEFAULT_MOON = 2.0 / MOON_R_KM
   double precision,parameter :: MOHO_MAXIMUM_DEFAULT_MOON = 100.0 / MOON_R_KM
 
   ! min/max defaults
@@ -103,9 +105,18 @@
   MOHO_MINIMUM = MOHO_MINIMUM_DEFAULT
   MOHO_MAXIMUM = MOHO_MAXIMUM_DEFAULT
 
+  ! modification for different crustal models
+  ! full_sphericalharmonics crustal model
   if (REFERENCE_CRUSTAL_MODEL == ICRUST_CRUST_SH) then
     ! minimum moho < 3.9km
     MOHO_MINIMUM = 3.5d0 / (R_PLANET/1000.d0)
+  endif
+  ! SGLOBE-rani crustal model
+  if (REFERENCE_CRUSTAL_MODEL == ICRUST_SGLOBECRUST) then
+    ! minimum moho
+    MOHO_MINIMUM = 2.d0 / (R_PLANET/1000.d0)
+    ! maximum moho
+    MOHO_MAXIMUM = 115.d0 / (R_PLANET/1000.d0)
   endif
 
   ! radii for stretching criteria
@@ -139,14 +150,17 @@
     endif
 
     ! sets longitude bounds [-180,180]
-    if (lon > 180.0d0 ) lon = lon - 360.0d0
+    if (lon > 180.d0 ) lon = lon - 360.0d0
 
     ! initializes
     moho = 0.d0
     sediment = 0.d0
+    moho_only = .true.  ! only moho value needed
 
     ! gets smoothed moho depth
-    call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust)
+    call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only, &
+                               c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                               c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c)
 
     !debug
     !if (lon > 140.0 .and. lon < 143. .and. lat <-42. .and. lat > -45. .and. ia == 27) then
@@ -271,7 +285,7 @@
   ! small stretch check: stretching should affect only points above R220
   if (r*R_PLANET < R220) then
     print *,'Error moho stretching: ',r*R_PLANET,R220,moho*R_PLANET
-    call exit_mpi(myrank,'incorrect moho stretching')
+    call exit_mpi(myrank,'incorrect moho stretching in moho_stretching_honor_crust() routine')
   endif
 
   end subroutine moho_stretching_honor_crust
@@ -297,7 +311,7 @@
 
   use shared_parameters, only: R_PLANET,HONOR_DEEP_MOHO
 
-  use meshfem3D_par, only: R220
+  use meshfem_par, only: R220
 
   implicit none
 
@@ -309,8 +323,10 @@
   integer :: ia,count_crust,count_mantle
   double precision :: r,theta,phi,lat,lon
   double precision :: vpvc,vphc,vsvc,vshc,etac,rhoc
+  double precision :: c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                      c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c
   double precision :: moho,sediment
-  logical :: found_crust
+  logical :: found_crust,moho_only
   double precision :: x,y,z
 
   ! loops over element's anchor points
@@ -346,9 +362,12 @@
     ! initializes
     moho = 0.d0
     sediment = 0.d0
+    moho_only = .true.  ! only moho value needed
 
     ! gets smoothed moho depth
-    call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust)
+    call meshfem3D_model_crust(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only, &
+                               c11c,c12c,c13c,c14c,c15c,c16c,c22c,c23c,c24c,c25c,c26c, &
+                               c33c,c34c,c35c,c36c,c44c,c45c,c46c,c55c,c56c,c66c)
 
     ! checks moho depth
     if (abs(moho) < TINYVAL ) call exit_mpi(myrank,'Error moho depth in crust_reg to honor')
@@ -396,7 +415,7 @@
   ! small stretch check: stretching should affect only points above R220
   if (r*R_PLANET < R220) then
     print *,'Error moho stretching: ',r*R_PLANET,R220,moho*R_PLANET
-    call exit_mpi(myrank,'incorrect moho stretching')
+    call exit_mpi(myrank,'incorrect moho stretching in moho_stretching_honor_crust_reg() routine')
   endif
 
   end subroutine moho_stretching_honor_crust_reg
@@ -416,7 +435,7 @@
   use shared_parameters, only: PLANET_TYPE,IPLANET_EARTH,IPLANET_MARS,IPLANET_MOON, &
     R_PLANET,RMOHO_STRETCH_ADJUSTMENT
 
-  use meshfem3D_par, only: RMOHO_FICTITIOUS_IN_MESHER,R220,RMIDDLE_CRUST
+  use meshfem_par, only: RMOHO_FICTITIOUS_IN_MESHER,R220,RMIDDLE_CRUST
 
   implicit none
 
@@ -602,7 +621,7 @@
   use shared_parameters, only: PLANET_TYPE,IPLANET_EARTH,IPLANET_MARS,IPLANET_MOON, &
     R_PLANET,RMOHO_STRETCH_ADJUSTMENT
 
-  use meshfem3D_par, only: RMOHO_FICTITIOUS_IN_MESHER,R220,RMIDDLE_CRUST
+  use meshfem_par, only: RMOHO_FICTITIOUS_IN_MESHER,R220,RMIDDLE_CRUST
 
   implicit none
 

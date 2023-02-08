@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -27,20 +27,20 @@
 
 !===============================================================================
 !> \brief Read adios arrays created by the mesher (file: regX_solver_data.bp)
-subroutine read_arrays_solver_adios(iregion_code, &
-                                    nspec,nglob,nglob_xy, &
-                                    nspec_iso,nspec_tiso,nspec_ani, &
-                                    rho_vp,rho_vs,xstore,ystore,zstore, &
-                                    xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz, &
-                                    rhostore, kappavstore,muvstore,kappahstore,muhstore,eta_anisostore, &
-                                    c11store,c12store,c13store,c14store,c15store,c16store,c22store, &
-                                    c23store,c24store,c25store,c26store,c33store,c34store,c35store, &
-                                    c36store,c44store,c45store,c46store,c55store,c56store,c66store, &
-                                    mu0store, &
-                                    ibool,idoubling,ispec_is_tiso, &
-                                    rmassx,rmassy,rmassz, &
-                                    nglob_oceans,rmass_ocean_load, &
-                                    b_rmassx,b_rmassy)
+  subroutine read_arrays_solver_adios(iregion_code, &
+                                      nspec,nglob,nglob_xy, &
+                                      nspec_iso,nspec_tiso,nspec_ani, &
+                                      rho_vp,rho_vs,xstore,ystore,zstore, &
+                                      xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz, &
+                                      rhostore, kappavstore,muvstore,kappahstore,muhstore,eta_anisostore, &
+                                      c11store,c12store,c13store,c14store,c15store,c16store,c22store, &
+                                      c23store,c24store,c25store,c26store,c33store,c34store,c35store, &
+                                      c36store,c44store,c45store,c46store,c55store,c56store,c66store, &
+                                      mu0store, &
+                                      ibool,idoubling,ispec_is_tiso, &
+                                      rmassx,rmassy,rmassz, &
+                                      nglob_oceans,rmass_ocean_load, &
+                                      b_rmassx,b_rmassy)
 
 
   use constants_solver
@@ -56,44 +56,42 @@ subroutine read_arrays_solver_adios(iregion_code, &
   integer,intent(in) :: nspec_iso,nspec_tiso,nspec_ani
 
   ! Stacey
-  real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,nspec):: rho_vp,rho_vs
+  real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(inout):: rho_vp,rho_vs
 
-  real(kind=CUSTOM_REAL), dimension(nglob) :: xstore,ystore,zstore
+  real(kind=CUSTOM_REAL), dimension(nglob),intent(inout) :: xstore,ystore,zstore
 
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec) :: &
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(inout) :: &
     xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
 
   ! material properties
-  real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,nspec_iso) :: &
+  real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,nspec_iso),intent(inout) :: &
     rhostore,kappavstore,muvstore
 
   ! additional arrays for anisotropy stored only where needed to save memory
-  real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,nspec_tiso) :: &
+  real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,nspec_tiso),intent(inout) :: &
     kappahstore,muhstore,eta_anisostore
 
   ! additional arrays for full anisotropy
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec_ani) :: &
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec_ani),intent(inout) :: &
     c11store,c12store,c13store,c14store,c15store,c16store, &
     c22store,c23store,c24store,c25store,c26store,c33store,c34store, &
     c35store,c36store,c44store,c45store,c46store,c55store,c56store,c66store
 
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec) :: mu0store
+  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(inout) :: mu0store
 
   ! global addressing
-  integer,dimension(NGLLX,NGLLY,NGLLZ,nspec) :: ibool
-  integer, dimension(nspec) :: idoubling
-  logical, dimension(nspec) :: ispec_is_tiso
+  integer,dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(inout) :: ibool
+  integer, dimension(nspec),intent(inout) :: idoubling
+  logical, dimension(nspec),intent(inout) :: ispec_is_tiso
 
   ! mass matrices and additional ocean load mass matrix
-  real(kind=CUSTOM_REAL), dimension(nglob_xy) :: rmassx,rmassy
-  real(kind=CUSTOM_REAL), dimension(nglob_xy) :: b_rmassx,b_rmassy
+  real(kind=CUSTOM_REAL), dimension(nglob_xy),intent(inout) :: rmassx,rmassy
+  real(kind=CUSTOM_REAL), dimension(nglob_xy),intent(inout) :: b_rmassx,b_rmassy
 
-  real(kind=CUSTOM_REAL), dimension(nglob)    :: rmassz
+  real(kind=CUSTOM_REAL), dimension(nglob),intent(inout)    :: rmassz
 
-  integer :: nglob_oceans
-  real(kind=CUSTOM_REAL), dimension(nglob_oceans) :: rmass_ocean_load
-
-  character(len=MAX_STRING_LEN) :: file_name
+  integer,intent(in) :: nglob_oceans
+  real(kind=CUSTOM_REAL), dimension(nglob_oceans),intent(inout) :: rmass_ocean_load
 
   ! local parameters
   integer :: lnspec, lnglob
@@ -102,10 +100,11 @@ subroutine read_arrays_solver_adios(iregion_code, &
   integer(kind=8), dimension(1) :: start, count
 
   integer(kind=8), dimension(256),target :: selections
-  integer :: sel_num, i
+  integer :: sel_num, i, istep
   integer(kind=8), pointer :: sel => null()
 
   character(len=128) :: region_name, region_name_scalar
+  character(len=MAX_STRING_LEN) :: file_name
 
   ! user output
   if (myrank == 0) then
@@ -122,13 +121,32 @@ subroutine read_arrays_solver_adios(iregion_code, &
 
   sel_num = 0
 
-  file_name= trim(LOCAL_PATH) // "/solver_data.bp"
+  file_name = get_adios_filename(trim(LOCAL_PATH) // "/solver_data")
 
   ! Setup the ADIOS library to read the file
+  call init_adios_group(myadios_group,"SolverReader")
   call open_file_adios_read_and_init_method(myadios_file,myadios_group,file_name)
+
+  ! note: adios2 increases step numbers on variables when appending to a file.
+  !       this can lead to issues when reading back values for the next regions, for example, reg2/nspec
+  !       to work-around this, we explicitly call begin_step() and end_step() for writing out region1/2/3 data
+  !
+  !       here, we will need to skip these steps again from previous regions.
+  !       we thus call begin_step explicitly for reading in region1/2/3
+  ! skips steps from previous regions
+  do istep = 1,iregion_code-1
+    ! start step
+    call read_adios_begin_step(myadios_file)
+    ! ends step for this region
+    call read_adios_end_step(myadios_file)
+  enddo
+
+  ! starts step for this region
+  call read_adios_begin_step(myadios_file)
 
   ! debug
   !call show_adios_file_variables(myadios_file,myadios_group,file_name)
+  !call synchronize_all()
 
   ! read coordinates of the mesh
   call read_adios_scalar(myadios_file, myadios_group, myrank, trim(region_name) // "nspec",lnspec)
@@ -143,13 +161,13 @@ subroutine read_arrays_solver_adios(iregion_code, &
     print *,'Error: rank ',myrank,' region ',iregion_code,' invalid file dimension: nspec in file = ',lnspec, &
             ' but nspec desired:',nspec
     print *,'please check file ',trim(file_name)
-    call exit_mpi(myrank,'Error dimensions in solver_data.bp')
+    call exit_mpi(myrank,'Error nspec dimensions in adios solver_data file')
   endif
   if (lnglob /= nglob) then
     print *,'Error: rank ',myrank,' region ',iregion_code,' invalid file dimension: nglob in file = ',lnglob, &
             ' but nglob desired:',nglob
     print *,'please check file ',trim(file_name)
-    call exit_mpi(myrank,'Error dimensions in solver_data.bp')
+    call exit_mpi(myrank,'Error nglob dimensions in adios solver_data file')
   endif
   call synchronize_all()
 
@@ -402,6 +420,9 @@ subroutine read_arrays_solver_adios(iregion_code, &
                                    trim(region_name) // "rmass_ocean_load/array", rmass_ocean_load)
   endif
 
+  ! ends step for this region
+  call read_adios_end_step(myadios_file)
+
   ! perform actual reading
   call read_adios_perform(myadios_file)
 
@@ -411,10 +432,11 @@ subroutine read_arrays_solver_adios(iregion_code, &
     call delete_adios_selection(sel)
   enddo
 
-  ! closes adios file
+  ! closes adios file & cleans/removes group object
   call close_file_adios_read_and_finalize_method(myadios_file)
+  call delete_adios_group(myadios_group,"SolverReader")
 
   ! synchronizes processes
   call synchronize_all()
 
-end subroutine read_arrays_solver_adios
+  end subroutine read_arrays_solver_adios

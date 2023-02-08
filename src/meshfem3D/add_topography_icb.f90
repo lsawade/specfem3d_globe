@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -31,7 +31,7 @@
 
   use constants
   use shared_parameters, only: R_PLANET,R_PLANET_KM
-  use meshfem3D_par, only: RICB,RCMB
+  use meshfem_par, only: RICB,RCMB
 
   implicit none
 

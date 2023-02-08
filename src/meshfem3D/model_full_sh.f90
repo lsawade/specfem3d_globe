@@ -1,13 +1,13 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  5 . 1
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
-!          Main authors: Dimitri Komatitsch and Jeroen Tromp
+!     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
-!             and University of Pau / CNRS / INRIA, France
-! (c) Princeton University / California Institute of Technology and University of Pau / CNRS / INRIA
-!                            December 2010
+!                and CNRS / University of Marseille, France
+!                 (there are currently many more authors!)
+! (c) Princeton University and CNRS / University of Marseille, April 2014
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -83,11 +83,15 @@
             CRUST_SH_V_moho(NSH_40), &
             stat=ier)
   if (ier /= 0) call exit_MPI(myrank,'Error allocating crust arrays')
+  CRUST_SH_V_vph(:) = 0.d0; CRUST_SH_V_vpv(:) = 0.d0
+  CRUST_SH_V_vsh(:) = 0.d0; CRUST_SH_V_vsv(:) = 0.d0
+  CRUST_SH_V_rho(:) = 0.d0; CRUST_SH_V_eta(:) = 0.d0
+  CRUST_SH_V_moho(:) = 0.d0
 
   ! the variables read are declared and stored in structure CRUST_SH_V
   if (myrank == 0) call read_crust_sh_model()
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_dp(CRUST_SH_V_vsh,NSH_40)
   call bcast_all_dp(CRUST_SH_V_vsv,NSH_40)
   call bcast_all_dp(CRUST_SH_V_vph,NSH_40)
@@ -262,7 +266,7 @@
 !-----------------------------------------------------------------------------------------
 !
 
-  subroutine crust_sh(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust)
+  subroutine crust_sh(lat,lon,r,vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment,found_crust,elem_in_crust,moho_only)
 
 ! gets crustal value for location lat/lon/r
 
@@ -273,10 +277,13 @@
 
   implicit none
 
+  ! lat/lon  - in degrees (range lat/lon = [-90,90] / [-180,180]
+  ! radius r - normalized by globe radius [0,1.x]
   double precision,intent(in) :: lat,lon,r
+
   double precision,intent(out) :: vpvc,vphc,vsvc,vshc,etac,rhoc,moho,sediment
   logical,intent(out) :: found_crust
-  logical,intent(in) :: elem_in_crust
+  logical,intent(in) :: elem_in_crust,moho_only
 
   ! local parameters
   double precision :: depth,scaleval
@@ -284,12 +291,7 @@
   real(kind=4) :: shcof(NSH_40)
   real(kind=4) :: xlat,xlon
 
-  ! gets coefficient for location
-  xlat = sngl(lat)
-  xlon = sngl(lon)
-  call ylm(xlat,xlon,NS_40,shcof)
-
-  ! calculates model values
+  ! initializes
   vsvc = ZERO !km/s
   vshc = ZERO !km/s
   vpvc = ZERO !km/s
@@ -298,6 +300,14 @@
   moho = ZERO !km
   sediment = ZERO
   etac = ZERO
+  found_crust = .true.
+
+  ! gets coefficient for location
+  xlat = sngl(lat)
+  xlon = sngl(lon)
+  call ylm(xlat,xlon,NS_40,shcof)
+
+  ! calculates model values
   do l = 1,NSH_40
     vsvc = vsvc + CRUST_SH_V_vsv(l)*dble(shcof(l))
     vshc = vshc + CRUST_SH_V_vsh(l)*dble(shcof(l))
@@ -308,8 +318,16 @@
     moho = moho + CRUST_SH_V_moho(l)*dble(shcof(l))
   enddo
 
+  ! scales (non-dimensionalizes) values
+  moho = moho * 1000.d0/R_PLANET
+
+  ! checks if anything further to do
+  if (moho_only) return
+
+  ! no sediment thickness information
+  sediment = 0.d0
+
   ! check values
-  found_crust = .true.
   if (vsvc <= ZERO) found_crust = .false.
   if (vshc <= ZERO) found_crust = .false.
   if (vpvc <= ZERO) found_crust = .false.
@@ -332,19 +350,13 @@
     found_crust = .true.
   else
     ! checks if depth of position above/below moho
-    depth = (1.d0 - r) * (R_PLANET/1000.d0)
+    depth = (1.d0 - r)  ! non-dimensional
     !debug
     !print *,'sh crust: depth = ',depth,' moho = ',moho
     if (depth <= moho) then
       found_crust = .true.
     endif
   endif
-
-  ! scales (non-dimensionalizes) values
-  moho = moho * 1000.d0/R_PLANET
-
-  ! no sediment thickness information
-  sediment = 0.d0
 
   if (found_crust) then
     scaleval = dsqrt(PI*GRAV*RHOAV)
@@ -429,7 +441,7 @@
   ! the variables read are declared and stored in structure S20RTS_V
   if (myrank == 0) call read_model_mantle_sh()
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_dp(MANTLE_SH_V_dvsh,(NK_20+1)*(NSH_20))
   call bcast_all_dp(MANTLE_SH_V_dvsv,(NK_20+1)*(NSH_20))
   call bcast_all_dp(MANTLE_SH_V_dvph,(NK_20+1)*(NSH_20))
@@ -1072,7 +1084,7 @@
   use constants
   use shared_parameters, only: R_PLANET
 
-  use meshfem3D_par, only: R220,R400,R670,R771
+  use meshfem_par, only: R220,R400,R670,R771
 
   implicit none
 
@@ -1183,7 +1195,7 @@
 
   ! debug
   if (DEBUG_STATISTICS) then
-    ! collects min/max on master
+    ! collects min/max on main
     call min_all_cr(min_410,min_410_all)
     call max_all_cr(max_410,max_410_all)
     call min_all_cr(min_650,min_650_all)

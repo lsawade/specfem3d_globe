@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -59,14 +59,14 @@
 
   ! seismograms
   integer :: NTSTEP_BETWEEN_OUTPUT_SEISMOS,NTSTEP_BETWEEN_READ_ADJSRC,NTSTEP_BETWEEN_FRAMES, &
-             NTSTEP_BETWEEN_OUTPUT_INFO
+             NTSTEP_BETWEEN_OUTPUT_INFO,NTSTEP_BETWEEN_OUTPUT_SAMPLE
 
   double precision :: RECORD_LENGTH_IN_MINUTES
 
   logical :: RECEIVERS_CAN_BE_BURIED
   logical :: OUTPUT_SEISMOS_ASCII_TEXT,OUTPUT_SEISMOS_SAC_ALPHANUM,OUTPUT_SEISMOS_SAC_BINARY, &
-             OUTPUT_SEISMOS_ASDF, &
-             ROTATE_SEISMOGRAMS_RT,WRITE_SEISMOGRAMS_BY_MASTER, &
+             OUTPUT_SEISMOS_ASDF,OUTPUT_SEISMOS_3D_ARRAY, &
+             ROTATE_SEISMOGRAMS_RT,WRITE_SEISMOGRAMS_BY_MAIN, &
              SAVE_ALL_SEISMOS_IN_ONE_FILE,USE_BINARY_FOR_LARGE_FILE,READ_ADJSRC_ASDF
 
   logical :: SAVE_SEISMOGRAMS_STRAIN ! option under development (see Hom Nath commit 2deb0fa89), no functionality implemented yet
@@ -74,9 +74,9 @@
 
   ! sources
   logical :: USE_FORCE_POINT_SOURCE
-  logical :: USE_RICKER_TIME_FUNCTION,PRINT_SOURCE_TIME_FUNCTION
   logical :: USE_SOURCE_DERIVATIVE
   integer :: USE_SOURCE_DERIVATIVE_DIRECTION
+  logical :: USE_MONOCHROMATIC_CMT_SOURCE,PRINT_SOURCE_TIME_FUNCTION
 
 
   ! checkpointing/restart
@@ -89,6 +89,7 @@
 
   double precision :: ANGULAR_WIDTH_XI_IN_DEGREES,ANGULAR_WIDTH_ETA_IN_DEGREES, &
                       CENTER_LONGITUDE_IN_DEGREES,CENTER_LATITUDE_IN_DEGREES,GAMMA_ROTATION_AZIMUTH
+
   logical :: SAVE_MESH_FILES,SAVE_FORWARD
 
   ! movies
@@ -102,7 +103,20 @@
   logical :: ELLIPTICITY,GRAVITY,ROTATION,TOPOGRAPHY,OCEANS, &
              ATTENUATION
 
+  ! regional mesh cut-off
+  logical :: REGIONAL_MESH_CUTOFF
+  ! regional mesh cut-off depth (in km)
+  ! possible selections: 24.4d0, 80.d0, 220.d0, 400.d0, 600.d0, 670.d0, 771.d0
+  double precision :: REGIONAL_MESH_CUTOFF_DEPTH = 400.d0
+  ! regional mesh cut-off w/ a second doubling layer below 220km interface
+  logical :: REGIONAL_MESH_ADD_2ND_DOUBLING = .false.
+
+  ! absorbing boundary conditions
   logical :: ABSORBING_CONDITIONS
+
+  ! absorbing sponge layer
+  logical :: ABSORB_USING_GLOBAL_SPONGE
+  double precision :: SPONGE_LATITUDE_IN_DEGREES,SPONGE_LONGITUDE_IN_DEGREES,SPONGE_RADIUS_IN_DEGREES
 
   ! file directories
   character(len=MAX_STRING_LEN) :: OUTPUT_FILES
@@ -136,6 +150,9 @@
 
   logical :: USE_FULL_TISO_MANTLE,SAVE_SOURCE_MASK
 
+  logical :: STEADY_STATE_KERNEL
+  double precision :: STEADY_STATE_LENGTH_IN_MINUTES
+
   ! for simultaneous runs from the same batch job
   integer :: NUMBER_OF_SIMULTANEOUS_RUNS
   logical :: BROADCAST_SAME_MESH_AND_MODEL
@@ -155,6 +172,40 @@
   ! (optional) parameters
   double precision :: USER_DT = -1.0  ! negative values will be ignored by default
   integer :: USER_NSTEP = -1          ! negative to ignore by default
+
+  ! (optional) local mesh parameters
+  ! for regional cutoff meshes (REGIONAL_MESH_CUTOFF must be .true. in Par_file)
+  ! this will create a local mesh, i.e., doesn't honor Moho/R80/R220, but creates a crust & mantle mesh
+  ! separated at the fictitious moho depth (at 40 or 35 km), down to the REGIONAL_MESH_CUTOFF value.
+  !
+  ! Additionally, this local mesh can have up to 5 doubling layers;
+  ! with the doubling layer index specified by the NZ_DOUBLING_* values.
+  !
+  ! flag to switch on local mesh
+  logical :: USE_LOCAL_MESH = .false.
+
+  ! total number of mesh layers for local mesh
+  ! (moho used will be the fictitious moho depth, i.e., at 40 or 35 km depth depending on EARTH_RMOHO_STRETCH_ADJUSTMENT)
+  integer :: LOCAL_MESH_NUMBER_OF_LAYERS_CRUST = 4
+  integer :: LOCAL_MESH_NUMBER_OF_LAYERS_MANTLE = 8
+
+  ! number of doubling layers
+  integer :: NDOUBLINGS = 2
+  ! position of doubling layer (counted from top down)
+  integer :: NZ_DOUBLING_1 = 2
+  integer :: NZ_DOUBLING_2 = 5
+  integer :: NZ_DOUBLING_3 = 0
+  integer :: NZ_DOUBLING_4 = 0
+  integer :: NZ_DOUBLING_5 = 0
+
+  ! (optional) scattering perturbations
+  logical :: ADD_SCATTERING_PERTURBATIONS = .false.
+  double precision :: SCATTERING_STRENGTH = 0.d0
+  double precision :: SCATTERING_CORRELATION = 1.d0
+
+  ! (optional) simultaneous run execution shifts
+  logical :: SHIFT_SIMULTANEOUS_RUNS = .false.
+  double precision :: FILESYSTEM_IO_BANDWIDTH = 0.d0
 
   end module shared_input_parameters
 
@@ -190,8 +241,13 @@
   integer :: NSTEP
   double precision :: DT
 
+  ! number of steady state time steps
+  integer :: NSTEP_STEADY_STATE
+
   ! shortest minimum period resolved by mesh (empirical formula)
   double precision :: T_min_period
+  ! shortest wavelength resolved by mesh (empirical; in km/s)
+  double precision :: estimated_min_wavelength
 
   ! number of sources given in CMTSOLUTION file
   integer :: NSOURCES
@@ -240,10 +296,11 @@
   logical :: ATTENUATION_GLL
   logical :: INCLUDE_CENTRAL_CUBE,INFLATE_CENTRAL_CUBE
 
+  ! this is used in UTILS/estimate_best_values_runs.f90 only, to estimate memory use
   logical :: EMULATE_ONLY = .false.
 
-! honor PREM Moho or not
-! doing so drastically reduces the stability condition and therefore the time step
+  ! honor PREM Moho or not
+  ! doing so drastically reduces the stability condition and therefore the time step
   logical :: HONOR_1D_SPHERICAL_MOHO,CASE_3D
 
   ! this for all the regions

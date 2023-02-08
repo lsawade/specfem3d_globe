@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -703,7 +703,7 @@
     close(IOUT)
 
     ! outer core
-    if (NSPEC_OUTER_CORE_3DMOVIE /= 1) then
+    if (NSPEC_OUTER_CORE_3DMOVIE > 1) then
       write(outputname,"('proc',i6.6,'_reg2_div_displ_it',i6.6,'.bin')") myrank,it
       open(unit=IOUT,file=trim(LOCAL_TMP_PATH)//'/'//trim(outputname),status='unknown',form='unformatted',iostat=ier)
       if (ier /= 0 ) call exit_MPI(myrank,'Error opening file '//trim(outputname))

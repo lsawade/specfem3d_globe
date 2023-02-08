@@ -1,7 +1,7 @@
 #=====================================================================
 #
-#          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-#          --------------------------------------------------
+#                       S p e c f e m 3 D  G l o b e
+#                       ----------------------------
 #
 #     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 #                        Princeton University, USA
@@ -49,6 +49,7 @@ shared_OBJECTS = \
 	$O/define_all_layers.shared.o \
 	$O/euler_angles.shared.o \
 	$O/exit_mpi.shared.o \
+	$O/fft.shared.o \
 	$O/flush_system.shared.o \
 	$O/get_all_eight_slices.shared.o \
 	$O/get_global.shared.o \
@@ -64,6 +65,7 @@ shared_OBJECTS = \
 	$O/lagrange_poly.shared.o \
 	$O/make_ellipticity.shared.o \
 	$O/memory_eval.shared.o \
+	$O/model_mars_1D.shared.o \
 	$O/model_prem.shared.o \
 	$O/model_Sohl.shared.o \
 	$O/model_topo_bathy.shared.o \
@@ -90,6 +92,7 @@ shared_MODULES = \
 	$(FC_MODDIR)/manager_adios.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_prem_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sohl_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_mars_1d_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_vpremoon_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/my_mpi.$(FC_MODEXT) \
 	$(FC_MODDIR)/shared_input_parameters.$(FC_MODEXT) \
@@ -130,14 +133,6 @@ adios_shared_STUBS = \
 #	$(FC_MODDIR)/adios2_helpers_read_mod.$(FC_MODEXT) \
 #	$(EMPTY_MACRO)
 
-asdf_shared_OBJECTS = \
-	$O/asdf_manager.shared_asdf.o \
-	$(EMPTY_MACRO)
-
-asdf_shared_STUBS = \
-	$O/asdf_method_stubs.cc.o \
-	$(EMPTY_MACRO)
-
 ifeq ($(ADIOS),yes)
 shared_OBJECTS += $(adios_shared_OBJECTS)
 shared_MODULES += $(adios_shared_MODULES)
@@ -148,12 +143,32 @@ else
 shared_OBJECTS += $(adios_shared_STUBS)
 endif
 
+##
+## ASDF
+##
+
+asdf_shared_OBJECTS = \
+	$O/asdf_manager.shared_asdf.o \
+	$(EMPTY_MACRO)
+
+asdf_shared_STUBS = \
+	$O/asdf_method_stubs.cc.o \
+	$(EMPTY_MACRO)
 
 ifeq ($(ASDF),yes)
 shared_OBJECTS += $(asdf_shared_OBJECTS)
 else
 shared_OBJECTS += $(asdf_shared_STUBS)
 endif
+
+##
+## C++ Parallel STL sorting
+##
+
+ifeq ($(PARALLEL_STL),yes)
+shared_OBJECTS += $O/sort_array_coordinates_c.shared.o
+endif
+
 
 #######################################
 
@@ -173,8 +188,16 @@ else ifeq ($(ADIOS2),yes)
 $O/adios_helpers.shared_adios.o: $O/adios_helpers_readers.shared_adios.o $O/adios_helpers_writers.shared_adios.o $O/adios_helpers_definitions.shared_adios.o
 endif
 
-$O/get_model_parameters.shared.o: $O/model_prem.shared.o $O/model_Sohl.shared.o $O/model_vpremoon.shared.o
-$O/make_ellipticity.shared.o: $O/model_prem.shared.o $O/model_Sohl.shared.o $O/model_vpremoon.shared.o
+$O/get_model_parameters.shared.o: \
+	$O/model_prem.shared.o \
+	$O/model_Sohl.shared.o \
+	$O/model_vpremoon.shared.o \
+	$O/model_mars_1D.shared.o
+
+$O/make_ellipticity.shared.o: \
+	$O/model_prem.shared.o \
+	$O/model_Sohl.shared.o \
+	$O/model_vpremoon.shared.o
 
 ##
 ## shared
@@ -249,3 +272,8 @@ $O/%.shared_asdf.o: $S/%.f90
 
 $O/%.cc.o: $S/%.c ${SETUP}/config.h
 	${CC} -c $(CPPFLAGS) $(CFLAGS) -o $@ $<
+
+## c++ files
+$O/%.shared.o: $S/%.cpp ${SETUP}/config.h
+	${CXX} -c $(CXXFLAGS) $(PARALLEL_STL_DEF) -o $@ $<
+

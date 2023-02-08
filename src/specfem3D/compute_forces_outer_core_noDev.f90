@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -96,7 +96,7 @@
 !   big loop over all spectral elements in the fluid
 ! ****************************************************
 
-  if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE /= 1 .and. (iphase == 1)) then
+  if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE > 1 .and. (iphase == 1)) then
     div_displfluid(:,:,:,:) = 0._CUSTOM_REAL
   endif
 
@@ -130,7 +130,7 @@
             tempx3l = tempx3l + displfluid(ibool(i,j,l,ispec)) * hprime_zz(k,l)
           enddo
 
-          ! get derivatives of velocity potential with respect to x, y and z
+          ! get derivatives of potential with respect to x, y and z
           xixl = xix(i,j,k,ispec)
           xiyl = xiy(i,j,k,ispec)
           xizl = xiz(i,j,k,ispec)
@@ -254,7 +254,7 @@
             ! note: these calculations are only considered for SIMULATION_TYPE == 1 .and. SAVE_FORWARD
             !          and one has set MOVIE_VOLUME_TYPE == 4 when MOVIE_VOLUME is .true.;
             !         in case of SIMULATION_TYPE == 3, it gets overwritten by compute_kernels_outer_core()
-            if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE /= 1) then
+            if (MOVIE_VOLUME .and. NSPEC_OUTER_CORE_3DMOVIE > 1) then
               div_displfluid(i,j,k,ispec) = dpotentialdx_with_rot * vec_x &
                                           + dpotentialdy_with_rot * vec_y &
                                           + dpotentialdzl * vec_z

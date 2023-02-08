@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -75,7 +75,7 @@
         timeval = time_t - tshift_src(isource)
 
         ! determines source time function value
-        stf = get_stf_viscoelastic(timeval,isource)
+        stf = get_stf_viscoelastic(timeval,isource,it)
 
         ! distinguishes between single and double precision for reals
         stf_used = real(stf,kind=CUSTOM_REAL)
@@ -110,7 +110,7 @@
       timeval = time_t - tshift_src(isource)
 
       ! determines source time function value
-      stf = get_stf_viscoelastic(timeval,isource)
+      stf = get_stf_viscoelastic(timeval,isource,it)
 
       ! stores current stf values
       stf_pre_compute(isource) = stf
@@ -131,7 +131,7 @@
   use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ,NDIM
 
   use specfem_par, only: myrank,it,it_begin,it_end,NTSTEP_BETWEEN_READ_ADJSRC, &
-    nadj_rec_local,hxir_adjstore,hetar_adjstore,hgammar_adjstore,number_adjsources_global,source_adjoint, &
+    nadj_rec_local,hxir_adjstore,hetar_adjstore,hgammar_adjstore,number_adjsources_global, &
     islice_selected_rec,ispec_selected_rec,nrec,iadj_vec, &
     GPU_MODE,GPU_ASYNC_COPY,Mesh_pointer
 
@@ -142,6 +142,8 @@
   ! local parameters
   real(kind=CUSTOM_REAL),dimension(NDIM) :: stf_array
   real(kind=CUSTOM_REAL) :: hlagrange
+  real(kind=CUSTOM_REAL),dimension(NDIM,nadj_rec_local) :: stf_array_adjoint
+
   integer :: irec,irec_local,i,j,k,iglob,ispec
   integer :: ivec_index
   logical :: ibool_read_adj_arrays
@@ -199,7 +201,7 @@
     ! receivers act as sources
     do irec_local = 1, nadj_rec_local
       ! adjoint source time function (trace)
-      call get_stf_adjoint_source(irec_local,stf_array)
+      call get_stf_adjoint_source(it,irec_local,stf_array)
 
       ! receiver location
       irec = number_adjsources_global(irec_local)
@@ -286,21 +288,25 @@
     ! note: adjoint sourcearrays can become very big when used with many receiver stations
     !       we overlap here the memory transfer to GPUs
 
-    ! current time index
-    ivec_index = iadj_vec(it)
+    ! receivers act as sources
+    ! determines STF contribution for each local adjoint source (taking account of LDDRK scheme stages)
+    do irec_local = 1, nadj_rec_local
+      ! adjoint source time function (trace)
+      call get_stf_adjoint_source(it,irec_local,stf_array)
+      ! stores stf for all local adjoint sources
+      stf_array_adjoint(:,irec_local) = stf_array(:)
+    enddo
 
     if (GPU_ASYNC_COPY) then
       ! only synchronously transfers array at beginning or whenever new arrays were read in
       if (ibool_read_adj_arrays) then
         ! transfers adjoint arrays to GPU device memory
         ! note: function call passes pointer to array source_adjoint at corresponding time slice
-        call transfer_adj_to_device(Mesh_pointer,nrec,source_adjoint(1,1,ivec_index), &
-                                    islice_selected_rec)
+        call transfer_adj_to_device(Mesh_pointer,nrec,stf_array_adjoint,islice_selected_rec)
       endif
     else
       ! synchronously transfers adjoint arrays to GPU device memory before adding adjoint sources on GPU
-      call transfer_adj_to_device(Mesh_pointer,nrec,source_adjoint(1,1,ivec_index), &
-                                  islice_selected_rec)
+      call transfer_adj_to_device(Mesh_pointer,nrec,stf_array_adjoint,islice_selected_rec)
     endif
 
     ! adds adjoint source contributions
@@ -312,19 +318,25 @@
       if ((.not. ibool_read_adj_arrays) .and. &
           (.not. mod(it,NTSTEP_BETWEEN_READ_ADJSRC) == 0) .and. &
           (.not. it == it_end)) then
-        ! next time index
-        ivec_index = iadj_vec(it+1)
 
         ! checks next index
+        ivec_index = iadj_vec(it+1)
         if (ivec_index < 1 .or. ivec_index > NTSTEP_BETWEEN_READ_ADJSRC) then
           print *,'Error iadj_vec bounds: rank',myrank,' it = ',it,' index = ',ivec_index, &
-                 'out of bounds ',1,'to',NTSTEP_BETWEEN_READ_ADJSRC
+                  'out of bounds ',1,'to',NTSTEP_BETWEEN_READ_ADJSRC
           call exit_MPI(myrank,'Error iadj_vec index bounds')
         endif
 
+        ! next time index
+        do irec_local = 1, nadj_rec_local
+          ! adjoint source time function (trace)
+          call get_stf_adjoint_source(it+1,irec_local,stf_array)
+          ! stores stf for all local adjoint sources
+          stf_array_adjoint(:,irec_local) = stf_array(:)
+        enddo
+
         ! asynchronously transfers next time slice
-        call transfer_adj_to_device_async(Mesh_pointer,nrec,source_adjoint(1,1,ivec_index), &
-                                          islice_selected_rec)
+        call transfer_adj_to_device_async(Mesh_pointer,nrec,stf_array_adjoint,islice_selected_rec)
       endif
     endif
 
@@ -373,7 +385,11 @@
     !              2. subset, it_temp goes from (900 - 301) = 599 down to 299
     !              3. subset, it_temp goes from (900 - 0)   = 900 down to 600
     !works always:
-    it_tmp = NSTEP - (NSUBSET_ITERATIONS - iteration_on_subset)*NT_DUMP_ATTENUATION - it_of_this_subset + 1
+    if (NSTEP_STEADY_STATE > 0) then
+      it_tmp = NSTEP_STEADY_STATE - (NSUBSET_ITERATIONS - iteration_on_subset)*NT_DUMP_ATTENUATION - it_of_this_subset + 1
+    else
+      it_tmp = NSTEP - (NSUBSET_ITERATIONS - iteration_on_subset)*NT_DUMP_ATTENUATION - it_of_this_subset + 1
+    endif
   else
     it_tmp = it
   endif
@@ -424,7 +440,7 @@
         timeval = time_t - tshift_src(isource)
 
         ! determines source time function value
-        stf = get_stf_viscoelastic(timeval,isource)
+        stf = get_stf_viscoelastic(timeval,isource,it_tmp)
 
         ! distinguishes between single and double precision for reals
         stf_used = real(stf,kind=CUSTOM_REAL)
@@ -453,7 +469,7 @@
       timeval = time_t - tshift_src(isource)
 
       ! determines source time function value
-      stf = get_stf_viscoelastic(timeval,isource)
+      stf = get_stf_viscoelastic(timeval,isource,it_tmp)
 
       ! stores current stf values
       stf_pre_compute(isource) = stf
@@ -470,16 +486,16 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  double precision function get_stf_viscoelastic(time_source_dble,isource)
+  double precision function get_stf_viscoelastic(time_source_dble,isource,it_index)
 
 ! returns source time function value for specified time
 
-  use specfem_par, only: USE_FORCE_POINT_SOURCE,force_stf,hdur,hdur_Gaussian
+  use specfem_par, only: USE_FORCE_POINT_SOURCE,USE_MONOCHROMATIC_CMT_SOURCE,force_stf,hdur,hdur_Gaussian
 
   implicit none
 
   double precision,intent(in) :: time_source_dble
-  integer,intent(in) :: isource
+  integer,intent(in) :: isource,it_index
 
   ! local parameters
   double precision :: stf,f0
@@ -487,13 +503,13 @@
   double precision, external :: comp_source_time_function
   double precision, external :: comp_source_time_function_rickr
   double precision, external :: comp_source_time_function_gauss
+  double precision, external :: comp_source_time_function_gauss_2
   double precision, external :: comp_source_time_function_mono
 
   ! note: calling comp_source_time_function() includes the handling for external source time functions
 
   ! determines source time function value
   if (USE_FORCE_POINT_SOURCE) then
-    ! single point force
     ! single point force
     select case(force_stf(isource))
     case (0)
@@ -505,18 +521,26 @@
       stf = comp_source_time_function_rickr(time_source_dble,f0)
     case (2)
       ! Heaviside (step) source time function
-      stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource))
+      stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource),it_index)
     case (3)
       ! Monochromatic source time function
       f0 = 1.d0 / hdur(isource) ! using hdur as a PERIOD just to avoid changing FORCESOLUTION file format
       stf = comp_source_time_function_mono(time_source_dble,f0)
+    case (4)
+      ! Gaussian source time function by Meschede et al. (2011)
+      stf = comp_source_time_function_gauss_2(time_source_dble,hdur(isource))
     case default
       stop 'unsupported force_stf value!'
     end select
   else
     ! moment-tensor
     ! Heaviside source time function
-    stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource))
+    if (USE_MONOCHROMATIC_CMT_SOURCE) then
+      f0 = 1.d0 / hdur(isource) ! using half duration as a FREQUENCY just to avoid changing CMTSOLUTION file format
+      stf = comp_source_time_function_mono(time_source_dble,f0)
+    else
+      stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource),it_index)
+    endif
   endif
 
   ! return value
@@ -528,11 +552,11 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine get_stf_adjoint_source(irec_local,stf_array)
+  subroutine get_stf_adjoint_source(it_in,irec_local,stf_array)
 
   use constants, only: CUSTOM_REAL,NDIM,C_LDDRK
 
-  use specfem_par, only: it,NSTEP,NTSTEP_BETWEEN_READ_ADJSRC, &
+  use specfem_par, only: NSTEP,NTSTEP_BETWEEN_READ_ADJSRC, &
     source_adjoint,iadj_vec, &
     USE_LDDRK,istage
 
@@ -546,7 +570,7 @@
 !       so far, specfem doesn't use this technique and there are no such interface definitions within subroutines.
 !       so let's just use a subroutine call for this.
 
-  integer,intent(in) :: irec_local
+  integer,intent(in) :: it_in,irec_local
   real(kind=CUSTOM_REAL),dimension(NDIM),intent(out) :: stf_array
 
   ! local parameters
@@ -569,10 +593,10 @@
     !       iadj_vec(it) goes from iadj_vec(1) = 1000, iadj_vec(2) = 999 to iadj_vec(1000) = 1
     if (istage == 1) then
       ! exact position at time it
-      if (it == 1) then
-        idx = it
+      if (it_in == 1) then
+        idx = it_in
       else
-        idx = it - 1
+        idx = it_in - 1
       endif
       ivec_index = iadj_vec(idx)
       ! adjoint source time function for 3 components
@@ -586,10 +610,10 @@
       ! see: https://www.iquilezles.org/www/articles/minispline/minispline.htm
       t = C_LDDRK(istage)
       ! shift index by -1 due to LDDRK scheme
-      if (it == 1) then
+      if (it_in == 1) then
         idx = 1
       else
-        idx = it - 1
+        idx = it_in - 1
       endif
       ivec_index = iadj_vec(idx)
 
@@ -645,7 +669,7 @@
     ! Newmark
     ! has 1 stage, at index iadj_vec
     ! adjoint source array index
-    ivec_index = iadj_vec(it)
+    ivec_index = iadj_vec(it_in)
     ! adjoint source time function for 3 components
     stf(:) = source_adjoint(:,irec_local,ivec_index)
   endif
@@ -654,6 +678,6 @@
   stf_array(:) = real(stf(:),kind=CUSTOM_REAL)
 
   !debug
-  !if (irec_local == 1) print *,myrank,(it-1)*NSTAGE_TIME_SCHEME + istage,stf_array(1),stf_array(2),stf_array(3),'#i #stf'
+  !if (irec_local == 1) print *,myrank,(it_in-1)*NSTAGE_TIME_SCHEME + istage,stf_array(1),stf_array(2),stf_array(3),'#i #stf'
 
   end subroutine get_stf_adjoint_source

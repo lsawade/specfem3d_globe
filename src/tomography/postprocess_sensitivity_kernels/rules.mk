@@ -1,7 +1,7 @@
 #=====================================================================
 #
-#          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-#          --------------------------------------------------
+#                       S p e c f e m 3 D  G l o b e
+#                       ----------------------------
 #
 #     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 #                        Princeton University, USA
@@ -119,15 +119,18 @@ tomography/postprocess_sensitivity_kernels: postprocess
 ## xconvert_model_file_adios
 ##
 xconvert_model_file_adios_OBJECTS = \
+	$O/postprocess_par.postprocess_module.o \
 	$O/convert_model_file_adios.postprocess_adios.o \
 	$(EMPTY_MACRO)
 
 xconvert_model_file_adios_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
 	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
 	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
 	$O/adios_helpers_addons.shared_adios_cc.o \
 	$O/adios_helpers_definitions.shared_adios.o \
@@ -149,11 +152,13 @@ xaddition_sem_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xaddition_sem_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
 	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
 	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
 	$(EMPTY_MACRO)
 
@@ -170,10 +175,13 @@ xclip_sem_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xclip_sem_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
+	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
 	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
 	$(EMPTY_MACRO)
 
@@ -191,10 +199,13 @@ xcombine_sem_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xcombine_sem_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
+	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
 	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
 	$(EMPTY_MACRO)
 
@@ -211,11 +222,13 @@ xdifference_sem_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xdifference_sem_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
 	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
 	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
 	$(EMPTY_MACRO)
 
@@ -231,9 +244,12 @@ xinterpolate_model_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xinterpolate_model_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
 	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
 	$O/gll_library.shared.o \
 	$O/heap_sort.shared.o \
 	$O/hex_nodes.shared.o \
@@ -242,7 +258,6 @@ xinterpolate_model_SHARED_OBJECTS = \
 	$O/recompute_jacobian.shared.o \
 	$O/search_kdtree.shared.o \
 	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
 	$(EMPTY_MACRO)
 
@@ -290,27 +305,125 @@ xsmooth_sem_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xsmooth_sem_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
+	$O/auto_ner.shared.o \
+	$O/count_elements.shared.o \
+	$O/count_points.shared.o \
+	$O/define_all_layers.shared.o \
 	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
 	$O/get_all_eight_slices.shared.o \
+	$O/get_model_parameters.shared.o \
+	$O/get_timestep_and_layers.shared.o \
 	$O/gll_library.shared.o \
 	$O/heap_sort.shared.o \
+	$O/model_mars_1D.shared.o \
+	$O/model_vpremoon.shared.o \
+	$O/param_reader.cc.o \
+	$O/read_compute_parameters.shared.o \
+	$O/read_parameter_file.shared.o \
+	$O/read_value_parameters.shared.o \
 	$O/reduce.shared.o \
 	$O/rthetaphi_xyz.shared.o \
 	$O/search_kdtree.shared.o \
 	$O/smooth_weights_vec.shared.o \
 	$O/write_VTK_file.shared.o \
-	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
-	$O/read_value_parameters.shared.o \
 	$(EMPTY_MACRO)
+
+###
+### GPU
+###
+
+gpu_smooth_OBJECTS = \
+	$O/check_fields_gpu.o \
+	$O/helper_functions_gpu.o \
+	$O/initialize_gpu.o \
+	$O/smooth_gpu.o \
+	$O/transfer_fields_gpu.o \
+	$(EMPTY_MACRO)
+
+gpu_smooth_STUBS = \
+	$O/specfem3D_gpu_method_stubs.gpu_cc.o \
+	$(EMPTY_MACRO)
+
+# kernel files
+gpu_smooth_kernels_OBJS := \
+	$O/get_maximum_scalar_kernel.o \
+	$O/get_maximum_vector_kernel.o \
+	$O/smooth_normalize_data_kernel.o \
+	$O/smooth_process_kernel.o \
+	$(EMPTY_MACRO)
+
+## CUDA
+ifeq ($(CUDA),yes)
+	# cuda
+  # renames endings
+	cuda_smooth_kernels_OBJS:=$(subst .o,.cuda-kernel.o,${gpu_smooth_kernels_OBJS})
+	cuda_smooth_DEVICE_OBJ =  $O/cuda_smooth_device_obj.o
+endif
+
+## HIP
+ifeq ($(HIP),yes)
+  # defines $(cuda_smooth_kernels_OBJS)
+  # renames endings
+  cuda_smooth_kernels_OBJS:=$(subst .o,.hip-kernel.o,${gpu_smooth_kernels_OBJS})
+endif
+
+ifdef NO_GPU
+	gpu_xs_OBJECTS = $(gpu_smooth_STUBS)
+else
+	gpu_xs_OBJECTS = $(gpu_smooth_OBJECTS)
+endif
+
+# substitutes object endings to assign corresponding compilation rule
+ifeq ($(GPU_CUDA_AND_OCL),yes)
+	# combines both CUDA and OpenCL kernels compilation
+  gpu_smooth_OBJECTS:=$(subst .o,.cuda-ocl.o,${gpu_smooth_OBJECTS})
+endif
+
+ifneq ($(GPU_CUDA_AND_OCL),yes)
+  # OpenCL kernels only
+  ifeq ($(OCL), yes)
+    gpu_smooth_OBJECTS:=$(subst .o,.ocl.o,${gpu_smooth_OBJECTS})
+  endif
+
+  # CUDA kernels only
+  ifeq ($(CUDA),yes)
+    gpu_smooth_OBJECTS:=$(subst .o,.cuda.o,${gpu_smooth_OBJECTS})
+  endif
+
+  # HIP kernels only
+  ifeq ($(HIP), yes)
+    gpu_smooth_OBJECTS:=$(subst .o,.hip.o,${gpu_smooth_OBJECTS})
+  endif
+endif
+
+gpu_smooth_OBJECTS += $(cuda_smooth_DEVICE_OBJ) $(cuda_smooth_kernels_OBJS)
+
+##
+## compilation
+##
+xsmooth_sem_SHARED_OBJECTS += $(gpu_xs_OBJECTS)
+xsmooth_sem_LIBS = $(MPILIBS)  # $(LDFLAGS) $(MPILIBS) $(LIBS)
+xsmooth_sem_LIBS += $(GPU_LINK)
+
+INFO_SMOOTH="building xsmooth_sem $(BUILD_VERSION_TXT)"
 
 # extra dependencies
 $O/smooth_sem.postprocess.o: $O/search_kdtree.shared.o
 
-${E}/xsmooth_sem: $(xsmooth_sem_OBJECTS) $(xsmooth_sem_SHARED_OBJECTS)
-	${MPIFCCOMPILE_CHECK} -o $@ $+ $(MPILIBS)
+${E}/xsmooth_sem: $(xsmooth_sem_OBJECTS) $(xsmooth_sem_SHARED_OBJECTS) # $(COND_MPI_OBJECTS)
+	@echo ""
+	@echo $(INFO_SMOOTH)
+	@echo ""
+	${FCLINK} -o $@ $+ $(xsmooth_sem_LIBS)
+	@echo ""
+
+$(cuda_smooth_DEVICE_OBJ): $(subst $(cuda_smooth_DEVICE_OBJ), ,$(gpu_smooth_OBJECTS)) $(cuda_smooth_kernels_OBJS)
+	${NVCCLINK} -o $@ $^
 
 
 ##
@@ -334,11 +447,24 @@ xsmooth_sem_adios_SHARED_OBJECTS += \
 	$O/adios_manager.shared_adios_module.o \
 	$(EMPTY_MACRO)
 
+##
+## compilation
+##
+xsmooth_sem_adios_LIBS = $(MPILIBS)  # $(LDFLAGS) $(MPILIBS) $(LIBS)
+xsmooth_sem_adios_LIBS += $(GPU_LINK)
+
+INFO_SMOOTH_ADIOS="building xsmooth_sem_adios $(BUILD_VERSION_TXT)"
+
 # extra dependencies
 $O/smooth_sem.postprocess_adios.o: $O/search_kdtree.shared.o
 
 ${E}/xsmooth_sem_adios: $(xsmooth_sem_adios_OBJECTS) $(xsmooth_sem_adios_SHARED_OBJECTS)
-	${MPIFCCOMPILE_CHECK} -o $@ $+ $(MPILIBS)
+	@echo ""
+	@echo $(INFO_SMOOTH_ADIOS)
+	@echo ""
+	${FCLINK} -o $@ $+ $(xsmooth_sem_adios_LIBS)
+	@echo ""
+
 
 
 ##
@@ -351,15 +477,30 @@ xsmooth_laplacian_sem_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xsmooth_laplacian_sem_SHARED_OBJECTS = \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/shared_par.shared_module.o \
 	$O/parallel.sharedmpi.o \
 	$O/assemble_MPI_scalar.shared.o \
+	$O/auto_ner.shared.o \
+	$O/count_elements.shared.o \
+	$O/count_points.shared.o \
+	$O/define_all_layers.shared.o \
 	$O/exit_mpi.shared.o \
+	$O/flush_system.shared.o \
+	$O/get_model_parameters.shared.o \
+	$O/get_timestep_and_layers.shared.o \
 	$O/gll_library.shared.o \
 	$O/lagrange_poly.shared.o \
+	$O/model_mars_1D.shared.o \
+	$O/model_prem.shared.o \
+	$O/model_vpremoon.shared.o \
 	$O/param_reader.cc.o \
+	$O/read_compute_parameters.shared.o \
 	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
+	$O/reduce.shared.o \
+	$O/rthetaphi_xyz.shared.o \
 	$(EMPTY_MACRO)
 
 ${E}/xsmooth_laplacian_sem: $(xsmooth_laplacian_sem_OBJECTS) $(xsmooth_laplacian_sem_SHARED_OBJECTS)
@@ -401,12 +542,20 @@ xcreate_cross_section_OBJECTS = \
 	$(EMPTY_MACRO)
 
 xcreate_cross_section_SHARED_OBJECTS = \
-	$O/shared_par.shared_module.o \
+	$O/specfem3D_par.solverstatic_module.o \
+	$O/read_mesh_parameters.solverstatic.o \
 	$O/parallel.sharedmpi.o \
+	$O/shared_par.shared_module.o \
 	$O/binary_c_io.cc.o \
+	$O/auto_ner.shared.o \
+	$O/count_elements.shared.o \
+	$O/count_points.shared.o \
 	$O/create_name_database.shared.o \
+	$O/define_all_layers.shared.o \
 	$O/exit_mpi.shared.o \
 	$O/flush_system.shared.o \
+	$O/get_model_parameters.shared.o \
+	$O/get_timestep_and_layers.shared.o \
 	$O/gll_library.shared.o \
 	$O/heap_sort.shared.o \
 	$O/hex_nodes.shared.o \
@@ -414,18 +563,20 @@ xcreate_cross_section_SHARED_OBJECTS = \
 	$O/intgrl.shared.o \
 	$O/lagrange_poly.shared.o \
 	$O/make_ellipticity.shared.o \
+	$O/model_mars_1D.shared.o \
 	$O/model_prem.shared.o \
 	$O/model_Sohl.shared.o \
 	$O/model_topo_bathy.shared.o \
 	$O/model_vpremoon.shared.o \
+	$O/param_reader.cc.o \
+	$O/read_compute_parameters.shared.o \
+	$O/read_parameter_file.shared.o \
+	$O/read_value_parameters.shared.o \
 	$O/recompute_jacobian.shared.o \
 	$O/reduce.shared.o \
 	$O/rthetaphi_xyz.shared.o \
 	$O/search_kdtree.shared.o \
 	$O/spline_routines.shared.o \
-	$O/param_reader.cc.o \
-	$O/read_parameter_file.shared.o \
-	$O/read_value_parameters.shared.o \
 	$(EMPTY_MACRO)
 
 # extra dependencies
@@ -441,13 +592,13 @@ ${E}/xcreate_cross_section: $(xcreate_cross_section_OBJECTS) $(xcreate_cross_sec
 ### module dependencies
 ###
 $O/postprocess_par.postprocess_module.o: $O/shared_par.shared_module.o
-
+$O/postprocess_par.postprocess_module.o: $O/specfem3D_par.solverstatic_module.o
 
 ####
 #### rule for each .o file below
 ####
 
-$O/%.postprocess_module.o: $S/%.f90 ${OUTPUT}/values_from_mesher.h
+$O/%.postprocess_module.o: $S/%.f90 $O/shared_par.shared_module.o $O/specfem3D_par.solverstatic_module.o
 	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
 
 $O/%.postprocess.o: $S/%.f90 $O/postprocess_par.postprocess_module.o $O/parallel.sharedmpi.o

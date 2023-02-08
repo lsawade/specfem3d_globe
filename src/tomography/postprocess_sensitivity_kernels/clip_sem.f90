@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -75,7 +75,7 @@ program clip_sem_globe
 
   character(len=MAX_STRING_LEN) :: input_dir,output_dir,kernel_names_comma_delimited
   character(len=MAX_STRING_LEN) :: filename, kernel_name
-  character(len=MAX_STRING_LEN),dimension(MAX_KERNEL_NAMES) :: kernel_names
+  character(len=MAX_STRING_LEN),dimension(:),allocatable :: kernel_names
   character(len=MAX_STRING_LEN) :: arg(NARGS)
   integer :: ier, iker,nker,i,j,k,ispec
   integer :: sizeprocs
@@ -103,24 +103,16 @@ program clip_sem_globe
   endif
   call synchronize_all()
 
-  ! check number of MPI processes
-  if (sizeprocs /= NPROCTOT_VAL) then
-    if (myrank == 0) then
-      print *
-      print *,'Expected number of MPI processes: ', NPROCTOT_VAL
-      print *,'Actual number of MPI processes: ', sizeprocs
-      print *
-    endif
-    call synchronize_all()
-    stop 'Error wrong number of MPI processes'
-  endif
-  call synchronize_all()
-
   if (myrank == 0) then
     print *,'Running XCLIP_SEM'
     print *
   endif
   call synchronize_all()
+
+  ! allocates array
+  allocate(kernel_names(MAX_KERNEL_NAMES),stat=ier)
+  if (ier /= 0) stop 'Error allocating kernel_names array'
+  kernel_names(:) = ''
 
   ! parse command line arguments
   do i = 1, NARGS
@@ -142,12 +134,42 @@ program clip_sem_globe
     print *,'output directory    : ',trim(output_dir)
     print *,'clip values min/max : ',min_val,max_val
     print *
+  endif
+
+  ! reads mesh parameters
+  if (myrank == 0) then
+    ! reads mesh_parameters.bin file from input1dir/
+    LOCAL_PATH = input_dir
+    call read_mesh_parameters()
+  endif
+  ! broadcast parameters to all processes
+  call bcast_mesh_parameters()
+
+  ! user output
+  if (myrank == 0) then
+    print *,'mesh parameters (from input directory):'
+    print *,'  NSPEC_CRUST_MANTLE = ',NSPEC_CRUST_MANTLE
+    print *,'  NPROCTOT          = ',NPROCTOT_VAL
+    print *
     print *,'SEM array size = ',NGLLX,'x',NGLLY,'x',NGLLZ,'x',NSPEC_CRUST_MANTLE
     print *,'total number of points in SEM array = ',NGLLX * NGLLY * NGLLZ * NSPEC_CRUST_MANTLE
     print *
     print *,'region code uses format: ','proc'//'***'//reg//'*'//'.bin'
     print *
   endif
+
+  ! check number of MPI processes
+  if (sizeprocs /= NPROCTOT_VAL) then
+    if (myrank == 0) then
+      print *
+      print *,'Expected number of MPI processes: ', NPROCTOT_VAL
+      print *,'Actual number of MPI processes: ', sizeprocs
+      print *
+    endif
+    call synchronize_all()
+    stop 'Error wrong number of MPI processes'
+  endif
+  call synchronize_all()
 
   ! initialize array
   allocate(sem_array(NGLLX,NGLLY,NGLLZ,NSPEC_CRUST_MANTLE),stat=ier)

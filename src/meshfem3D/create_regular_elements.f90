@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -47,13 +47,13 @@
 ! adds a regular spectral element to the different regions of the mesh
 
   use constants, only: myrank,NDIM,CUSTOM_REAL,NGLLX,NGLLY,NGNOD,NGNOD_EIGHT_CORNERS,SUPPRESS_CRUSTAL_MESH, &
-    SAVE_BOUNDARY_MESH,IREGION_CRUST_MANTLE
+    SAVE_BOUNDARY_MESH,IREGION_CRUST_MANTLE,IMAIN
 
   use shared_parameters, only: ner_mesh_layers,ratio_sampling_array,doubling_index,r_bottom,r_top
 
-  use meshfem3D_models_par, only: HONOR_1D_SPHERICAL_MOHO,CASE_3D
+  use meshfem_models_par, only: HONOR_1D_SPHERICAL_MOHO,CASE_3D
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     xstore,ystore,zstore
 
   use regions_mesh_par, only: &
@@ -129,6 +129,15 @@
             * NEX_PER_PROC_ETA/ratio_sampling_array(ilayer) &
             * ner_without_doubling
 
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) '    number of regular elements  = ',nelements
+    call flush_IMAIN()
+  endif
+
+  ! checks if anything to do
+  if (nelements <= 0) return
+
   ! fill mapping to be able to parallelize loops below
   allocate(map_ispec(nelements),stat=ier)
   if (ier /= 0) stop 'Error allocating map_ispec'
@@ -161,7 +170,7 @@
         ! fills mapping
         map_ispec(ielem) = ispec0 + ielem
         ! check
-        if (map_ispec(ielem) > nspec) call exit_MPI(myrank,'ispec greater than nspec in mesh creation')
+        if (map_ispec(ielem) > nspec) call exit_MPI(myrank,'ispec greater than nspec in mesh creation for regular element')
       enddo
     enddo
   enddo
@@ -232,27 +241,27 @@
         ! xmin & xmax
         if (ix_elem == 1) then
           iMPIcut_xi(1,ispec_loc) = .true.
-          if (iproc_xi == 0) iboun(1,ispec_loc)= .true.
+          if (iproc_xi == 0) iboun(1,ispec_loc) = .true.
         endif
         if (ix_elem == (NEX_PER_PROC_XI-ratio_sampling_array(ilayer)+1)) then
           iMPIcut_xi(2,ispec_loc) = .true.
-          if (iproc_xi == NPROC_XI-1) iboun(2,ispec_loc)= .true.
+          if (iproc_xi == NPROC_XI-1) iboun(2,ispec_loc) = .true.
         endif
         ! ymin & ymax
         if (iy_elem == 1) then
           iMPIcut_eta(1,ispec_loc) = .true.
-          if (iproc_eta == 0) iboun(3,ispec_loc)= .true.
+          if (iproc_eta == 0) iboun(3,ispec_loc) = .true.
         endif
         if (iy_elem == (NEX_PER_PROC_ETA-ratio_sampling_array(ilayer)+1)) then
           iMPIcut_eta(2,ispec_loc) = .true.
-          if (iproc_eta == NPROC_ETA-1) iboun(4,ispec_loc)= .true.
+          if (iproc_eta == NPROC_ETA-1) iboun(4,ispec_loc) = .true.
         endif
         ! zmin & zmax
         if (iz_elem == ner_mesh_layers(ilayer) .and. ilayer == ifirst_region) then
-          iboun(6,ispec_loc)= .true.
+          iboun(6,ispec_loc) = .true.
         endif
         if (iz_elem == 1 .and. ilayer == ilast_region) then    ! defined if no doubling in this layer
-          iboun(5,ispec_loc)= .true.
+          iboun(5,ispec_loc) = .true.
         endif
 
         ! define the doubling flag of this element

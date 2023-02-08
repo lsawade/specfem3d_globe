@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -146,7 +146,8 @@
   ! because that is by far the most expensive setup for runs in terms of memory usage, thus that is
   ! the type of run for which we need to make sure that everything fits in memory
   call memory_eval(NEX_PER_PROC_XI,NEX_PER_PROC_ETA, &
-                   NPROCTOT,NSPEC_REGIONS,NGLOB_REGIONS, &
+                   NPROCTOT, &
+                   NSPEC_REGIONS,NGLOB_REGIONS, &
                    NSPECMAX_ANISO_IC,NSPECMAX_ISO_MANTLE,NSPECMAX_TISO_MANTLE, &
                    NSPECMAX_ANISO_MANTLE,NSPEC_CRUST_MANTLE_ATTENUATION, &
                    NSPEC_INNER_CORE_ATTENUATION, &
@@ -162,7 +163,7 @@
                    NSPEC2D_BOTTOM,NSPEC2D_TOP,static_memory_size)
 
   call compute_optimized_dumping(static_memory_size,NT_DUMP_ATTENUATION_optimal,number_of_dumpings_to_do, &
-                   static_memory_size_GB,size_to_store_at_each_time_step,disk_size_of_each_dumping)
+                                 static_memory_size_GB,size_to_store_at_each_time_step,disk_size_of_each_dumping)
 
   ! restore the simulation type that we have temporarily erased
   SIMULATION_TYPE = saved_SIMULATION_TYPE
@@ -385,19 +386,19 @@
 
       icorner = icorner + 1
 
-      xi= - ANGULAR_WIDTH_XI_RAD/2. + dble(ix)*ANGULAR_WIDTH_XI_RAD
-      eta= - ANGULAR_WIDTH_ETA_RAD/2. + dble(iy)*ANGULAR_WIDTH_ETA_RAD
+      xi  = - ANGULAR_WIDTH_XI_RAD/2.  + dble(ix)*ANGULAR_WIDTH_XI_RAD
+      eta = - ANGULAR_WIDTH_ETA_RAD/2. + dble(iy)*ANGULAR_WIDTH_ETA_RAD
 
-      x=dtan(xi)
-      y=dtan(eta)
+      x = dtan(xi)
+      y = dtan(eta)
 
-      gamma=ONE/dsqrt(ONE+x*x+y*y)
-      rgt=R_UNIT_SPHERE*gamma
+      gamma = ONE/dsqrt(ONE+x*x+y*y)
+      rgt = R_UNIT_SPHERE*gamma
 
       ! define the mesh points at the top surface
-      x_top=-y*rgt
-      y_top=x*rgt
-      z_top=rgt
+      x_top = -y*rgt
+      y_top = x*rgt
+      z_top = rgt
 
       ! rotate top
       vector_ori(1) = x_top
@@ -642,8 +643,8 @@
     write(IOUT,*) 'integer, parameter :: NX_BATHY_VAL = ',NX_BATHY
     write(IOUT,*) 'integer, parameter :: NY_BATHY_VAL = ',NY_BATHY
   else
-    write(IOUT,*) 'integer, parameter :: NX_BATHY_VAL = 1'
-    write(IOUT,*) 'integer, parameter :: NY_BATHY_VAL = 1'
+    write(IOUT,*) 'integer, parameter :: NX_BATHY_VAL = 0'
+    write(IOUT,*) 'integer, parameter :: NY_BATHY_VAL = 0'
   endif
   write(IOUT,*)
 
@@ -730,15 +731,15 @@
     write(IOUT,*) 'integer, parameter :: NSPEC_CRUST_MANTLE_3DMOVIE = NSPEC_CRUST_MANTLE'
     write(IOUT,*) 'integer, parameter :: NGLOB_CRUST_MANTLE_3DMOVIE = NGLOB_CRUST_MANTLE'
   else
-    write(IOUT,*) 'integer, parameter :: NSPEC_CRUST_MANTLE_3DMOVIE = 1'
-    write(IOUT,*) 'integer, parameter :: NGLOB_CRUST_MANTLE_3DMOVIE = 1'
+    write(IOUT,*) 'integer, parameter :: NSPEC_CRUST_MANTLE_3DMOVIE = 0'
+    write(IOUT,*) 'integer, parameter :: NGLOB_CRUST_MANTLE_3DMOVIE = 0'
   endif
   write(IOUT,*)
 
   if (MOVIE_VOLUME .and. MOVIE_VOLUME_TYPE == 4) then
     write(IOUT,*) 'integer, parameter :: NSPEC_OUTER_CORE_3DMOVIE = NSPEC_OUTER_CORE'
   else
-    write(IOUT,*) 'integer, parameter :: NSPEC_OUTER_CORE_3DMOVIE = 1'
+    write(IOUT,*) 'integer, parameter :: NSPEC_OUTER_CORE_3DMOVIE = 0'
   endif
 
   ! in the case of Stacey boundary conditions, add C*delta/2 contribution to the mass matrix
@@ -751,9 +752,9 @@
   if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
      NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
   else
-     NGLOB_XY_CM = 1
+     NGLOB_XY_CM = 0
   endif
-  NGLOB_XY_IC = 1
+  NGLOB_XY_IC = 0
 
   if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
     NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
@@ -816,7 +817,7 @@
     NSPEC2D_TOP,UNDO_ATTENUATION
 
   use constants, only: NGLLX,NGLLY,NGLLZ,NDIM,N_SLS,CUSTOM_REAL, &
-    IREGION_CRUST_MANTLE,IREGION_INNER_CORE,IREGION_OUTER_CORE
+    IREGION_CRUST_MANTLE,IREGION_INNER_CORE,IREGION_OUTER_CORE, NTSTEP_BETWEEN_COMPUTE_KERNELS
 
   implicit none
 
@@ -847,7 +848,7 @@
   what_we_can_use_in_GB = MEMORY_INSTALLED_PER_CORE_IN_GB * PERCENT_OF_MEM_TO_USE_PER_CORE / 100.d0
 
   ! convert static memory size to GB
-  static_memory_size_GB = static_memory_size / 1.d9
+  static_memory_size_GB = static_memory_size / 1024.d0 / 1024.d0 / 1024.d0
 
 !! DK DK June 2014: TODO  this comment is true but the statement is commented out for now
 !! DK DK June 2014: TODO  because there is no GPU support for UNDO_ATTENUATION yet
@@ -904,14 +905,15 @@
   endif
 
   ! convert to GB
-  size_to_store_at_each_time_step = size_to_store_at_each_time_step / 1.d9
+  size_to_store_at_each_time_step = size_to_store_at_each_time_step / 1024.d0 / 1024.d0 / 1024.d0
 
-  NT_DUMP_ATTENUATION_optimal = int((what_we_can_use_in_GB - static_memory_size_GB) / size_to_store_at_each_time_step)
+  NT_DUMP_ATTENUATION_optimal = int((what_we_can_use_in_GB - static_memory_size_GB) / size_to_store_at_each_time_step) * &
+                                                                                      max(1,NTSTEP_BETWEEN_COMPUTE_KERNELS)
   ! check
   if (NT_DUMP_ATTENUATION_optimal <= 0) NT_DUMP_ATTENUATION_optimal = 1
 
   ! compute the size of files to dump to disk
-  disk_size_of_each_dumping = 0
+  disk_size_of_each_dumping = 0.d0
 
   ! displ_crust_mantle, veloc_crust_mantle, accel_crust_mantle
   disk_size_of_each_dumping = disk_size_of_each_dumping + 3.d0*dble(NDIM)*NGLOB_REGIONS(IREGION_CRUST_MANTLE)*dble(CUSTOM_REAL)
@@ -924,7 +926,7 @@
 
   ! A_array_rotation,B_array_rotation
   if (ROTATION) disk_size_of_each_dumping = disk_size_of_each_dumping + &
-      dble(NGLLX)*dble(NGLLY)*dble(NGLLZ)*NSPEC_REGIONS(IREGION_OUTER_CORE)*2.d0*dble(CUSTOM_REAL)
+      2.d0*dble(NGLLX)*dble(NGLLY)*dble(NGLLZ)*NSPEC_REGIONS(IREGION_OUTER_CORE)*dble(CUSTOM_REAL)
 
   if (ATTENUATION) then
     ! R_memory_crust_mantle
@@ -937,7 +939,7 @@
   endif
 
   ! convert to GB
-  disk_size_of_each_dumping = disk_size_of_each_dumping / 1.d9
+  disk_size_of_each_dumping = disk_size_of_each_dumping / 1024.d0 / 1024.d0 / 1024.d0
 
 !! DK DK this formula could be made more precise; currently in some cases it can probably be off by +1 or -1; does not matter much
   number_of_dumpings_to_do = ceiling( dble(NSTEP)/dble(NT_DUMP_ATTENUATION_optimal) )

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -169,7 +169,7 @@
   endif
 
   ! 3D crust options
-  ! model name has "_crustmaps", "_crust1.0", "_crust2.0", "_epcrust", "_eucrust", "_crustSH" appended:
+  ! model name has "_crustmaps", "_crust1.0", "_crust2.0", "_epcrust", "_eucrust", "_crustSH", "_sglobecrust" appended:
   ! "MODEL   = **model**_crust1.0" ..
   !
   ! this will use the corresponding 3D crustal model instead of the default crust (usually CRUST2.0).
@@ -216,6 +216,27 @@
     impose_crust = ICRUST_CRUST_SH
     ! in case it has an ending for the crust, remove it from the name
     MODEL_ROOT = MODEL_ROOT(1: len_trim(MODEL_ROOT)-8)
+  endif
+  ! checks with '_sglobecrust' option
+  if (len_trim(MODEL_ROOT) > 12 ) ending = MODEL_ROOT(len_trim(MODEL_ROOT)-11:len_trim(MODEL_ROOT))
+  if (trim(ending) == '_sglobecrust') then
+    impose_crust = ICRUST_SGLOBECRUST
+    ! in case it has an ending for the crust, remove it from the name
+    MODEL_ROOT = MODEL_ROOT(1: len_trim(MODEL_ROOT)-12)
+  endif
+  ! checks with '_crustSPIRAL' option
+  if (len_trim(MODEL_ROOT) > 12 ) ending = MODEL_ROOT(len_trim(MODEL_ROOT)-11:len_trim(MODEL_ROOT))
+  if (trim(ending) == '_crustspiral') then
+    impose_crust = ICRUST_SPIRAL
+    ! in case it has an ending for the crust, remove it from the name
+    MODEL_ROOT = MODEL_ROOT(1: len_trim(MODEL_ROOT)-12)
+  endif
+  ! checks with '_crustSHmars' option
+  if (len_trim(MODEL_ROOT) > 12 ) ending = MODEL_ROOT(len_trim(MODEL_ROOT)-11:len_trim(MODEL_ROOT))
+  if (trim(ending) == '_crustshmars') then
+    impose_crust = ICRUST_SH_MARS
+    ! in case it has an ending for the crust, remove it from the name
+    MODEL_ROOT = MODEL_ROOT(1: len_trim(MODEL_ROOT)-12)
   endif
 
   ! save main model name (without appended options)
@@ -271,11 +292,28 @@
   ! model specifics
   select case (trim(MODEL_NAME))
 
+  !-----------------------------------------------------------------------
+  !
   ! 1-D models
+  !
+  !-----------------------------------------------------------------------
+
+  ! 1-D reference models
+
+  ! Earth
   case ('1d_isotropic_prem')
     HONOR_1D_SPHERICAL_MOHO = .true.
 
   case ('1d_transversely_isotropic_prem')
+    HONOR_1D_SPHERICAL_MOHO = .true.
+    TRANSVERSE_ISOTROPY = .true.
+
+  case ('1d_isotropic_prem2')
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM2
+    HONOR_1D_SPHERICAL_MOHO = .true.
+
+  case ('1d_transversely_isotropic_prem2')
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM2
     HONOR_1D_SPHERICAL_MOHO = .true.
     TRANSVERSE_ISOTROPY = .true.
 
@@ -304,8 +342,13 @@
     HONOR_1D_SPHERICAL_MOHO = .true.
     REFERENCE_1D_MODEL = REFERENCE_MODEL_1DREF
 
+  case ('1d_ccrem')
+    HONOR_1D_SPHERICAL_MOHO = .true.
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_CCREM
+
+  ! Mars 1D models
   case ('1d_sohl')
-    ! Mars
+    ! Mars model A
     TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
     HONOR_1D_SPHERICAL_MOHO = .true.
     REFERENCE_1D_MODEL = REFERENCE_MODEL_SOHL
@@ -320,7 +363,7 @@
     REFERENCE_CRUSTAL_MODEL = ICRUST_CRUSTMAPS
 
   case ('1d_sohl_b')
-    ! Mars
+    ! Mars model B
     TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
     HONOR_1D_SPHERICAL_MOHO = .true.
     REFERENCE_1D_MODEL = REFERENCE_MODEL_SOHL_B
@@ -349,6 +392,22 @@
     REFERENCE_1D_MODEL = REFERENCE_MODEL_CASE65TAY
     REFERENCE_CRUSTAL_MODEL = ICRUST_CRUSTMAPS
 
+  case('1d_mars','mars_1d')
+    ! Mars
+    TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
+    HONOR_1D_SPHERICAL_MOHO = .true.
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_MARS_1D
+
+  case('1d_mars_3d_crust','mars_1d_3d_crust')
+    ! Mars
+    TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
+    CASE_3D = .true.
+    CRUSTAL = .true.
+    ONE_CRUST = .true.
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_MARS_1D
+    REFERENCE_CRUSTAL_MODEL = ICRUST_CRUSTMAPS
+
+  ! Moon 1D models
   case('vpremoon')
     ! Moon
     TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
@@ -362,7 +421,13 @@
     REFERENCE_1D_MODEL = REFERENCE_MODEL_MOON_MEENA
     stop 'model MOON_MEENA is not fully implemented yet'
 
+  !-----------------------------------------------------------------------
+  !
   ! 3-D models
+  !
+  !-----------------------------------------------------------------------
+
+  ! Earth
   case ('transversely_isotropic_prem_plus_3d_crust_2.0')
     CASE_3D = .true.
     CRUSTAL = .true.
@@ -377,6 +442,28 @@
     impose_crust = ICRUST_CRUST1
 
   case ('transversely_isotropic_prem_plus_3d')
+    CASE_3D = .true.
+    CRUSTAL = .true.
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .true.
+
+  case ('transversely_isotropic_prem2_plus_3d_crust_2.0')
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM2
+    CASE_3D = .true.
+    CRUSTAL = .true.
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .true.
+
+  case ('transversely_isotropic_prem2_plus_3d_crust_1.0')
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM2
+    CASE_3D = .true.
+    CRUSTAL = .true.
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .true.
+    impose_crust = ICRUST_CRUST1
+
+  case ('transversely_isotropic_prem2_plus_3d')
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM2
     CASE_3D = .true.
     CRUSTAL = .true.
     ONE_CRUST = .true.
@@ -415,8 +502,11 @@
     ONE_CRUST = .true.
     TRANSVERSE_ISOTROPY = .true.
 
+  ! Mars
   case('mars_full_sh')
     ! Mars using spherical harmonics model, uses Sohl & Spoon reference model by default
+    ! note: spherical harmonics must be defined as in full_sh format
+    !       with model files in directory folder DATA/full_sphericalharmonic_model/
     REFERENCE_1D_MODEL = REFERENCE_MODEL_SOHL
     ! uses SH crustal model by default
     REFERENCE_CRUSTAL_MODEL = ICRUST_CRUST_SH
@@ -428,6 +518,22 @@
     ONE_CRUST = .true.
     TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
 
+  case('mars_sh_model')
+    ! Mars using spherical harmonics model, uses Case65TAY 1-D reference model by default
+    ! note: spherical harmonics must be defined as in Ana-Catalina Plesa evolution model formats
+    !       with model files specified in file DATA/mars/SH_model/SH_model_files.dat
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_CASE65TAY
+    ! uses SH crustal model by default
+    REFERENCE_CRUSTAL_MODEL = ICRUST_SH_MARS
+    ! 3D mantle model perturbations
+    THREE_D_MODEL = THREE_D_MODEL_SH_MARS
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.
+    CASE_3D = .true.
+    CRUSTAL = .true.
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
+
+  ! Moon
   case ('moon_full_sh')
     ! Moon using spherical harmonics model, uses VPREMOON reference model by default
     REFERENCE_1D_MODEL = REFERENCE_MODEL_VPREMOON
@@ -539,6 +645,8 @@
 
   case ('sgloberani_aniso')
     ! anisotropic perturbations to PREM
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM
+    REFERENCE_CRUSTAL_MODEL = ICRUST_SGLOBECRUST
     CASE_3D = .true.
     CRUSTAL = .true.
     MODEL_3D_MANTLE_PERTUBATIONS = .true.
@@ -548,6 +656,8 @@
 
   case ('sgloberani_iso')
     ! isotropic perturbations to PREM
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM
+    REFERENCE_CRUSTAL_MODEL = ICRUST_SGLOBECRUST
     CASE_3D = .true.
     CRUSTAL = .true.
     MODEL_3D_MANTLE_PERTUBATIONS = .true.
@@ -574,15 +684,36 @@
     THREE_D_MODEL = THREE_D_MODEL_ANISO_MANTLE
     ANISOTROPIC_3D_MANTLE = .true. ! treats mantle elements as fully anisotropic
 
+  case ('spiral')
+    ! uses SPiRaL crustal model by default
+    REFERENCE_CRUSTAL_MODEL = ICRUST_SPIRAL
+    CASE_3D = .true.                      ! crustal moho stretching
+    CRUSTAL = .true.                      ! with 3D crust: depends on 3D mantle reference model
+    ONE_CRUST = .true.                    ! 1 element layer in top crust region
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_1DREF
+    TRANSVERSE_ISOTROPY = .true.          ! to use transverse isotropic PREM 1D ref model
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.
+    THREE_D_MODEL = THREE_D_MODEL_SPIRAL
+    ANISOTROPIC_3D_MANTLE = .true.        ! treats mantle elements as fully anisotropic
+    ATTENUATION_3D = .true.
+
   case ('heterogen')
     ONE_CRUST = .true.
     CASE_3D = .true.
     CRUSTAL = .true.
-    HETEROGEN_3D_MANTLE = .true.  ! adds additional (dvp,dvs,drho) perturbations on top of reference 3D model
+    HETEROGEN_3D_MANTLE = .true.          ! adds additional (dvp,dvs,drho) perturbations on top of reference 3D model
     MODEL_3D_MANTLE_PERTUBATIONS = .true.
     REFERENCE_1D_MODEL = REFERENCE_MODEL_1DREF
     THREE_D_MODEL = THREE_D_MODEL_S362ANI
     TRANSVERSE_ISOTROPY = .true.
+
+  case ('heterogen_prem')
+    !chris changed 2021
+    CRUSTAL = .true.                      ! with 3D crust: depends on 3D mantle reference model
+    HETEROGEN_3D_MANTLE = .true.          ! adds additional (dvp,dvs,drho) perturbations on top of reference 3D model
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM
+    THREE_D_MODEL = THREE_D_MODEL_HETEROGEN_PREM
 
 #ifdef USE_CEM
   case ('cem_request')
@@ -627,9 +758,16 @@
     ! takes tiso PREM mantle model as reference
     TRANSVERSE_ISOTROPY = .true.
 
+  !-----------------------------------------------------------------------
+  !
   ! GLL models
+  !
+  !-----------------------------------------------------------------------
+
   ! velocities will get over-imposed onto a default mesh
   ! (mostly used for iterative model updates)
+
+  ! Earth
   case ('gll','gll_tiso')
     ! default GLL model:
     ! will be given on local basis, at all GLL points,
@@ -689,6 +827,7 @@
     THREE_D_MODEL = THREE_D_MODEL_GLL
     ATTENUATION_GLL = .true.
 
+  ! Mars
   case ('gll_mars')
     ! Mars
     ! default GLL model, based on 1D_Sohl_3D_crust
@@ -726,15 +865,30 @@
     MODEL_GLL = .true.
     MODEL_GLL_TYPE = 1 ! (1 == iso) input model files are iso (vp,vs,rho)
 
+  ! Moon
   case ('gll_moon')
     ! Moon, based on VPREMOON
     REFERENCE_1D_MODEL = REFERENCE_MODEL_VPREMOON
     REFERENCE_CRUSTAL_MODEL = ICRUST_CRUSTMAPS
     TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model
     MODEL_3D_MANTLE_PERTUBATIONS = .false. ! not based on a 3D mantle model, but 1D model VPREMOON
-    THREE_D_MODEL = 0
+    THREE_D_MODEL = 0                      ! not used
     MODEL_GLL = .true.
     MODEL_GLL_TYPE = 1 ! (1 == iso) input model files are iso (vp,vs,rho)
+
+  case ('glad_bkmns')
+    ! block-mantle-sphericalharmonics model expansions of GLAD models (based on s362ani)
+    ! 3d crust - mesh stretching
+    ONE_CRUST = .true.
+    CASE_3D = .true.
+    CRUSTAL = .true.
+    ! reference model (same as s362ani)
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_1DREF
+    REFERENCE_CRUSTAL_MODEL = ICRUST_BKMNS_GLAD
+    ! crust/mantle
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.
+    TRANSVERSE_ISOTROPY = .true. ! same as reference model
+    THREE_D_MODEL = THREE_D_MODEL_BKMNS_GLAD
 
   case default
     print *
@@ -790,25 +944,28 @@
   if (HONOR_1D_SPHERICAL_MOHO .and. CASE_3D ) &
     stop 'honor 1D spherical moho excludes having 3D crustal mesh stretching'
 
-  ! checks that IASP91, AK135, 1066A, JP1D or SEA1D is isotropic
+  ! checks that IASP91, AK135, 1066A, JP1D, SEA1D or CCREM is isotropic
   if ((REFERENCE_1D_MODEL == REFERENCE_MODEL_IASP91 .or. &
        REFERENCE_1D_MODEL == REFERENCE_MODEL_AK135F_NO_MUD .or. &
        REFERENCE_1D_MODEL == REFERENCE_MODEL_1066A .or. &
        REFERENCE_1D_MODEL == REFERENCE_MODEL_JP1D .or. &
-       REFERENCE_1D_MODEL == REFERENCE_MODEL_SEA1D) .and. TRANSVERSE_ISOTROPY) &
-        stop 'models IASP91, AK135, 1066A, JP1D and SEA1D are currently isotropic'
+       REFERENCE_1D_MODEL == REFERENCE_MODEL_SEA1D .or. &
+       REFERENCE_1D_MODEL == REFERENCE_MODEL_CCREM) .and. TRANSVERSE_ISOTROPY) &
+        stop 'models IASP91, AK135, 1066A, JP1D, SEA1D and CCREM are currently isotropic'
 
   ! Mars
   ! Mars 1D_Sohl is isotropic
   if ((REFERENCE_1D_MODEL == REFERENCE_MODEL_SOHL .or. &
        REFERENCE_1D_MODEL == REFERENCE_MODEL_SOHL_B .or. &
-       REFERENCE_1D_MODEL == REFERENCE_MODEL_CASE65TAY) .and. TRANSVERSE_ISOTROPY) &
-      stop 'models 1D_Sohl, 1D_Sohl_B, 1D_case65TAY are currently isotropic'
+       REFERENCE_1D_MODEL == REFERENCE_MODEL_CASE65TAY .or. &
+       REFERENCE_1D_MODEL == REFERENCE_MODEL_MARS_1D) .and. TRANSVERSE_ISOTROPY) &
+      stop 'models 1D_Sohl, 1D_Sohl_B, 1D_case65TAY, 1D_mars are currently isotropic'
   ! Mars has no ocean
   if ((REFERENCE_1D_MODEL == REFERENCE_MODEL_SOHL .or. &
        REFERENCE_1D_MODEL == REFERENCE_MODEL_SOHL_B .or. &
-       REFERENCE_1D_MODEL == REFERENCE_MODEL_CASE65TAY) .and. OCEANS) &
-    stop 'models 1D_Sohl, 1D_Sohl_B, 1D_case65TAY cannot use an ocean approximation'
+       REFERENCE_1D_MODEL == REFERENCE_MODEL_CASE65TAY .or. &
+       REFERENCE_1D_MODEL == REFERENCE_MODEL_MARS_1D) .and. OCEANS) &
+    stop 'models 1D_Sohl, 1D_Sohl_B, 1D_case65TAY, 1D_mars cannot use an ocean approximation'
 
   ! Moon
   ! Moon is isotropic
@@ -837,11 +994,13 @@
     REGIONAL_MOHO_MESH,HONOR_DEEP_MOHO, &
     REFERENCE_1D_MODEL
 
+  use model_mars_1d_par, only: MARS_1D_RSURFACE
+
   implicit none
 
 ! note: Please make sure to broadcast the values below in broadcast_computed_parameters.f90
 !
-!       here, only the master process is setting the new defaults.
+!       here, only the main process is setting the new defaults.
 !       thus, they need to be broadcast to all other processes.
 !       this will be done in routine broadcast_computed_parameters().
 
@@ -849,12 +1008,21 @@
   select case(REFERENCE_1D_MODEL)
   case (REFERENCE_MODEL_SOHL, &
         REFERENCE_MODEL_SOHL_B, &
-        REFERENCE_MODEL_CASE65TAY)
+        REFERENCE_MODEL_CASE65TAY, &
+        REFERENCE_MODEL_MARS_1D)
     ! Mars
     ! sets planet
     PLANET_TYPE = IPLANET_MARS
     ! radius
     R_PLANET = MARS_R  ! physical surface radius (in m)
+
+    ! change radius for specific model
+    if (REFERENCE_1D_MODEL == REFERENCE_MODEL_MARS_1D) then
+      ! Mars 1D model
+      ! as defined by DATA/mars/mars_1D.dat, use a radius of 3389.50 km
+      ! this is different to the default Sohl models, which use a radius of 3390.0 km for Mars
+      R_PLANET = MARS_1D_RSURFACE
+    endif
     R_PLANET_KM = R_PLANET / 1000.d0
     R_EARTH = R_PLANET ! overwrites R_EARTH which is still widely used in the code (e.g., to non-dimensionalize)
     R_EARTH_KM = R_PLANET_KM
@@ -980,9 +1148,12 @@
   use model_prem_par
   use model_sohl_par
   use model_vpremoon_par
+  use model_mars_1d_par
 
   implicit none
 
+  ! local parameters
+  double precision :: CCREM_RSURFACE
 
 ! sets radii in PREM or IASP91 and normalized density at fluid-solid interface on fluid size for coupling
 !
@@ -1041,16 +1212,18 @@
     ! default: Sohl & Spohn
     ROCEAN = SOHL_ROCEAN
     RMIDDLE_CRUST = SOHL_RMIDDLE_CRUST
-    RMOHO = SOHL_RMOHO
-    R80  = SOHL_R80
+    ! Model A
+    RMOHO = SOHL_A_RMOHO
+    R80  = SOHL_A_R80
     R120 = -1.d0 ! by default there is no d120 discontinuity
-    R220 = SOHL_R220
-    R400 = SOHL_R400
-    R600 = SOHL_R600
-    R670 = SOHL_R670
-    R771 = SOHL_R771
-    RTOPDDOUBLEPRIME = SOHL_RTOPDDOUBLEPRIME
-    RCMB = SOHL_RCMB
+    R220 = SOHL_A_R220
+    R400 = SOHL_A_R400
+    R600 = SOHL_A_R600
+    R670 = SOHL_A_R670
+    R771 = SOHL_A_R771
+    RTOPDDOUBLEPRIME = SOHL_A_RTOPDDOUBLEPRIME
+    RCMB = SOHL_A_RCMB
+    ! artifical ICB (to impose solid/elastic inner core)
     RICB = SOHL_RICB
 
     ! non-dimensionalizes densities
@@ -1209,6 +1382,27 @@
     R600 = 5771000.d0
     R771 = 5611000.d0
 
+  case (REFERENCE_MODEL_CCREM)
+    ! CCREM
+    ! (same as values in model_ccrem.f90)
+    CCREM_RSURFACE = R_PLANET
+    ROCEAN = CCREM_RSURFACE   ! no ocean
+    RMIDDLE_CRUST = CCREM_RSURFACE - 20000.d0 ! depth = 20 km
+    RMOHO = CCREM_RSURFACE - 35000.d0         ! depth = 35 km
+    R80  = CCREM_RSURFACE - 80000.d00         ! depth = 80 km
+    R220 = CCREM_RSURFACE - 220000.d0          ! depth = 220 km
+    R400 = CCREM_RSURFACE - 410000.d0          ! depth = 410 km - CCREM depth 410km discontinuity
+    R600 = CCREM_RSURFACE - 600000.d0          ! depth = 600 km
+    R670 = CCREM_RSURFACE - 660000.d0          ! depth = 660 km - CCREM depth 660km discontinuity
+    R771 = CCREM_RSURFACE - 771000.d0          ! depth = 771 km (PREM)
+    RTOPDDOUBLEPRIME = CCREM_RSURFACE - 2741000.d0 ! depth = 2741 km (PREM)
+    RCMB = CCREM_RSURFACE - 2891000.d0         ! depth = 2891 km (PREM)
+    RICB = CCREM_RSURFACE - 5153500.d0         ! depth = 5153.5 km
+
+    RHO_TOP_OC = 9.9131d0 * 1000.d0 / RHOAV
+    RHO_BOTTOM_OC = 12.1478d0 * 1000.d0 / RHOAV
+
+  ! Mars models
   case (REFERENCE_MODEL_SOHL_B)
     ! Mars
     ! Sohl & Spohn, 1997: Model B
@@ -1245,6 +1439,26 @@
     RHO_TOP_OC = 6936.40 / MARS_RHOAV    ! densities fluid outer core (from modSOHL)
     RHO_BOTTOM_OC = 7268.20 / MARS_RHOAV
 
+  case (REFERENCE_MODEL_MARS_1D)
+    ! Mars
+    ROCEAN = R_PLANET   ! no ocean
+    RMIDDLE_CRUST = MARS_1D_RMIDDLE_CRUST
+    RMOHO = MARS_1D_RMOHO
+    R80  = MARS_1D_R80
+    R220 = MARS_1D_R220
+    R400 = MARS_1D_R400
+    R600 = MARS_1D_R600
+    R670 = MARS_1D_R670
+    R771 = MARS_1D_R771
+    RTOPDDOUBLEPRIME = MARS_1D_RTOPDDOUBLEPRIME
+    RCMB = MARS_1D_RCMB
+    RICB = MARS_1D_RICB
+    ! densities
+    RHO_TOP_OC = MARS_1D_RHO_OCEANS / RHOAV
+    RHO_TOP_OC = MARS_1D_RHO_TOP_OC / MARS_RHOAV
+    RHO_BOTTOM_OC = MARS_1D_RHO_BOTTOM_OC / RHOAV
+
+  ! Moon models
   case (REFERENCE_MODEL_MOON_MEENA)
     ! Moon
     ! by Meena Yellapragada

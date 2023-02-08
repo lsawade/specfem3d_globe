@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -55,7 +55,7 @@
   integer(kind=8) :: sel
 
   ! only crust and mantle
-  write(file_name,'(a)') trim(PATHNAME_GLL_modeldir) // 'model_gll.bp'
+  file_name = get_adios_filename(trim(PATHNAME_GLL_modeldir) // 'model_gll')
 
   ! user output
   if (myrank == 0) then
@@ -66,6 +66,7 @@
   endif
 
   ! Setup the ADIOS library to read the file
+  call init_adios_group(myadios_group,"GLLReaderQmu")
   call open_file_adios_read_and_init_method(myadios_file,myadios_group,file_name)
 
   local_dim = NGLLX * NGLLY * NGLLZ * MGLL_QMU_V%nspec
@@ -75,11 +76,12 @@
 
   ! reads in model for each partition
   call read_adios_schedule_array(myadios_file, myadios_group, sel, start, count, &
-                                 "reg1/Qmu/array", MGLL_QMU_V%qmu_new(:,:,:,1:MGLL_QMU_V%nspec))
+                                 "reg1/qmu/array", MGLL_QMU_V%qmu_new(:,:,:,1:MGLL_QMU_V%nspec))
   call read_adios_perform(myadios_file)
 
   ! closes adios file
   call close_file_adios_read_and_finalize_method(myadios_file)
+  call delete_adios_group(myadios_group,"GLLReaderQmu")
 
   call synchronize_all()
 

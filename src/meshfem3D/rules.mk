@@ -1,7 +1,7 @@
 #=====================================================================
 #
-#          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-#          --------------------------------------------------
+#                       S p e c f e m 3 D  G l o b e
+#                       ----------------------------
 #
 #     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 #                        Princeton University, USA
@@ -92,7 +92,9 @@ meshfem3D_MESHER_OBJECTS = \
 	$O/model_atten3D_QRFSI12.check.o \
 	$O/model_attenuation_gll.check.o \
 	$O/model_attenuation.check.o \
+	$O/model_bkmns.check.o \
 	$O/model_case65TAY.check.o \
+	$O/model_ccrem.check.o \
 	$O/model_crust_1_0.check.o \
 	$O/model_crust_2_0.check.o \
 	$O/model_crustmaps.check.o \
@@ -109,8 +111,12 @@ meshfem3D_MESHER_OBJECTS = \
 	$O/model_s20rts.check.o \
 	$O/model_s40rts.check.o \
 	$O/model_s362ani.check.o \
+	$O/model_scattering.check.o \
 	$O/model_sea99_s.check.o \
 	$O/model_sglobe.check.o \
+	$O/model_sglobecrust.check.o \
+	$O/model_sh_mars.check.o \
+	$O/model_spiral.check.o \
 	$O/moho_stretching.check.o \
 	$O/save_arrays_solver.check.o \
 	$O/save_model_meshfiles.check.o \
@@ -133,9 +139,9 @@ meshfem3D_MODULES = \
 	$(FC_MODDIR)/regions_mesh_par2.$(FC_MODEXT) \
 	$(FC_MODDIR)/mpi_interfaces_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/gapp2_mantle_model_constants.$(FC_MODEXT) \
-	$(FC_MODDIR)/manager_adios_par.$(FC_MODEXT) \
-	$(FC_MODDIR)/meshfem3d_models_par.$(FC_MODEXT) \
-	$(FC_MODDIR)/meshfem3d_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/manager_adios.$(FC_MODEXT) \
+	$(FC_MODDIR)/meshfem_models_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/meshfem_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/mpi_crust_mantle_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/mpi_inner_core_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/mpi_outer_core_par.$(FC_MODEXT) \
@@ -145,7 +151,10 @@ meshfem3D_MODULES = \
 	$(FC_MODDIR)/model_aniso_mantle_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_atten3d_qrfsi12_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_attenuation_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_bkmns_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_case65tay_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_sh_mars_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_ccrem_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_crust_1_0_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_crust_2_0_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_crustmaps_par.$(FC_MODEXT) \
@@ -161,9 +170,13 @@ meshfem3D_MODULES = \
 	$(FC_MODDIR)/model_s20rts_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_s362ani_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_s40rts_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_scattering_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sea1d_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sea99_s_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sglobe_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_sglobecrust_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_spiral_crust_par.$(FC_MODEXT) \
+	$(FC_MODDIR)/model_spiral_mantle_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/avs_dx_global_chunks_mod.$(FC_MODEXT) \
 	$(FC_MODDIR)/avs_dx_global_mod.$(FC_MODEXT) \
 	$(FC_MODDIR)/avs_dx_global_faces_mod.$(FC_MODEXT) \
@@ -179,13 +192,13 @@ meshfem3D_SHARED_OBJECTS = \
 	$O/binary_c_io.cc.o \
 	$O/broadcast_computed_parameters.shared.o \
 	$O/count_elements.shared.o \
-	$O/count_number_of_sources.shared.o \
 	$O/count_points.shared.o \
 	$O/create_addressing.shared.o \
 	$O/create_name_database.shared.o \
 	$O/define_all_layers.shared.o \
 	$O/euler_angles.shared.o \
 	$O/exit_mpi.shared.o \
+	$O/fft.shared.o \
 	$O/flush_system.shared.o \
 	$O/get_all_eight_slices.shared.o \
 	$O/get_global.shared.o \
@@ -199,6 +212,7 @@ meshfem3D_SHARED_OBJECTS = \
 	$O/lagrange_poly.shared.o \
 	$O/make_ellipticity.shared.o \
 	$O/memory_eval.shared.o \
+	$O/model_mars_1D.shared.o \
 	$O/model_prem.shared.o \
 	$O/model_Sohl.shared.o \
 	$O/model_topo_bathy.shared.o \
@@ -249,13 +263,6 @@ adios_meshfem3D_SHARED_STUBS = \
 	$O/adios_method_stubs.cc.o \
 	$(EMPTY_MACRO)
 
-#adios2_meshfem3D_OBJECTS = \
-#	$(EMPTY_MACRO)
-
-#adios2_meshfem3D_SHARED_OBJECTS = \
-#	$O/adios2_helpers_read.shared_adios2_module.o \
-#	$(EMPTY_MACRO)
-
 # conditional adios linking
 ifeq ($(ADIOS),yes)
 meshfem3D_OBJECTS += $(adios_meshfem3D_OBJECTS)
@@ -278,6 +285,13 @@ meshfem3D_OBJECTS += $O/model_cem.checknetcdf.o
 meshfem3D_MODULES += $(FC_MODDIR)/cem_par.$(FC_MODEXT)
 endif
 
+##
+## C++ Parallel STL sorting
+##
+
+ifeq ($(PARALLEL_STL),yes)
+meshfem3D_SHARED_OBJECTS += $O/sort_array_coordinates_c.shared.o
+endif
 
 #######################################
 
@@ -319,7 +333,9 @@ $O/model_attenuation.check.o: \
 	$O/model_1066a.check.o \
 	$O/model_sea1d.check.o \
 	$O/model_case65TAY.check.o \
+	$O/model_ccrem.check.o \
 	$O/model_vpremoon.shared.o \
+	$O/model_mars_1D.shared.o \
 	$(EMPTY_MACRO)
 
 $O/meshfem3D_par.check_module.o: $O/adios_manager.shared_adios_module.o

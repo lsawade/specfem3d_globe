@@ -1,8 +1,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -73,6 +73,7 @@ FC_FUNC_(show_adios2_all_variables,SHOW_ADIOS2_ALL_VARIABLES)(adios2_io **adios_
   printf("variables: %i\n",(int)nvars);
   for (int i = 0; i < nvars; i++){
     adios2_variable *var = adios_vars[i];
+    if (var == NULL) continue;
 
     size_t len;
     ret = adios2_variable_name(NULL, &len, var);

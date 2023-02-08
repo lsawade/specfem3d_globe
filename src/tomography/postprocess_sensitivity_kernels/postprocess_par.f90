@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -28,17 +28,21 @@
 
 module postprocess_par
 
+  use constants, only: myrank
+
   use constants, only: CUSTOM_REAL,MAX_STRING_LEN, &
     NGLLX,NGLLY,NGLLZ,IIN,IOUT, &
-    FOUR_THIRDS,GAUSSALPHA,GAUSSBETA, &
-    myrank
+    FOUR_THIRDS,GAUSSALPHA,GAUSSBETA
 
   use shared_parameters, only: LOCAL_PATH,R_PLANET_KM
 
-  implicit none
+  use constants_solver, only: NSPEC_CRUST_MANTLE,NSPEC_OUTER_CORE,NSPEC_INNER_CORE, &
+    NGLOB_CRUST_MANTLE, &
+    NPROCTOT_VAL,NPROC_XI_VAL,NPROC_ETA_VAL, &
+    NEX_XI_VAL,NEX_ETA_VAL,NCHUNKS_VAL, &
+    ANGULAR_WIDTH_XI_IN_DEGREES_VAL,ANGULAR_WIDTH_ETA_IN_DEGREES_VAL
 
-  ! array dimensions for static compilation
-  include "OUTPUT_FILES/values_from_mesher.h"
+  implicit none
 
   ! maximum number of kernel names (comma-separated e.g. vsv,vsh,vpv,vph,eta,rho -> 6 kernel names)
   integer,parameter :: MAX_KERNEL_NAMES = 24

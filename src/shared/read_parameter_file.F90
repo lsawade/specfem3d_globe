@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -40,9 +40,8 @@
 
   implicit none
 
-! local variables
+  ! local variables
   integer :: ier
-  character(len=MAX_STRING_LEN) :: path_to_add
 
   ! opens the parameter file: DATA/Par_file
   call open_parameter_file(ier)
@@ -58,25 +57,18 @@
   call read_value_integer(NCHUNKS, 'NCHUNKS', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: NCHUNKS'
 
-  if (NCHUNKS == 6) then
-    ! global simulations
-    ANGULAR_WIDTH_XI_IN_DEGREES = 90.d0
-    ANGULAR_WIDTH_ETA_IN_DEGREES = 90.d0
-    CENTER_LATITUDE_IN_DEGREES = 0.d0
-    CENTER_LONGITUDE_IN_DEGREES = 0.d0
-    GAMMA_ROTATION_AZIMUTH = 0.d0
-  else
-    ! 1/2-chunk simulations
+  if (NCHUNKS /= 6) then
+    ! 1-chunk or 2-chunk simulations
     call read_value_double_precision(ANGULAR_WIDTH_XI_IN_DEGREES, 'ANGULAR_WIDTH_XI_IN_DEGREES', ier)
-    if (ier /= 0) stop 'an error occurred while reading the parameter file: ANGULAR_WIDTH_XI...'
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: ANGULAR_WIDTH_XI_IN_DEGREES...'
     call read_value_double_precision(ANGULAR_WIDTH_ETA_IN_DEGREES, 'ANGULAR_WIDTH_ETA_IN_DEGREES', ier)
-    if (ier /= 0) stop 'an error occurred while reading the parameter file: ANGULAR_WIDTH_ETA...'
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: ANGULAR_WIDTH_ETA_IN_DEGREES...'
     call read_value_double_precision(CENTER_LATITUDE_IN_DEGREES, 'CENTER_LATITUDE_IN_DEGREES', ier)
-    if (ier /= 0) stop 'an error occurred while reading the parameter file: CENTER_LATITUDE...'
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: CENTER_LATITUDE_IN_DEGREES...'
     call read_value_double_precision(CENTER_LONGITUDE_IN_DEGREES, 'CENTER_LONGITUDE_IN_DEGREES', ier)
-    if (ier /= 0) stop 'an error occurred while reading the parameter file: CENTER_LONGITUDE...'
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: CENTER_LONGITUDE_IN_DEGREES...'
     call read_value_double_precision(GAMMA_ROTATION_AZIMUTH, 'GAMMA_ROTATION_AZIMUTH', ier)
-    if (ier /= 0) stop 'an error occurred while reading the parameter file: GAMMA_ROTATION...'
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: GAMMA_ROTATION_AZIMUTH...'
   endif
 
   ! number of elements at the surface along the two sides of the first chunk
@@ -88,6 +80,10 @@
   if (ier /= 0) stop 'an error occurred while reading the parameter file: NPROC_XI'
   call read_value_integer(NPROC_ETA_read, 'NPROC_ETA', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: NPROC_ETA'
+
+  ! define the velocity model
+  call read_value_string(MODEL, 'MODEL', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: MODEL'
 
   ! physical parameters
   call read_value_logical(OCEANS, 'OCEANS', ier)
@@ -103,14 +99,34 @@
   call read_value_logical(ATTENUATION, 'ATTENUATION', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: ATTENUATION'
 
+  call read_value_double_precision(RECORD_LENGTH_IN_MINUTES, 'RECORD_LENGTH_IN_MINUTES', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: RECORD_LENGTH_IN_MINUTES'
+
+  ! regional mesh cut-off
+  call read_value_logical(REGIONAL_MESH_CUTOFF, 'REGIONAL_MESH_CUTOFF', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: REGIONAL_MESH_CUTOFF'
+  if (REGIONAL_MESH_CUTOFF) then
+    call read_value_double_precision(REGIONAL_MESH_CUTOFF_DEPTH, 'REGIONAL_MESH_CUTOFF_DEPTH', ier)
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: REGIONAL_MESH_CUTOFF_DEPTH...'
+    call read_value_logical(REGIONAL_MESH_ADD_2ND_DOUBLING, 'REGIONAL_MESH_ADD_2ND_DOUBLING', ier)
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: REGIONAL_MESH_ADD_2ND_DOUBLING'
+  endif
+
+  ! absorbing conditions
   call read_value_logical(ABSORBING_CONDITIONS, 'ABSORBING_CONDITIONS', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: ABSORBING_CONDITIONS'
 
-  ! define the velocity model
-  call read_value_string(MODEL, 'MODEL', ier)
-  if (ier /= 0) stop 'an error occurred while reading the parameter file: MODEL'
-  call read_value_double_precision(RECORD_LENGTH_IN_MINUTES, 'RECORD_LENGTH_IN_MINUTES', ier)
-  if (ier /= 0) stop 'an error occurred while reading the parameter file: RECORD_LENGTH_IN_MINUTES'
+  ! sponge absorbing boundary properties
+  call read_value_logical(ABSORB_USING_GLOBAL_SPONGE, 'ABSORB_USING_GLOBAL_SPONGE', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: ABSORB_USING_GLOBAL_SPONGE'
+  if (ABSORB_USING_GLOBAL_SPONGE) then
+    call read_value_double_precision(SPONGE_LATITUDE_IN_DEGREES, 'SPONGE_LATITUDE_IN_DEGREES', ier)
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: SPONGE_LATITUDE_IN_DEGREES...'
+    call read_value_double_precision(SPONGE_LONGITUDE_IN_DEGREES, 'SPONGE_LONGITUDE_IN_DEGREES', ier)
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: SPONGE_LONGITUDE_IN_DEGREES...'
+    call read_value_double_precision(SPONGE_RADIUS_IN_DEGREES, 'SPONGE_RADIUS_IN_DEGREES', ier)
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: SPONGE_RADIUS_IN_DEGREES...'
+  endif
 
   ! attenuation parameters
   call read_value_logical(PARTIAL_PHYS_DISPERSION_ONLY, 'PARTIAL_PHYS_DISPERSION_ONLY', ier)
@@ -183,8 +199,8 @@
   if (ier /= 0) stop 'an error occurred while reading the parameter file: NTSTEP_BETWEEN_OUTPUT_INFO'
   call read_value_integer(NTSTEP_BETWEEN_OUTPUT_SEISMOS, 'NTSTEP_BETWEEN_OUTPUT_SEISMOS', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: NTSTEP_BETWEEN_OUTPUT_SEISMOS'
-  call read_value_integer(NTSTEP_BETWEEN_READ_ADJSRC, 'NTSTEP_BETWEEN_READ_ADJSRC', ier)
-  if (ier /= 0) return
+  call read_value_integer(NTSTEP_BETWEEN_OUTPUT_SAMPLE, 'NTSTEP_BETWEEN_OUTPUT_SAMPLE', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: NTSTEP_BETWEEN_OUTPUT_SAMPLE'
 
   ! point force sourse
   call read_value_logical(USE_FORCE_POINT_SOURCE, 'USE_FORCE_POINT_SOURCE', ier)
@@ -195,6 +211,10 @@
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE'
   call read_value_integer(USE_SOURCE_DERIVATIVE_DIRECTION, 'USE_SOURCE_DERIVATIVE_DIRECTION', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_SOURCE_DERIVATIVE_DIRECTION'
+
+  ! monochromatic double couple source
+  call read_value_logical(USE_MONOCHROMATIC_CMT_SOURCE, 'USE_MONOCHROMATIC_CMT_SOURCE', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_MONOCHROMATIC_CMT_SOURCE'
 
   ! option to save strain seismograms
   call read_value_logical(SAVE_SEISMOGRAMS_STRAIN, 'SAVE_SEISMOGRAMS_STRAIN', ier)
@@ -212,10 +232,12 @@
   if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_SEISMOS_SAC_BINARY'
   call read_value_logical(OUTPUT_SEISMOS_ASDF, 'OUTPUT_SEISMOS_ASDF', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_ASDF'
+  call read_value_logical(OUTPUT_SEISMOS_3D_ARRAY, 'OUTPUT_SEISMOS_3D_ARRAY', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_3D_ARRAY'
   call read_value_logical(ROTATE_SEISMOGRAMS_RT, 'ROTATE_SEISMOGRAMS_RT', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: ROTATE_SEISMOGRAMS_RT'
-  call read_value_logical(WRITE_SEISMOGRAMS_BY_MASTER, 'WRITE_SEISMOGRAMS_BY_MASTER', ier)
-  if (ier /= 0) stop 'an error occurred while reading the parameter file: WRITE_SEISMOGRAMS_BY_MASTER'
+  call read_value_logical(WRITE_SEISMOGRAMS_BY_MAIN, 'WRITE_SEISMOGRAMS_BY_MAIN', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: WRITE_SEISMOGRAMS_BY_MAIN'
   call read_value_logical(SAVE_ALL_SEISMOS_IN_ONE_FILE, 'SAVE_ALL_SEISMOS_IN_ONE_FILE', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: SAVE_ALL_SEISMOS_IN_ONE_FILE'
   call read_value_logical(USE_BINARY_FOR_LARGE_FILE, 'USE_BINARY_FOR_LARGE_FILE', ier)
@@ -226,8 +248,10 @@
   if (ier /= 0) stop 'an error occurred while reading the parameter file: PRINT_SOURCE_TIME_FUNCTION'
 
   ! adjoint kernels
+  call read_value_integer(NTSTEP_BETWEEN_READ_ADJSRC, 'NTSTEP_BETWEEN_READ_ADJSRC', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: NTSTEP_BETWEEN_READ_ADJSRC'
   call read_value_logical(READ_ADJSRC_ASDF, 'READ_ADJSRC_ASDF', ier)
-  if (ier /= 0) stop 'an error occured while reading the parameter file: READ_ADJSRC_ASDF'
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: READ_ADJSRC_ASDF'
   call read_value_logical(ANISOTROPIC_KL, 'ANISOTROPIC_KL', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: ANISOTROPIC_KL'
   call read_value_logical(SAVE_TRANSVERSE_KL_ONLY, 'SAVE_TRANSVERSE_KL_ONLY', ier)
@@ -242,6 +266,13 @@
   if (ier /= 0) stop 'an error occurred while reading the parameter file: SAVE_SOURCE_MASK'
   call read_value_logical(SAVE_REGULAR_KL, 'SAVE_REGULAR_KL', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: SAVE_REGULAR_KL'
+
+  call read_value_logical(STEADY_STATE_KERNEL, 'STEADY_STATE_KERNEL', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: STEADY_STATE_KERNEL'
+  if (STEADY_STATE_KERNEL) then
+    call read_value_double_precision(STEADY_STATE_LENGTH_IN_MINUTES, 'STEADY_STATE_LENGTH_IN_MINUTES', ier)
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: STEADY_STATE_LENGTH_IN_MINUTES'
+  endif
 
   ! for simultaneous runs from the same batch job
   call read_value_integer(NUMBER_OF_SIMULTANEOUS_RUNS, 'NUMBER_OF_SIMULTANEOUS_RUNS', ier)
@@ -288,34 +319,51 @@
   ! and the code should use the automatically determined value as by default
   !
   ! DT specified to override automatic DT
-  call read_value_double_precision(USER_DT, 'DT', ier)
+  call read_value_double_precision(USER_DT, 'DT', ier); ier = 0
+
   ! NSTEP specified to override automatic NSTEP
-  call read_value_integer(USER_NSTEP, 'NSTEP', ier)
+  call read_value_integer(USER_NSTEP, 'NSTEP', ier); ier = 0
   ! no error checking, continue if not available
+
+  ! (optional) regional local mesh parameters
+  if (REGIONAL_MESH_CUTOFF) then
+    ! flag to switch on local mesh
+    call read_value_logical(USE_LOCAL_MESH, 'USE_LOCAL_MESH', ier); ier = 0
+
+    ! total number of mesh layers for local mesh
+    ! (moho used will be the fictitious moho depth, i.e., at 40 or 35 km depth depending on EARTH_RMOHO_STRETCH_ADJUSTMENT)
+    call read_value_integer(LOCAL_MESH_NUMBER_OF_LAYERS_CRUST, 'NUMBER_OF_LAYERS_CRUST', ier); ier = 0
+    call read_value_integer(LOCAL_MESH_NUMBER_OF_LAYERS_MANTLE, 'NUMBER_OF_LAYERS_MANTLE', ier); ier = 0
+
+    ! number of doubling layers
+    call read_value_integer(NDOUBLINGS, 'NDOUBLINGS', ier); ier = 0
+    ! position of doubling layer (counted from top down)
+    call read_value_integer(NZ_DOUBLING_1, 'NZ_DOUBLING_1', ier); ier = 0
+    call read_value_integer(NZ_DOUBLING_2, 'NZ_DOUBLING_2', ier); ier = 0
+    call read_value_integer(NZ_DOUBLING_3, 'NZ_DOUBLING_3', ier); ier = 0
+    call read_value_integer(NZ_DOUBLING_4, 'NZ_DOUBLING_4', ier); ier = 0
+    call read_value_integer(NZ_DOUBLING_5, 'NZ_DOUBLING_5', ier); ier = 0
+
+    ! no error checking, continue if not available
+  endif
+
+  ! (optional) scattering perturbations
+  call read_value_logical(ADD_SCATTERING_PERTURBATIONS, 'SCATTERING_PERTURBATIONS', ier); ier = 0
+  if (ADD_SCATTERING_PERTURBATIONS) then
+    ! perturbation strength (e.g., 0.1 for 10% perturbations)
+    call read_value_double_precision(SCATTERING_STRENGTH, 'SCATTERING_STRENGTH', ier); ier = 0
+    ! correlation factor (e.g., 1.0 for k * a ~ 1.0)
+    call read_value_double_precision(SCATTERING_CORRELATION, 'SCATTERING_CORRELATION', ier); ier = 0
+  endif
+
+  ! (optional) simultaneous run execution shifts
+  call read_value_logical(SHIFT_SIMULTANEOUS_RUNS, 'SHIFT_SIMULTANEOUS_RUNS', ier); ier = 0
+  if (SHIFT_SIMULTANEOUS_RUNS) then
+    call read_value_double_precision(FILESYSTEM_IO_BANDWIDTH, 'FILESYSTEM_IO_BANDWIDTH', ier); ier = 0
+  endif
 
   ! closes parameter file
   call close_parameter_file()
-
-  ! ignore EXACT_MASS_MATRIX_FOR_ROTATION if rotation is not included in the simulations
-  if (.not. ROTATION) EXACT_MASS_MATRIX_FOR_ROTATION = .false.
-
-  ! re-sets attenuation flags
-  if (.not. ATTENUATION) then
-    ! turns off PARTIAL_PHYS_DISPERSION_ONLY when ATTENUATION is off in the Par_file
-    PARTIAL_PHYS_DISPERSION_ONLY = .false.
-  endif
-
-  ! re-sets ADIOS flags
-  if (.not. ADIOS_ENABLED) then
-    ADIOS_FOR_FORWARD_ARRAYS = .false.
-    ADIOS_FOR_MPI_ARRAYS = .false.
-    ADIOS_FOR_ARRAYS_SOLVER = .false.
-    ADIOS_FOR_SOLVER_MESHFILES = .false.
-    ADIOS_FOR_AVS_DX = .false.
-    ADIOS_FOR_KERNELS = .false.
-    ADIOS_FOR_MODELS = .false.
-    ADIOS_FOR_UNDO_ATTENUATION = .false.
-  endif
 
 #if !defined(USE_ADIOS) && !defined(USE_ADIOS2)
   if (ADIOS_ENABLED) then
@@ -330,84 +378,5 @@
     stop 'an error occurred while reading the parameter file: ADIOS is enabled but code not built with ADIOS'
   endif
 #endif
-
-  ! ADIOS is very useful for very large simulations (say using 2000 MPI tasks or more)
-  ! but slows down the code if used for simulations that are small or medium size, because of the overhead any library has.
-  if (ADIOS_ENABLED .and. NCHUNKS * NPROC_XI_read * NPROC_ETA_read < 2000 .and. myrank == 0) then
-    print *
-    print *,'**************'
-    print *,'**************'
-    print *,'ADIOS significantly slows down small or medium-size runs, which is the case here, please consider turning it off'
-    print *,'**************'
-    print *,'**************'
-    print *
-  endif
-
-  ! produces simulations compatible with old globe version 5.1.5
-  if (USE_OLD_VERSION_5_1_5_FORMAT) then
-    print *
-    print *,'**************'
-    print *,'using globe version 5.1.5 compatible simulation parameters'
-    if (.not. ATTENUATION_1D_WITH_3D_STORAGE ) &
-      stop 'ATTENUATION_1D_WITH_3D_STORAGE should be set to .true. for compatibility with globe version 5.1.5 '
-    if (UNDO_ATTENUATION) then
-      print *,'setting UNDO_ATTENUATION to .false. for compatibility with globe version 5.1.5 '
-      UNDO_ATTENUATION = .false.
-    endif
-    if (USE_LDDRK) then
-      print *,'setting USE_LDDRK to .false. for compatibility with globe version 5.1.5 '
-      USE_LDDRK = .false.
-    endif
-    if (EXACT_MASS_MATRIX_FOR_ROTATION) then
-      print *,'setting EXACT_MASS_MATRIX_FOR_ROTATION to .false. for compatibility with globe version 5.1.5 '
-      EXACT_MASS_MATRIX_FOR_ROTATION = .false.
-    endif
-    print *,'**************'
-    print *
-  endif
-
-  ! checks flags when perfect sphere is set
-  if (ASSUME_PERFECT_SPHERE) then
-    if (ELLIPTICITY) then
-      stop 'ELLIPTICITY not supported when ASSUME_PERFECT_SPHERE is set .true. in constants.h, please check...'
-    endif
-    if (TOPOGRAPHY) then
-      stop 'TOPOGRAPHY not supported when ASSUME_PERFECT_SPHERE is set .true. in constants.h, please check...'
-    endif
-  endif
-
-  ! see if we are running several independent runs in parallel
-  ! if so, add the right directory for that run (group numbers start at zero, but directory names start at run0001, thus we add one)
-  ! a negative value for "mygroup" is a convention that indicates that groups (i.e. sub-communicators, one per run) are off
-  if (NUMBER_OF_SIMULTANEOUS_RUNS > 1 .and. mygroup >= 0) then
-    write(path_to_add,"('run',i4.4,'/')") mygroup + 1
-    LOCAL_PATH = path_to_add(1:len_trim(path_to_add))//LOCAL_PATH(1:len_trim(LOCAL_PATH))
-    LOCAL_TMP_PATH = path_to_add(1:len_trim(path_to_add))//LOCAL_TMP_PATH(1:len_trim(LOCAL_TMP_PATH))
-  endif
-
-
-!----------------------------------------------
-!
-! status of implementation
-!
-!----------------------------------------------
-!
-! please remove these security checks only after validating new features
-
-!! DK DK July 2013: temporary, the time for Matthieu Lefebvre to merge his ADIOS implementation
-  if (ADIOS_ENABLED .and. SAVE_REGULAR_KL ) &
-    stop 'ADIOS_ENABLED support not implemented yet for SAVE_REGULAR_KL'
-
-  ! LDDRK
-  if (USE_LDDRK .and. (ABSORBING_CONDITIONS .and. .not. UNDO_ATTENUATION) ) &
-    stop 'USE_LDDRK support requires to use UNDO_ATTENUATION when absorbing boundaries are turned on'
-
-  if (USE_LDDRK .and. GPU_MODE ) &
-    stop 'USE_LDDRK support not implemented yet for GPU simulations'
-
-  if (UNDO_ATTENUATION .and. MOVIE_VOLUME .and. MOVIE_VOLUME_TYPE == 4 ) &
-    stop 'UNDO_ATTENUATION support not implemented yet for MOVIE_VOLUME_TYPE == 4 simulations'
-  if (UNDO_ATTENUATION .and. SIMULATION_TYPE == 3 .and. (MOVIE_VOLUME .or. MOVIE_SURFACE) ) &
-    stop 'UNDO_ATTENUATION support not implemented yet for SIMULATION_TYPE == 3 and movie simulations'
 
   end subroutine read_parameter_file

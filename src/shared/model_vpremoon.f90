@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -30,6 +30,7 @@
 !
 !   Garcia et al. (2011),
 !   Very preliminary reference Moon model, PEPI, 188, 96 - 113.
+!   https://doi.org/10.1016/j.pepi.2011.06.015
 !
 ! modified seismic model, starting from table 6 (left side, not geodesic model)
 !
@@ -37,6 +38,7 @@
 !
 !   Weber et al. (2011),
 !   Seismic Detection of the Lunar Core, Science, 331.
+!   DOI: 10.1126/science.1199375
 !
 !--------------------------------------------------------------------------------------------------
 
@@ -99,10 +101,10 @@
 !
 
   subroutine model_vpremoon(x,rho,drhodr,vp,vs,Qkappa,Qmu,idoubling,CRUSTAL, &
-                            ONE_CRUST,check_doubling_flag,iregion_code)
+                            check_doubling_flag,iregion_code)
 
   use constants
-  use shared_parameters, only: R_PLANET,RHOAV
+  use shared_parameters, only: R_PLANET,RHOAV,ONE_CRUST
 
   use model_vpremoon_par
 
@@ -124,7 +126,7 @@
   double precision,intent(inout) :: vp,vs,Qmu,Qkappa
   integer,intent(in) :: idoubling
   integer,intent(in) :: iregion_code
-  logical,intent(in) :: CRUSTAL,ONE_CRUST,check_doubling_flag
+  logical,intent(in) :: CRUSTAL,check_doubling_flag
 
   ! local parameters
   double precision :: r,frac,scaleval,dr,drho
@@ -145,11 +147,11 @@
       Qkappa_tmp = VPREMOON_Qkappa(NR_VPREMOON_layers-3)
       Qmu_tmp = VPREMOON_Qmu(NR_VPREMOON_layers-3)
       ! assign all crust (1:6) values to upper crust
-      VPREMOON_density(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = rho_tmp
-      VPREMOON_vp(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = vp_tmp
-      VPREMOON_vs(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = vs_tmp
-      VPREMOON_Qkappa(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = Qkappa_tmp
-      VPREMOON_Qmu(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = Qmu_tmp
+      VPREMOON_density(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = rho_tmp
+      VPREMOON_vp(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = vp_tmp
+      VPREMOON_vs(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = vs_tmp
+      VPREMOON_Qkappa(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = Qkappa_tmp
+      VPREMOON_Qmu(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = Qmu_tmp
     endif
 
     ! in case an external crustal model will be superimposed on top, we extend mantle values to the surface
@@ -158,12 +160,12 @@
     ! note: assumes that the crust is given by 6 layers
     !       see in vpremoon.dat: regolith layer (1:2), upper crust (3:4), lower crust (5:6), the mantle
     if (SUPPRESS_CRUSTAL_MESH .or. CRUSTAL) then
-      do i = NR_VPREMOON_layers-6,NR_VPREMOON_layers
-        VPREMOON_density(i) = VPREMOON_density(NR_VPREMOON_layers-7)
-        VPREMOON_vp(i) = VPREMOON_vp(NR_VPREMOON_layers-7)
-        VPREMOON_vs(i) = VPREMOON_vs(NR_VPREMOON_layers-7)
-        VPREMOON_Qkappa(i) = VPREMOON_Qkappa(NR_VPREMOON_layers-7)
-        VPREMOON_Qmu(i) = VPREMOON_Qmu(NR_VPREMOON_layers-7)
+      do i = NR_VPREMOON_layers-5,NR_VPREMOON_layers
+        VPREMOON_density(i) = VPREMOON_density(NR_VPREMOON_layers-6)
+        VPREMOON_vp(i) = VPREMOON_vp(NR_VPREMOON_layers-6)
+        VPREMOON_vs(i) = VPREMOON_vs(NR_VPREMOON_layers-6)
+        VPREMOON_Qkappa(i) = VPREMOON_Qkappa(NR_VPREMOON_layers-6)
+        VPREMOON_Qmu(i) = VPREMOON_Qmu(NR_VPREMOON_layers-6)
       enddo
     endif
   endif
@@ -173,6 +175,9 @@
 
   ! check flags to make sure we correctly honor the discontinuities
   ! we use strict inequalities since r has been slightly changed in mesher
+
+  ! note: using stop statements, not exit_mpi() calls to avoid the need for MPI libraries when linking xcreate_header_file
+
   if (check_doubling_flag) then
     !
     !--- inner core
@@ -188,37 +193,37 @@
           idoubling /= IFLAG_BOTTOM_CENTRAL_CUBE .and. &
           idoubling /= IFLAG_TOP_CENTRAL_CUBE .and. &
           idoubling /= IFLAG_IN_FICTITIOUS_CUBE) &
-           call exit_MPI(myrank,'wrong doubling flag for inner core point in model_vpremoon()')
+           stop 'wrong doubling flag for inner core point in model_vpremoon()'
     !
     !--- outer core
     !
     else if (r > VPREMOON_RICB .and. r < VPREMOON_RCMB) then
       if (idoubling /= IFLAG_OUTER_CORE_NORMAL) &
-        call exit_MPI(myrank,'wrong doubling flag for outer core point in model_vpremoon()')
+        stop 'wrong doubling flag for outer core point in model_vpremoon()'
     !
     !--- D" at the base of the mantle
     !
     else if (r > VPREMOON_RCMB .and. r < VPREMOON_RTOPDDOUBLEPRIME) then
       if (idoubling /= IFLAG_MANTLE_NORMAL) &
-        call exit_MPI(myrank,'wrong doubling flag for D" point in model_vpremoon()')
+        stop 'wrong doubling flag for D" point in model_vpremoon()'
     !
     !--- mantle: from top of D" to d670
     !
     else if (r > VPREMOON_RTOPDDOUBLEPRIME .and. r < VPREMOON_R670) then
       if (idoubling /= IFLAG_MANTLE_NORMAL) &
-        call exit_MPI(myrank,'wrong doubling flag for top D" - > d670 point in model_vpremoon()')
+        stop 'wrong doubling flag for top D" - > d670 point in model_vpremoon()'
     !
     !--- mantle: from d670 to d220
     !
     else if (r > VPREMOON_R670 .and. r < VPREMOON_R220) then
       if (idoubling /= IFLAG_670_220) &
-        call exit_MPI(myrank,'wrong doubling flag for d670 - > d220 point in model_vpremoon()')
+        stop 'wrong doubling flag for d670 - > d220 point in model_vpremoon()'
     !
     !--- mantle and crust: from d220 to MOHO and then to surface
     !
     else if (r > VPREMOON_R220) then
       if (idoubling /= IFLAG_220_80 .and. idoubling /= IFLAG_80_MOHO .and. idoubling /= IFLAG_CRUST) &
-        call exit_MPI(myrank,'wrong doubling flag for d220 - > Moho - > surface point in model_vpremoon()')
+        stop 'wrong doubling flag for d220 - > Moho - > surface point in model_vpremoon()'
     endif
   endif
 
@@ -320,6 +325,7 @@
   character(len=256) :: datafile,line
 
   double precision, parameter :: TOL = 1.d-9
+  ! debugging
   logical, parameter :: DEBUG = .false.
 
   ! file name
@@ -363,7 +369,10 @@
            VPREMOON_Qmu(NR_VPREMOON_layers), &
            VPREMOON_Qmu_original(NR_VPREMOON_layers), &
            stat=ier)
-  if (ier /= 0 ) call exit_MPI(myrank,'Error allocating VPREMOON arrays')
+  if (ier /= 0 ) stop 'Error allocating VPREMOON arrays'
+  VPREMOON_radius(:) = 0.d0; VPREMOON_density(:) = 0.d0
+  VPREMOON_vp(:) = 0.d0; VPREMOON_vs(:) = 0.d0
+  VPREMOON_Qkappa(:) = 0.d0; VPREMOON_Qmu(:) = 0.d0; VPREMOON_Qmu_original(:) = 0.d0
 
   ! read in layering
   ! note: table 6 starts from top surface to inner core
@@ -470,11 +479,11 @@
   ! checks data table
   ! ICB at radius(33)
   if (abs(RICB - VPREMOON_radius(2)) > TOL) &
-    call exit_MPI(myrank,'Error: vpremoon radius RICB and model radius index not matching')
+    stop 'Error: vpremoon radius RICB and model radius index not matching'
   if (abs(RCMB - VPREMOON_radius(4)) > TOL) &
-    call exit_MPI(myrank,'Error: vpremoon radius RCMB and model radius index not matching')
+    stop 'Error: vpremoon radius RCMB and model radius index not matching'
   if (abs(ROCEAN - VPREMOON_radius(NR_VPREMOON_layers)) > TOL) &
-    call exit_MPI(myrank,'Error: vpremoon radius ROCEAN and model radius index not matching')
+    stop 'Error: vpremoon radius ROCEAN and model radius index not matching'
 
   ! stores Qmu original values (without CRUSTAL modifications) for further use in attenuation routine
   VPREMOON_Qmu_original(:) = VPREMOON_Qmu(:)
@@ -485,10 +494,10 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine model_vpremoon_density(x,rho,ONE_CRUST)
+  subroutine model_vpremoon_density(x,rho)
 
   use constants
-  use shared_parameters, only: R_PLANET,RHOAV
+  use shared_parameters, only: R_PLANET,RHOAV,ONE_CRUST
 
   use model_vpremoon_par
 
@@ -496,7 +505,6 @@
 
   double precision,intent(in) :: x
   double precision,intent(out) :: rho
-  logical,intent(in) :: ONE_CRUST
 
   ! local parameters
   integer :: i
@@ -517,11 +525,11 @@
       Qkappa_tmp = VPREMOON_Qkappa(NR_VPREMOON_layers-3)
       Qmu_tmp = VPREMOON_Qmu(NR_VPREMOON_layers-3)
       ! assign all crust (1:6) values to upper crust
-      VPREMOON_density(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = rho_tmp
-      VPREMOON_vp(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = vp_tmp
-      VPREMOON_vs(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = vs_tmp
-      VPREMOON_Qkappa(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = Qkappa_tmp
-      VPREMOON_Qmu(NR_VPREMOON_layers-6:NR_VPREMOON_layers) = Qmu_tmp
+      VPREMOON_density(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = rho_tmp
+      VPREMOON_vp(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = vp_tmp
+      VPREMOON_vs(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = vs_tmp
+      VPREMOON_Qkappa(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = Qkappa_tmp
+      VPREMOON_Qmu(NR_VPREMOON_layers-5:NR_VPREMOON_layers) = Qmu_tmp
     endif
   endif
 

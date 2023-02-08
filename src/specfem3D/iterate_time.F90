@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -359,7 +359,12 @@
 
     ! approximative Hessian for preconditioning kernels
     if (APPROXIMATE_HESS_KL) then
-      call transfer_kernels_hess_cm_tohost(Mesh_pointer,hess_kl_crust_mantle,NSPEC_CRUST_MANTLE)
+      call transfer_kernels_hess_cm_tohost(Mesh_pointer, &
+                                           hess_kl_crust_mantle, &
+                                           hess_rho_kl_crust_mantle, &
+                                           hess_kappa_kl_crust_mantle, &
+                                           hess_mu_kl_crust_mantle, &
+                                           NSPEC_CRUST_MANTLE)
     endif
 
     ! outer core

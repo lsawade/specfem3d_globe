@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -101,6 +101,8 @@
            velocs(180*CRUSTMAP_RESOLUTION,360*CRUSTMAP_RESOLUTION,NLAYERS_CRUSTMAP), &
            stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating crustmaps arrays')
+  thickness(:,:,:) = 0.d0; density(:,:,:) = 0.d0
+  velocp(:,:,:) = 0.d0; velocs(:,:,:) = 0.d0
 
   allocate(thicknessnp(NLAYERS_CRUSTMAP), &
            densitynp(NLAYERS_CRUSTMAP), &
@@ -112,8 +114,12 @@
            velocssp(NLAYERS_CRUSTMAP), &
            stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating crustmaps np/sp arrays')
+  thicknessnp(:) = 0.d0; densitynp(:) = 0.d0
+  velocpnp(:) = 0.d0; velocsnp(:) = 0.d0
+  thicknesssp(:) = 0.d0; densitysp(:) = 0.d0
+  velocpsp(:) = 0.d0; velocssp(:) = 0.d0
 
-  ! master reads in crust maps
+  ! main reads in crust maps
   if (myrank == 0) call read_general_crustmap()
 
   ! broadcasts values to all processes
@@ -301,13 +307,13 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine model_crustmaps(lat,lon,x,vp,vs,rho,moho,sediment,found_crust,elem_in_crust)
+  subroutine model_crustmaps(lat,lon,x,vp,vs,rho,moho,sediment,found_crust,elem_in_crust,moho_only)
 
 ! Matthias Meschede
 ! read smooth crust2.0 model (0.25 degree resolution) with eucrust
 ! based on software routines provided with the crust2.0 model by Bassin et al.
 
-  use constants, only: PI,GRAV,INCLUDE_SEDIMENTS_IN_CRUST
+  use constants, only: PI,GRAV,ZERO,INCLUDE_SEDIMENTS_IN_CRUST
   use shared_parameters, only: R_PLANET,RHOAV
 
   use model_crustmaps_par
@@ -318,7 +324,7 @@
   double precision,intent(inout) :: vp,vs,rho
   double precision,intent(inout) :: moho,sediment
   logical,intent(out) :: found_crust
-  logical,intent(in) :: elem_in_crust
+  logical,intent(in) :: elem_in_crust,moho_only
 
   ! local parameters
   double precision :: h_sed,h_uc
@@ -326,6 +332,15 @@
   double precision,dimension(NLAYERS_CRUSTMAP) :: vps,vss,rhos,thicks
   double precision,parameter :: THICKNESS_TOL = 1.d-9 ! to skip zero-thickness layers
 
+  ! initializes
+  vp = ZERO
+  vs = ZERO
+  rho = ZERO
+  moho = ZERO
+  sediment = ZERO
+  found_crust = .true.
+
+  ! gets crustal values
   call read_crustmaps(lat,lon,vps,vss,rhos,thicks)
 
   ! format:
@@ -352,31 +367,46 @@
   ! moho
   x7 = (R_PLANET - (h_uc+thicks(4)+thicks(5))*1000.0d0)/R_PLANET
 
-  found_crust = .true.
+  ! moho
+  moho = (h_uc+thicks(4)+thicks(5))*1000.0d0/R_PLANET ! non-dimensionalizes
+
+  ! checks if anything further to do
+  if (moho_only) return
+
+  ! sediment thickness
+  if (INCLUDE_SEDIMENTS_IN_CRUST) then
+    sediment = h_sed * 1000.d0/R_PLANET ! non-dimensionalizes
+  endif
+
 ! if (x > x3 .and. INCLUDE_SEDIMENTS_IN_CRUST .and. h_sed > MINIMUM_SEDIMENT_THICKNESS) then
   if (x > x3 .and. INCLUDE_SEDIMENTS_IN_CRUST .and. thicks(1) > THICKNESS_TOL) then
-   vp = vps(1)
-   vs = vss(1)
-   rho = rhos(1)
+    ! soft sediment
+    vp = vps(1)
+    vs = vss(1)
+    rho = rhos(1)
 ! else if (x > x4 .and. INCLUDE_SEDIMENTS_IN_CRUST .and. h_sed > MINIMUM_SEDIMENT_THICKNESS) then
   else if (x > x4 .and. INCLUDE_SEDIMENTS_IN_CRUST .and. thicks(2) > THICKNESS_TOL) then
-   vp = vps(2)
-   vs = vss(2)
-   rho = rhos(2)
+    ! hard sediment
+    vp = vps(2)
+    vs = vss(2)
+    rho = rhos(2)
   else if (x > x5 .and. thicks(3) > THICKNESS_TOL) then
-   vp = vps(3)
-   vs = vss(3)
-   rho = rhos(3)
+    ! upper crust
+    vp = vps(3)
+    vs = vss(3)
+    rho = rhos(3)
   else if (x > x6 .and. thicks(4) > THICKNESS_TOL) then
-   vp = vps(4)
-   vs = vss(4)
-   rho = rhos(4)
+    ! middle crust
+    vp = vps(4)
+    vs = vss(4)
+    rho = rhos(4)
   else if ((x > x7 .and. thicks(5) > THICKNESS_TOL) .or. elem_in_crust) then
-   vp = vps(5)
-   vs = vss(5)
-   rho = rhos(5)
+    ! lower crust
+    vp = vps(5)
+    vs = vss(5)
+    rho = rhos(5)
   else
-   found_crust = .false.
+    found_crust = .false.
   endif
 
   !   non-dimensionalize
@@ -387,20 +417,12 @@
     vs = vs*1000.0d0/(R_PLANET*scaleval)
     rho = rho*1000.0d0/RHOAV
   else
-    ! takes ficticious values
+    ! takes fictitious values
     !vp = 20.0*1000.0d0/(R_PLANET*scaleval)
     !vs = 20.0*1000.0d0/(R_PLANET*scaleval)
     !rho = 20.0*1000.0d0/RHOAV
     ! uses default input values
     continue
-  endif
-
-  ! moho
-  moho = (h_uc+thicks(4)+thicks(5))*1000.0d0/R_PLANET ! non-dimensionalizes
-
-  ! sediment thickness
-  if (INCLUDE_SEDIMENTS_IN_CRUST) then
-    sediment = h_sed * 1000.d0/R_PLANET ! non-dimensionalizes
   endif
 
   end subroutine model_crustmaps
@@ -456,8 +478,8 @@
   integer :: num_points
   integer :: i,ipoin,iupcolat,ileftlng,irightlng
 
-! get integer colatitude and longitude of crustal cap
-! -90 < lat < 90 -180 < lon < 180
+  ! get integer colatitude and longitude of crustal cap
+  ! -90 < lat < 90 -180 < lon < 180
   if (lat > 90.0d0 .or. lat < -90.0d0 .or. lon > 180.0d0 .or. lon < -180.0d0) &
     write(*,*) lat,' ',lon, ' error in latitude/longitude range in crust'
 
@@ -482,9 +504,10 @@
   case (IPLANET_MARS,IPLANET_MOON)
     ! Mars, Moon
     ! for global scale
-    cap_degree = 2.d0
-    !cap_degree = 1.d0 / CRUSTMAP_RESOLUTION
-    !print *,"HELLO"
+    !cap_degree = 2.d0
+    ! by default uses CAP smoothing with crustmap resolution, e.g. 1/4 degree
+    cap_degree = 1.d0 / CRUSTMAP_RESOLUTION
+    ! gets smoothing points and weights
     call smooth_weights_CAP_vardegree(lon,lat,xlon,xlat,weight,cap_degree,NTHETA,NPHI)
     num_points = NTHETA*NPHI
 
@@ -659,27 +682,28 @@
   if (lat > 90.0d0 .or. lat < -90.0d0 .or. lng > 180.0d0 .or. lng < -180.0d0) &
     stop 'Error in latitude/longitude range in ibilinearmap'
 
-! map longitudes to [0,360]
+  ! map longitudes to [0,360]
   if (lng < 0) then
     xlng=lng+360.0
   else
     xlng=lng
   endif
 
-  buffer=0.5+((90.0-lat)*CRUSTMAP_RESOLUTION)
-  iupcolat=int(buffer)
-  weightup=1.0-(buffer-dble(iupcolat))
+  ! latitude index & weight
+  buffer = 0.5+((90.0-lat)*CRUSTMAP_RESOLUTION)
+  iupcolat = int(buffer)
+  weightup = 1.0-(buffer-dble(iupcolat))
 
   if (iupcolat < 0) iupcolat = 0
-  if (iupcolat > 180*CRUSTMAP_RESOLUTION)  iupcolat=180*CRUSTMAP_RESOLUTION
+  if (iupcolat > 180*CRUSTMAP_RESOLUTION)  iupcolat = 180*CRUSTMAP_RESOLUTION
 
+  ! longitude index & weight
+  buffer = 0.5+(xlng*CRUSTMAP_RESOLUTION)
+  ileftlng = int(buffer)
+  weightleft = 1.0-(buffer-dble(ileftlng))
 
-  buffer=0.5+(xlng*CRUSTMAP_RESOLUTION)
-  ileftlng=int(buffer)
-  weightleft=1.0-(buffer-dble(ileftlng))
-
-  if (ileftlng < 1) ileftlng=360*CRUSTMAP_RESOLUTION
-  if (ileftlng > 360*CRUSTMAP_RESOLUTION) ileftlng=1
+  if (ileftlng < 1) ileftlng = 360*CRUSTMAP_RESOLUTION
+  if (ileftlng > 360*CRUSTMAP_RESOLUTION) ileftlng = 1
 
   end subroutine ibilinearmap
 

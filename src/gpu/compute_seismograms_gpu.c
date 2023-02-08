@@ -1,8 +1,8 @@
 /*
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -88,7 +88,7 @@ void FC_FUNC_ (compute_seismograms_gpu,
     clCheck (clSetKernelArg (mocl.kernels.compute_seismograms_kernel, idx++, sizeof (cl_mem), (void *) &mp->d_nu.ocl));
     clCheck (clSetKernelArg (mocl.kernels.compute_seismograms_kernel, idx++, sizeof (cl_mem), (void *) &mp->d_ispec_selected_rec.ocl));
     clCheck (clSetKernelArg (mocl.kernels.compute_seismograms_kernel, idx++, sizeof (cl_mem), (void *) &mp->d_number_receiver_global.ocl));
-    clCheck (clSetKernelArg (mocl.kernels.compute_seismograms_kernel, idx++, sizeof (int),    (void *) &scale_displ));
+    clCheck (clSetKernelArg (mocl.kernels.compute_seismograms_kernel, idx++, sizeof (realw),  (void *) &scale_displ));
 
     local_work_size[0] = blocksize;
     local_work_size[1] = 1;
@@ -144,9 +144,36 @@ void FC_FUNC_ (compute_seismograms_gpu,
       print_CUDA_error_if_any(cudaMemcpy(seismograms + 3*mp->nrec_local*seismo_current,mp->d_seismograms.cuda,size_buffer,
                                          cudaMemcpyDeviceToHost),98000);
     }
-
   }
+#endif
+#ifdef USE_HIP
+  if (run_hip) {
+    dim3 grid(num_blocks_x,num_blocks_y);
+    dim3 threads(blocksize,1,1);
 
+    // prepare field transfer array on device
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(compute_seismograms_kernel), grid, threads, 0, mp->compute_stream,
+                                                                    mp->nrec_local,
+                                                                    displ.hip,
+                                                                    mp->d_ibool_crust_mantle.hip,
+                                                                    mp->d_hxir.hip,mp->d_hetar.hip,mp->d_hgammar.hip,
+                                                                    mp->d_seismograms.hip,
+                                                                    mp->d_nu.hip,
+                                                                    mp->d_ispec_selected_rec.hip,
+                                                                    mp->d_number_receiver_global.hip,
+                                                                    scale_displ);
+    // copies buffer to CPU
+    if (GPU_ASYNC_COPY &&  ((seismo_current+1) != NTSTEP_BETWEEN_OUTPUT_SEISMOS) && (it != NSTEP) && (it != it_end) ) {
+      // waits until kernel is finished before starting async memcpy
+      hipStreamSynchronize(mp->compute_stream);
+      // copies buffer to CPU
+      hipMemcpyAsync(seismograms + 3*mp->nrec_local*seismo_current,mp->d_seismograms.hip,size_buffer,hipMemcpyDeviceToHost,mp->copy_stream);
+    } else {
+      // synchronous copy
+      print_HIP_error_if_any(hipMemcpy(seismograms + 3*mp->nrec_local*seismo_current,mp->d_seismograms.hip,size_buffer,
+                                       hipMemcpyDeviceToHost),98000);
+    }
+  }
 #endif
 
   GPU_ERROR_CHECKING ("compute_seismograms_gpu");

@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -49,6 +49,28 @@
   call world_size(sizeprocs)
   call world_rank(myrank)
 
+  ! Cray compilers
+#if _CRAYFTN
+#warning "Warning: using Cray compiler assign function for un-compressed file output"
+  ! Cray uses compressed formats by default for list-directed output, for example:
+  !     write(*,*) 10,10            leads to output -> 2*10           compressed, instead of:       10        10
+  !     write(*,*) 1,1.78e-5                        -> 1,   1.78e-5   comma delimiter, instead of:   1         1.78e-5
+  ! this leads to problems when writing seismograms in ASCII-format.
+  ! to circumvent this behaviour, one can use cray's assign environment:
+  !   $ setenv FILENV ASGTMP
+  !   $ assign -U on g:all        (g:all  - all file open requests)
+  ! see: https://pubs.cray.com/bundle/Cray_Fortran_Reference_Manual_100_S-3901_Fortran_ditaval.xml/..
+  !             ..page/Cray_Fortran_Implementation_Specifics.html
+  ! or use the Fortran statement here below:
+
+  !debug
+  !if (myrank == 0) print *,'...compiled by Cray compilers'
+
+  ! assigns -U (uncompressed format) for all subsequent file opens
+  ! includes seismograms, but not the already opened files
+  call assign('assign -U on g:all',ier)
+#endif
+
   ! open main output file, only written to by process 0
   if (myrank == 0) then
     if (IMAIN /= ISTANDARD_OUTPUT) then
@@ -61,7 +83,7 @@
     write(IMAIN,*) '**** Specfem3D MPI Solver ****'
     write(IMAIN,*) '******************************'
     write(IMAIN,*)
-    write(IMAIN,*) 'Version: ', git_version
+    write(IMAIN,*) 'Version: ', git_package_version
     write(IMAIN,*)
     call flush_IMAIN()
   endif
@@ -72,9 +94,12 @@
   if (myrank == 0) then
     ! read the parameter file and compute additional parameters
     call read_compute_parameters()
+
+    ! count the total number of sources in the CMTSOLUTION file
+    call count_number_of_sources()
   endif
 
-  ! broadcast parameters read from master to all processes
+  ! broadcast parameters read from main to all processes
   call broadcast_computed_parameters()
 
   ! check that the code is running with the requested nb of processes
@@ -82,6 +107,13 @@
     if (myrank == 0) print *,'Error wrong number of MPI processes ',sizeprocs,' should be ',NPROCTOT,', please check...'
     call exit_MPI(myrank,'wrong number of MPI processes in the initialization of SPECFEM')
   endif
+
+  ! read the mesh parameters for all array setup
+  if (myrank == 0) then
+    call read_mesh_parameters()
+  endif
+  ! broadcast parameters to all processes
+  call bcast_mesh_parameters()
 
   ! synchronizes processes
   call synchronize_all()
@@ -210,6 +242,11 @@
 
     write(IMAIN,*)
     write(IMAIN,*)
+    if (REGIONAL_MESH_CUTOFF) then
+      write(IMAIN,*) 'Regional mesh cutoff:'
+      write(IMAIN,*) '  cut-off depth          = ',REGIONAL_MESH_CUTOFF_DEPTH,'(km)'
+      write(IMAIN,*)
+    endif
     call flush_IMAIN()
   endif
 
@@ -252,14 +289,16 @@
     do while(ier == 0)
       read(IIN,"(a)",iostat=ier) dummystring
       if (ier == 0) then
-        ! excludes empty lines
-        if (len_trim(dummystring) > 0 ) nrec = nrec + 1
+        ! excludes empty lines and skips comment lines
+        if (len_trim(dummystring) > 0 .and. dummystring(1:1) /= '#') then
+          nrec = nrec + 1
+        endif
       endif
     enddo
     close(IIN)
   endif
 
-  ! broadcast the information read on the master to the nodes
+  ! broadcast the information read on the main node to all the nodes
   call bcast_all_singlei(nrec)
 
   ! checks number of total receivers
@@ -529,8 +568,8 @@
     endif
   endif
 
-  if (SAVE_SEISMOGRAMS_STRAIN .and. WRITE_SEISMOGRAMS_BY_MASTER) &
-    call exit_MPI(myrank,'For SAVE_SEISMOGRAMS_STRAIN, please set WRITE_SEISMOGRAMS_BY_MASTER to .false.')
+  if (SAVE_SEISMOGRAMS_STRAIN .and. WRITE_SEISMOGRAMS_BY_MAIN) &
+    call exit_MPI(myrank,'For SAVE_SEISMOGRAMS_STRAIN, please set WRITE_SEISMOGRAMS_BY_MAIN to .false.')
 
   end subroutine initialize_simulation_check
 
@@ -541,12 +580,15 @@
   subroutine initialize_GPU()
 
 ! initialization for GPU cards
+
   use iso_c_binding
   use specfem_par
+
   implicit none
   ! local parameters
   integer :: ngpu_devices,ngpu_devices_min,ngpu_devices_max
   integer :: iproc
+  logical :: USE_CUDA_AWARE_MPI_all
 
   !----------------------------------------------------------------
   ! user test parameters
@@ -592,6 +634,10 @@
   ! initializes number of local gpu devices
   ngpu_devices = 0
 
+  ! all processes will try to switch to CUDA-aware setup
+  call any_all_l(USE_CUDA_AWARE_MPI,USE_CUDA_AWARE_MPI_all)
+  USE_CUDA_AWARE_MPI = USE_CUDA_AWARE_MPI_all
+
   ! GPU_MODE now defined in Par_file
   if (GPU_MODE) then
     ! user output
@@ -615,7 +661,21 @@
     endif
 
     ! initializes GPU and outputs info to files for all processes
-    call initialize_gpu_device(GPU_RUNTIME,trim(GPU_PLATFORM)//C_NULL_CHAR,trim(GPU_DEVICE)//C_NULL_CHAR,myrank,ngpu_devices)
+    if (USE_CUDA_AWARE_MPI) then
+      ! devices have already been set before MPI_init()
+      if (myrank == 0) then
+        write(IMAIN,*)
+        write(IMAIN,*) "  using CUDA-aware MPI"
+        write(IMAIN,*)
+        call flush_IMAIN()
+      endif
+      ! just to get number of devices and device info output
+      GPU_PLATFORM = "cuda_aware_devices"
+      call initialize_gpu_device(GPU_RUNTIME,trim(GPU_PLATFORM)//C_NULL_CHAR,trim(GPU_DEVICE)//C_NULL_CHAR,myrank,ngpu_devices)
+    else
+      ! sets GPU devices
+      call initialize_gpu_device(GPU_RUNTIME,trim(GPU_PLATFORM)//C_NULL_CHAR,trim(GPU_DEVICE)//C_NULL_CHAR,myrank,ngpu_devices)
+    endif
   endif
 
   ! collects min/max of local devices found for statistics
@@ -633,3 +693,54 @@
   endif
 
   end subroutine initialize_GPU
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine initialize_cuda_aware_mpi()
+
+  use shared_parameters, only: GPU_MODE
+  use specfem_par, only: USE_CUDA_AWARE_MPI
+
+  implicit none
+
+#ifdef WITH_CUDA_AWARE_MPI
+  ! local parameters
+  integer :: ier
+  logical :: has_cuda_aware_mpi
+
+  ! initializes flags
+  USE_CUDA_AWARE_MPI = .false.
+
+  ! we check first if GPU_MODE is set in Par_file
+  ! opens the parameter file: DATA/Par_file
+  call open_parameter_file(ier)
+  if (ier /= 0) stop 'an error occurred while opening the parameter file'
+
+  call read_value_logical(GPU_MODE, 'GPU_MODE', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: GPU_MODE'
+
+  ! closes parameter file
+  call close_parameter_file()
+
+  ! default
+  has_cuda_aware_mpi = .false.
+
+  if (GPU_MODE) then
+    ! CUDA-aware MPI check
+    call check_cuda_aware_mpi(has_cuda_aware_mpi)
+
+    ! check if CUDA-aware MPI is supported (and GPU devices set)
+    if (has_cuda_aware_mpi) then
+      USE_CUDA_AWARE_MPI = .true.
+    endif
+  endif
+#else
+  ! to avoid compiler warnings
+  ! initializes flags
+  GPU_MODE = .false.
+  USE_CUDA_AWARE_MPI = .false.
+#endif
+
+  end subroutine initialize_cuda_aware_mpi

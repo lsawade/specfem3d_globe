@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -62,6 +62,9 @@
   ! close output file
   if (myrank == 0 .and. IMAIN /= ISTANDARD_OUTPUT) close(IMAIN)
 
+  ! flushes possible left-overs from print-statements
+  call flush_stdout()
+
   ! stop all the MPI processes, and exit
   call abort_mpi()
 
@@ -92,6 +95,9 @@
   write(*,*) error_msg(1:len(error_msg))
   write(*,*) 'Error detected, aborting MPI...'
 
+  ! flushes possible left-overs from print-statements
+  call flush_stdout()
+
   ! stop all the MPI processes, and exit
   call abort_mpi()
 
@@ -99,3 +105,36 @@
 
   end subroutine exit_MPI_without_rank
 
+!-------------------------------------------------------------------------------------------------
+!
+! shared helper functions
+!
+!-------------------------------------------------------------------------------------------------
+! put here for lack of better places... move to a better file in future
+
+  subroutine print_gll_min_max_all(nspec,array,name)
+
+! prints out minimum/maximum value of given GLL array
+
+  use constants, only: CUSTOM_REAL,IMAIN,NGLLX,NGLLY,NGLLZ,myrank
+
+  implicit none
+
+  integer, intent(in) :: nspec
+  real(kind=CUSTOM_REAL),dimension(NGLLX,NGLLY,NGLLZ,nspec),intent(in) :: array
+  character(len=*),intent(in) :: name
+
+  ! local parameters
+  real(kind=CUSTOM_REAL) :: minvalue,maxvalue,min_all,max_all
+
+  ! gets min/max for all slices
+  maxvalue = maxval( array )
+  minvalue = minval( array )
+  call max_all_cr(maxvalue, max_all)
+  call min_all_cr(minvalue, min_all)
+
+  if (myrank == 0) then
+    write(IMAIN,*) '  '//trim(name)//' min/max: ',min_all,max_all
+  endif
+
+  end subroutine print_gll_min_max_all

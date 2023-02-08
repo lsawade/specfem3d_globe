@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -55,12 +55,16 @@ module adios_helpers_mod
   public :: define_adios_global_string_1d_array
   public :: define_adios_local_string_1d_array
   public :: define_adios_global_array1D
+  public :: define_adios_compression
 
   ! from adios_helpers_readers_mod
   public :: read_adios_array
   public :: read_adios_array_gll_check
   public :: read_adios_scalar
+  public :: read_adios_scalar_local_dim
   public :: read_adios_perform
+  public :: read_adios_begin_step
+  public :: read_adios_end_step
   public :: read_adios_schedule_array
 
   ! from adios_helpers_writers_mod

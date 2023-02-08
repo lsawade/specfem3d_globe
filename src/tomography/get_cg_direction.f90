@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -42,6 +42,7 @@ subroutine get_gradient_cg_tiso()
 
   use tomography_kernels_tiso
   use tomography_kernels_tiso_cg
+
   implicit none
   ! local parameters
   real(kind=CUSTOM_REAL) :: alpha_bulk,alpha_betav,alpha_betah,alpha_eta,alpha_all

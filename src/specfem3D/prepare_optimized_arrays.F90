@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -634,7 +634,7 @@
 ! outputs memory bandwidth performance to know more about the memory bandwidth. this should indicate how fast we can go,
 ! since our routines are memory-bound...
 !
-! motivated by: STEAM benchmarks
+! motivated by: STREAM benchmarks
 ! http://www.cs.virginia.edu/stream/ref.html
 
   use constants_solver, only: CUSTOM_REAL,NDIM,FORCE_VECTORIZATION_VAL,IMAIN,myrank
@@ -690,6 +690,7 @@
 !$OMP PARALLEL &
 !$OMP DEFAULT(NONE) &
 !$OMP SHARED(displ,veloc,accel,deltat) &
+!$OMP FIRSTPRIVATE(NGLOB) &
 !$OMP PRIVATE(i)
 !$OMP DO
       do i = 1,NGLOB * NDIM
@@ -712,6 +713,7 @@
 !$OMP PARALLEL &
 !$OMP DEFAULT(NONE) &
 !$OMP SHARED(displ,veloc,accel,deltat) &
+!$OMP FIRSTPRIVATE(NGLOB) &
 !$OMP PRIVATE(i)
 !$OMP DO
       do i = 1,NGLOB

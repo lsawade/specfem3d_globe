@@ -30,8 +30,8 @@ module BOAST
 /*\n\
 !=====================================================================\n\
 !\n\
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0\n\
-!          --------------------------------------------------\n\
+!                       S p e c f e m 3 D  G l o b e\n\
+!                       ----------------------------\n\
 !\n\
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp\n\
 !                        Princeton University, USA\n\
@@ -55,7 +55,7 @@ module BOAST
 !\n\
 !=====================================================================\n\
 */\n"
-    if BOAST::get_lang == CUDA then
+    if (BOAST::get_lang == CUDA or BOAST::get_lang == HIP) then
     var += "\n"
     end
     return var

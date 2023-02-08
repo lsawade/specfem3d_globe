@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -52,20 +52,20 @@ module manager_adios
 
   ! MPI copies of communicator and rank
   integer :: comm_adios
-  integer,public :: myrank_adios
-  integer,public :: sizeprocs_adios
+  integer, public :: myrank_adios
+  integer, public :: sizeprocs_adios
 
   ! initialized flag
   logical :: is_adios_initialized
   logical, public :: is_adios_version1
   logical, public :: is_adios_version2
 
-  ! for undo_att snapshots: single file per iteration step (or only one file for all steps)
-  logical, parameter, public :: ADIOS_SAVE_ALL_SNAPSHOTS_IN_ONE_FILE = .true.
+  ! compression flag
+  logical, public :: use_adios_compression
 
 #if defined(USE_ADIOS)
   ! adios
-  character(len=*),parameter :: ADIOS_VERBOSITY = "verbose=1" ! lowest level: verbose=1
+  character(len=*),parameter :: ADIOS_VERBOSITY = "verbose=1" ! lowest level: verbose=1, .., debug=4
   ! default file handle for read/write
   integer(kind=8), public :: myadios_file
   ! IO group
@@ -81,20 +81,27 @@ module manager_adios
   logical, public :: is_initialized_fwd_group
 
 #elif defined(USE_ADIOS2)
+  ! note: we're using save attribute to be able to compile with a flag like -std=f2003
+  !       without it, a compilation error with gfortran (v7.5.0) would occur:
+  !       ..
+  !         Error: Fortran 2008: Implied SAVE for module variable 'myadios2_obj' at (1), needed due to the default initialization
+  !       ..
+  !       this seems to be needed only for type(..) variables.
+  !
   ! adios2 main object
-  type(adios2_adios), public:: myadios2_obj
+  type(adios2_adios), public, save :: myadios2_obj
   ! default file handle for read/write
-  type(adios2_engine), public :: myadios_file
+  type(adios2_engine), public, save :: myadios_file
   ! IO group
-  type(adios2_io), public :: myadios_group
+  type(adios2_io), public, save :: myadios_group
 
   ! additional file handle for read/write value file
-  type(adios2_engine), public :: myadios_val_file
-  type(adios2_io), public :: myadios_val_group
+  type(adios2_engine), public, save :: myadios_val_file
+  type(adios2_io), public, save :: myadios_val_group
 
-  ! for undo att
-  type(adios2_io), public :: myadios_fwd_group
-  type(adios2_engine), public:: myadios_fwd_file
+  ! for undo_att
+  type(adios2_io), public, save :: myadios_fwd_group
+  type(adios2_engine), public, save :: myadios_fwd_file
   logical, public :: is_initialized_fwd_group
 
   ! debugging mode
@@ -129,12 +136,14 @@ module manager_adios
   public :: set_adios_group_size
   public :: set_selection_boundingbox
   public :: delete_adios_selection
+  public :: delete_adios_group
   public :: get_adios_group
   public :: flush_adios_group_all
 
   ! check
   public :: check_adios_err
   public :: show_adios_file_variables
+  public :: get_adios_filename
 
 #endif  /* USE_ADIOS or USE_ADIOS2 */
 
@@ -152,7 +161,6 @@ contains
 
 #if defined(USE_ADIOS)
   use constants, only: ADIOS_BUFFER_SIZE_IN_MB
-
 !#ifdef ADIOS_VERSION_OLD
   ! ADIOS versions <= 1.9
   ! adios_set_max_buffer_size not defined yet
@@ -160,9 +168,6 @@ contains
   ! ADIOS versions >= 1.10
   !use adios_write_mod, only: adios_set_max_buffer_size
 !#endif
-
-#elif defined(USE_ADIOS2)
-  use constants, only: CUSTOM_REAL, SIZE_REAL
 #endif
 
   implicit none
@@ -204,7 +209,7 @@ contains
   ! note: return codes for this function have been fixed for ADIOS versions >= 1.6
   !       e.g., version 1.5.0 returns 1 here
   !print *,'adios init return: ',ier
-  !if (ier /= 0) stop 'Error setting up ADIOS: calling adios_init_noxml() routine failed'
+  if (ier /= 0) stop 'Error setting up ADIOS: calling adios_init_noxml() routine failed. Please use an ADIOS version >= 1.6'
 
 ! ask/check at configuration step for adios version 1.10 or higher?
 #ifdef ADIOS_VERSION_OLD
@@ -421,7 +426,13 @@ contains
     ! Set default parameters
     call adios2_set_parameters(adios_group, ADIOS2_ENGINE_PARAMS_DEFAULT, ier)
     call check_adios_err(ier,"Error setting parameters for ADIOS2 IO group in open_file_adios_read_and_init_method()")
+  else
+    ! debug
+    !print *,'debug adios: open_file_adios_read_and_init_method() has valid adios group'
   endif
+
+  ! synchronizes all processes to make sure engine & parameters has been set for all procs
+  call synchronize_all_comm(comm_adios)
 
   ! Open the handle to file containing all the ADIOS variables for the current io group
   call adios2_open(adios_handle, adios_group, trim(filename), adios2_mode_read, comm_adios, ier)
@@ -489,7 +500,7 @@ contains
   ! initializes read method
 #if defined(USE_ADIOS)
   call adios_read_init_method(ADIOS_READ_METHOD_BP, comm_dummy, ADIOS_VERBOSITY, ier)
-  call check_adios_err(ier,"Error initializing read adios by master for file: "//trim(name))
+  call check_adios_err(ier,"Error initializing read adios by main for file: "//trim(name))
 
   ! opens file
   call adios_read_open_file(adios_handle, trim(name), 0, comm_dummy, ier)
@@ -785,25 +796,35 @@ contains
   ! local parameters
   integer :: ier
 
-  TRACE_ADIOS('close_file_adios_read_and_finalize')
+  TRACE_ADIOS('close_file_adios_read_and_finalize_method')
 
 #if defined(USE_ADIOS)
   ! ADIOS 1
+  ! closes file
   call adios_read_close(adios_handle,ier)
-  if (ier /= 0 ) stop 'Error helper adios read close in close_file_adios_read_and_finalize() routine'
+  if (ier /= 0) stop 'Error helper adios read close in close_file_adios_read_and_finalize() routine'
 
   ! sets explicitly to zero
   adios_handle = 0
 
   ! finalizes file opened with adios_read_init_method()
   call adios_read_finalize_method(ADIOS_READ_METHOD_BP, ier)
-  if (ier /= 0 ) stop 'Error helper adios read finalize'
+  if (ier /= 0) stop 'Error helper adios read finalize failed'
 
 #elif defined(USE_ADIOS2)
   ! ADIOS 2
   ! no special case, file just has been opened with adios2_mode_read flag
   call adios2_close(adios_handle, ier)
   call check_adios_err(ier,"Error closing adios file close_file_adios_read_and_finalize() routine")
+
+  ! note: closing the file will not delete the adios io yet.
+  !       thus, the adios group handlers could still be valid when opening a file with the init method next time.
+  !       this leads to issues when used together with begin/end steps, producing adios2 errors like:
+  !         ..
+  !         ERROR: variable reg2/rhostore/offset exists in IO object Reader, in call to DefineVariable
+  !         ..
+  !
+  !       we will use explicit calls to delete_adios_group() routine as a work-around.
 
 #endif
 
@@ -942,7 +963,7 @@ contains
 ! as the data was written from
 
 #if defined(USE_ADIOS)
-  use constants, only: ADIOS_TRANSPORT_METHOD
+  use constants, only: ADIOS_TRANSPORT_METHOD,ADIOS_METHOD_PARAMS
 #elif defined(USE_ADIOS2)
   use constants, only: ADIOS2_ENGINE_DEFAULT,ADIOS2_ENGINE_PARAMS_DEFAULT
 #endif
@@ -971,13 +992,13 @@ contains
   ! ADIOS 1
   call adios_declare_group(adios_group, group_name, '', 0, ier)
   ! note: return codes for this function have been fixed for ADIOS versions >= 1.6
-  !call check_adios_err(ier,"Error declare group")
+  call check_adios_err(ier,"Error declare group")
 
   ! We set the transport method to 'MPI'. This seems to be the correct choice
   ! for now. We might want to move this to the constant.h file later on.
-  call adios_select_method(adios_group, ADIOS_TRANSPORT_METHOD, '', '', ier)
+  call adios_select_method(adios_group, ADIOS_TRANSPORT_METHOD, ADIOS_METHOD_PARAMS, '', ier)
   ! note: return codes for this function have been fixed for ADIOS versions >= 1.6
-  !call check_adios_err(ier,"Error select method")
+  call check_adios_err(ier,"Error select method")
 
 #elif defined(USE_ADIOS2)
   ! Create the ADIOS IO group which will contain all variables and attributes
@@ -1033,12 +1054,12 @@ contains
   ! ADIOS 1
   call adios_declare_group(adios_group, group_name, "iter", 0, ier)
   ! note: return codes for this function have been fixed for ADIOS versions >= 1.6
-  !call check_adios_err(ier,"Error declare group")
+  call check_adios_err(ier,"Error declare group")
 
   ! sets transport method
   call adios_select_method(adios_group, ADIOS_TRANSPORT_METHOD_UNDO_ATT, ADIOS_METHOD_PARAMS_UNDO_ATT, '', ier)
   ! note: return codes for this function have been fixed for ADIOS versions >= 1.6
-  !call check_adios_err(ier,"Error select method")
+  call check_adios_err(ier,"Error select method")
 
 #elif defined(USE_ADIOS2)
   ! ADIOS 2
@@ -1069,7 +1090,7 @@ contains
 ! only available with ADIOS compilation support
 ! to clearly separate adios version and non-adios version of same tools
 
-  subroutine set_adios_group_size(adios_handle,groupsize)
+  subroutine set_adios_group_size(adios_handle,group_size_inc)
 
   implicit none
 
@@ -1080,7 +1101,7 @@ contains
   ! adios2
   type(adios2_engine), intent(inout) :: adios_handle
 #endif
-  integer(kind=8), intent(in) :: groupsize
+  integer(kind=8), intent(in) :: group_size_inc
 
   ! local parameters
   integer :: ier
@@ -1093,7 +1114,7 @@ contains
   ! checks if file handle valid
   if (adios_handle == 0) stop 'Invalid ADIOS file handle argument in set_adios_group_size()'
 
-  call adios_group_size(adios_handle, groupsize, totalsize, ier)
+  call adios_group_size(adios_handle, group_size_inc, totalsize, ier)
   if (ier /= 0 ) stop 'Error calling adios_group_size() routine failed'
 
 #elif defined(USE_ADIOS2)
@@ -1103,7 +1124,7 @@ contains
   if (.not. adios_handle%valid) stop 'Invalid ADIOS2 file handle argument in set_adios_group_size()'
 
   ! to avoid compiler warning
-  totalsize = groupsize
+  totalsize = group_size_inc
   ier = 0
 #endif
 
@@ -1307,6 +1328,95 @@ contains
   end subroutine delete_adios_selection
 
 #endif
+!
+!---------------------------------------------------------------------------------
+!
+#if defined(USE_ADIOS) || defined(USE_ADIOS2)
+! only available with ADIOS compilation support
+! to clearly separate adios version and non-adios version of same tools
+
+  subroutine delete_adios_group(adios_group,group_name)
+
+! removes all variables from group and deletes it
+
+  implicit none
+
+#if defined(USE_ADIOS)
+  integer(kind=8), intent(inout) :: adios_group
+#elif defined(USE_ADIOS2)
+  type(adios2_io), intent(inout) :: adios_group
+#endif
+  character(len=*), intent(in) :: group_name
+
+  ! local parameters
+  integer :: ier
+  logical :: result
+
+  TRACE_ADIOS_ARG('delete_adios_group: group '//trim(group_name)//' - rank ',myrank_adios)
+
+#if defined(USE_ADIOS)
+  ! ADIOS 1
+  ! deletes all variable definitions from a group
+  ! we can define a new set of variables for the next output step
+  call adios_delete_vardefs(adios_group, ier)
+  if (ier /= 0) then
+    print *,'Error: adios delete group with group name ',trim(group_name),' failed'
+    stop 'Error helper adios delete group variables failed in delete_adios_group() routine'
+  endif
+
+  ! to avoid compiler warnings
+  result = .true.
+  ! nothing left to do, no explicit delete routine for the group in ADIOS1
+
+#elif defined(USE_ADIOS2)
+  ! ADIOS 2
+  ! note: closing a file will not delete the adios io yet.
+  !       thus, the adios group handlers could still be valid when opening a file with the init method next time.
+  !       this leads to issues when used together with begin/end steps, producing adios2 errors like:
+  !         ..
+  !         ERROR: variable reg2/rhostore/offset exists in IO object Reader, in call to DefineVariable
+  !         ..
+  !
+  ! cleans out the group
+  ! deletes all variable definitions from a group
+  call adios2_remove_all_variables(adios_group, ier)
+  call check_adios_err(ier,"Error removing group variables in delete_adios_group() routine")
+
+  ! removes io
+  ! (will recreate a new group in a next new open-and-init call)
+  call adios2_remove_io(result, myadios2_obj, group_name, ier)
+  ! checks result flag
+  if (result .neqv. .true.) stop 'Error failed removing io in delete_adios_group() routine'
+  call check_adios_err(ier,"Error removing io in delete_adios_group() routine")
+
+  ! explicitly resets group
+  if (adios_group%valid) adios_group%valid = .false.
+
+  ! this would fail, as io object is no more defined...
+  !call adios2_at_io(adios_group, myadios2_obj, group_name, ier)
+  !call check_adios_err(ier,"Error getting io in delete_adios_group() routine")
+
+  !! This below doesn't work as it will lead to issues with xsum_kernels_adios and possibly other tools...
+  !!
+  !! Avoid removing all ios: this will lead to problems when one io was opened for reading, while a second one
+  !!                         should stay valid for writing out (see e.g. sum_kernels.F90)
+  !!
+  !! removes io handlers created with adios2_declare_io()
+  !!if (myadios_group%valid .or. myadios_fwd_group%valid .or. myadios_val_group%valid) then
+  !!  ! removes ios
+  !!  call adios2_remove_all_ios(myadios2_obj, ier)
+  !!  call check_adios_err(ier,"Error removing all ios in delete_adios_group() routine")
+  !!  ! reset groups
+  !!  myadios_group%valid = .false.
+  !!  myadios_fwd_group%valid = .false.
+  !!  myadios_val_group%valid = .false.
+  !!endif
+
+#endif
+
+  end subroutine delete_adios_group
+
+#endif
 
 
 !-------------------------------------------------------------------------------
@@ -1349,6 +1459,13 @@ contains
   integer :: vtype, vnsteps, vndim
   integer(kind=8), dimension(3) :: dims
   integer :: group_count,i
+
+  ! user output
+  if (myrank_adios == 0) then
+    print *
+    print *,'show ADIOS file variables: ',trim(filename)
+    print *
+  endif
 
   ! file inquiry
   call adios_inq_file(adios_handle, variable_count, attribute_count, timestep_first, timestep_last, ier)
@@ -1462,6 +1579,13 @@ contains
   !       for Fortran bindings, unfortunately there is no adios2_inquire_all_*** functionality
   !       thus, we have no way to inquire and list all variables in a file using Fortran commands.
   !
+  ! user output
+  if (myrank_adios == 0) then
+    print *
+    print *,'show ADIOS2 file variables: ',trim(filename)
+    print *
+  endif
+
   ! only checks
   if (.not. myadios2_obj%valid) then
     call check_adios_err(ier,"Error inquiring adios2 file for reading: "//trim(filename))
@@ -1515,6 +1639,66 @@ contains
   end subroutine show_adios_file_variables
 
 #endif
+!
+!---------------------------------------------------------------------------------
+!
+#if defined(USE_ADIOS) || defined(USE_ADIOS2)
+! only available with ADIOS compilation support
+! to clearly separate adios version and non-adios version of same tools
+
+!> get the ADIOS filename
+!! \param name file name (without extension)
+
+  function get_adios_filename(name,ENGINE)
+
+  use constants, only: MAX_STRING_LEN,ADIOS2_ENGINE_DEFAULT
+
+  implicit none
+  character(len=*), intent(in) :: name
+  character(len=*), intent(in), optional :: ENGINE
+  character(len=MAX_STRING_LEN) :: get_adios_filename
+  ! local parameters
+  character(len=MAX_STRING_LEN) :: tmp_engine
+  character(len=4) :: ext
+  integer :: irange,i
+
+  ! selects engine type
+  if (present(ENGINE)) then
+    ! given by function call
+    tmp_engine = trim(ENGINE)
+  else
+    ! default
+    tmp_engine = trim(ADIOS2_ENGINE_DEFAULT)
+  endif
+
+  ! converts all string characters to lowercase (to make user input case-insensitive)
+  irange = iachar('a') - iachar('A')
+  do i = 1,len_trim(tmp_engine)
+    if (lge(tmp_engine(i:i),'A') .and. lle(tmp_engine(i:i),'Z')) then
+      tmp_engine(i:i) = achar(iachar(tmp_engine(i:i)) + irange)
+    endif
+  enddo
+
+  ! debug
+  !print *,'debug: get_adios_filename ',trim(name),' - engine: ',trim(tmp_engine)
+
+  ! sets ending according to engine
+  ! https://adios2.readthedocs.io/en/latest/engines/engines.html
+  select case(trim(tmp_engine))
+  case ("hdf5")
+    ext = ".h5"
+  case ("bp4")
+    ext = ".bp"
+  case default
+    ext = ".bp"
+  end select
+
+  ! engine chooses the filename extension (e.g., **.bp, **.h5, ..)
+  get_adios_filename = trim(name) // trim(ext)
+
+  end function get_adios_filename
+
+#endif
 
 
 !-------------------------------------------------------------------------------
@@ -1564,5 +1748,4 @@ contains
 #endif
 
 end module manager_adios
-
 

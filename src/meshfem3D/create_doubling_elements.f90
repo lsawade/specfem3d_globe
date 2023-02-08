@@ -1,7 +1,7 @@
 !=====================================================================
 !
-!          S p e c f e m 3 D  G l o b e  V e r s i o n  7 . 0
-!          --------------------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
 !                        Princeton University, USA
@@ -45,18 +45,17 @@
 
 ! adds doubling elements to the different regions of the mesh
 
-  use constants, only: myrank,CUSTOM_REAL, &
+  use constants, only: myrank,CUSTOM_REAL,IMAIN, &
     NGLLX,NGLLY,NGLLZ,NGNOD,NDIM,NGNOD2D,NDIM2D,NGNOD_EIGHT_CORNERS, &
-    MAX_NUMBER_OF_MESH_LAYERS, &
     NGLOB_DOUBLING_SUPERBRICK,NSPEC_DOUBLING_SUPERBRICK,NSPEC_DOUBLING_BASICBRICK,NSPEC_SUPERBRICK_1L, &
     IREGION_CRUST_MANTLE,IREGION_OUTER_CORE, &
     SAVE_BOUNDARY_MESH
 
   use shared_parameters, only: ner_mesh_layers,ratio_sampling_array,doubling_index,r_bottom,r_top
 
-  use meshfem3D_models_par, only: HONOR_1D_SPHERICAL_MOHO
+  use meshfem_models_par, only: HONOR_1D_SPHERICAL_MOHO
 
-  use meshfem3D_par, only: &
+  use meshfem_par, only: &
     xstore,ystore,zstore
 
   use regions_mesh_par, only: &
@@ -164,6 +163,15 @@
             * NEX_PER_PROC_ETA/(step_mult*ratio_sampling_array(ilayer)) &
             * nspec_sb
 
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) '    number of doubling elements = ',nelements
+    call flush_IMAIN()
+  endif
+
+  ! checks if anything to do
+  if (nelements <= 0) return
+
   ! fill mapping to be able to parallelize loops below
   allocate(map_ispec(nelements),stat=ier)
   if (ier /= 0) stop 'Error allocating map_ispec'
@@ -178,7 +186,7 @@
                                                 * NEX_PER_PROC_ETA/(step_mult*ratio_sampling_array(ilayer)))
         map_ispec(ielem) = ispec0 + ielem
         ! check
-        if (map_ispec(ielem) > nspec) call exit_MPI(myrank,'ispec greater than nspec in mesh creation')
+        if (map_ispec(ielem) > nspec) call exit_MPI(myrank,'ispec greater than nspec in mesh creation for doubling element')
       enddo
     enddo
   enddo
