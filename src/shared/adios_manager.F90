@@ -240,11 +240,7 @@ contains
 
   ! Create adios handler passing the communicator, debug mode and error flag
   ! adios2 duplicates the communicator for its internal use
-  if (USE_ADIOS2_DEBUG_MODE) then
-    call adios2_init(myadios2_obj, comm_adios, adios2_debug_mode_on, ier)
-  else
-    call adios2_init(myadios2_obj, comm_adios, adios2_debug_mode_off, ier)
-  endif
+  call adios2_init(myadios2_obj, comm_adios, ier)
   if (ier /= 0) stop 'Error setting up ADIOS2: calling adios2_init() routine failed'
 
 #endif
