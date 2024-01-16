@@ -13,10 +13,10 @@ SAVE_FORWARD                    = .false.   # save last frame of forward simulat
 NCHUNKS                         = 6
 
 # angular width of the first chunk (not used if full sphere with six chunks)
-ANGULAR_WIDTH_XI_IN_DEGREES     = 60.d0   # angular size of a chunk
-ANGULAR_WIDTH_ETA_IN_DEGREES    = 60.d0
-CENTER_LATITUDE_IN_DEGREES      = 50.d0
-CENTER_LONGITUDE_IN_DEGREES     = 15.d0
+ANGULAR_WIDTH_XI_IN_DEGREES     = 20.d0   # angular size of a chunk
+ANGULAR_WIDTH_ETA_IN_DEGREES    = 20.d0
+CENTER_LATITUDE_IN_DEGREES      = 40.d0
+CENTER_LONGITUDE_IN_DEGREES     = 25.d0
 GAMMA_ROTATION_AZIMUTH          = 0.d0
 
 # number of elements at the surface along the two sides of the first chunk
@@ -200,7 +200,7 @@ RATIO_BY_WHICH_TO_INCREASE_IT   = 1.5d0
 MOVIE_SURFACE                   = .false.
 MOVIE_VOLUME                    = .false.
 MOVIE_COARSE                    = .false.
-NTSTEP_BETWEEN_FRAMES           = 50
+NTSTEP_BETWEEN_FRAMES           = 28
 HDUR_MOVIE                      = 0.d0
 
 # save movie in volume.  Will save element if center of element is in prescribed volume
@@ -240,14 +240,9 @@ NTSTEP_BETWEEN_OUTPUT_INFO      = 500
 #
 #-----------------------------------------------------------
 
-# Compute derivate of the force/or the moment tensor
-# with respect to [depth in km, latitude in deg, longitude in deg] -- [1,2,3]
-USE_SOURCE_DERIVATIVE = .false.
-USE_SOURCE_DERIVATIVE_DIRECTION = 1
-
 # interval in time steps for temporary writing of seismograms
 NTSTEP_BETWEEN_OUTPUT_SEISMOS   = 5000000
-NTSTEP_BETWEEN_READ_ADJSRC      = 1000
+NTSTEP_BETWEEN_READ_ADJSRC      = 0
 
 # use a (tilted) FORCESOLUTION force point source (or several) instead of a CMTSOLUTION moment-tensor source.
 # This can be useful e.g. for asteroid simulations
@@ -271,6 +266,11 @@ USE_MONOCHROMATIC_CMT_SOURCE    = .false.
 # print source time function
 PRINT_SOURCE_TIME_FUNCTION      = .false.
 
+# Compute derivate of the force/or the moment tensor
+# with respect to [depth in km, latitude in deg, longitude in deg] -- [1,2,3]
+USE_SOURCE_DERIVATIVE           = .false.
+USE_SOURCE_DERIVATIVE_DIRECTION = 1
+
 #-----------------------------------------------------------
 #
 # Seismograms
@@ -278,7 +278,6 @@ PRINT_SOURCE_TIME_FUNCTION      = .false.
 #-----------------------------------------------------------
 
 # interval in time steps for temporary writing of seismograms
-NTSTEP_BETWEEN_OUTPUT_SEISMOS   = 5000000
 
 # set to n to reduce the sampling rate of output seismograms by a factor of n
 # defaults to 1, which means no down-sampling
@@ -321,17 +320,17 @@ RECEIVERS_CAN_BE_BURIED         = .true.
 #
 #-----------------------------------------------------------
 
-SAVE_GREEN_FUNCTIONS            = .false.
+SAVE_GREEN_FUNCTIONS            = .true.
 USE_BUFFER_ELEMENTS             = .true.
 NUMBER_OF_BUFFER_ELEMENTS       = 1
 
 # In general it makes sense to set these values
 # Because you will run it with an external STF
-# --> NTSTEP_BETWEEN_FRAMES (from movie section, 
+# --> NTSTEP_BETWEEN_FRAMES (from movie section,
 #     a separate parameter is probably better)
 # Uncomment NSTEP and T0 to set length of record manually.
-# NSTEP                           = 104286
-# T0                              = 0.d0
+NSTEP                           = 104286
+T0                              = 0.d0
 
 
 #-----------------------------------------------------------
@@ -342,7 +341,6 @@ NUMBER_OF_BUFFER_ELEMENTS       = 1
 
 # interval in time steps for reading adjoint traces
 # 0 = read the whole adjoint sources at start time
-NTSTEP_BETWEEN_READ_ADJSRC      = 0
 
 # use ASDF format for reading the adjoint sources
 READ_ADJSRC_ASDF                = .false.
@@ -428,7 +426,8 @@ NUMBER_OF_SIMULTANEOUS_RUNS     = 1
 # Thus, always set this option to .true. if the mesh and the model are the same for all simultaneous runs.
 # In that case there is no need to duplicate the mesh and model file database (the content of the DATABASES_MPI
 # directories) in each of the run0001, run0002,... directories, it is sufficient to have one in run0001
-# and the code will broadcast it to the others)ROADCAST_SAME_MESH_AND_MODEL   = .false.
+# and the code will broadcast it to the others)
+BROADCAST_SAME_MESH_AND_MODEL   = .false.
 
 #-----------------------------------------------------------
 
