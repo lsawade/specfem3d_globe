@@ -2253,6 +2253,9 @@
     case (4)
       rmin = T_zone4(0)
       rmax = T_zone4(num_spline_positions_zone4-1)
+    case default
+      rmin = 0.d0
+      rmax = 0.d0
     end select
 
     ! checks if in zone shell min/max radius
