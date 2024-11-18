@@ -1,7 +1,18 @@
 #!/bin/bash
+#
+# default, optional argument to be able to run only a kernel/backward simulation
+do_mesher=1
+if [ "$1" == "1" ]; then
+# forward simulation
+echo "forward simulation..."
+do_mesher=1
+elif [ "$1" == "3" ]; then
+# kernel/backward simulation
+echo "backward/kernel simulation..."
+do_mesher=0
+fi
 
-# gets settings from Par_file
-
+# DATABASES directory
 BASEMPIDIR=`grep ^LOCAL_PATH DATA/Par_file | cut -d = -f 2 `
 
 # script to run the mesher and the solver
@@ -15,13 +26,14 @@ NCHUNKS=`grep ^NCHUNKS DATA/Par_file | cut -d = -f 2 `
 numnodes=$(( $NCHUNKS * $NPROC_XI * $NPROC_ETA ))
 
 mkdir -p OUTPUT_FILES
+mkdir -p $BASEMPIDIR
 
 # backup files used for this simulation
 cp DATA/Par_file OUTPUT_FILES/
 cp DATA/STATIONS OUTPUT_FILES/
 cp DATA/CMTSOLUTION OUTPUT_FILES/
 
-
+if [ "$do_mesher" == "1" ]; then
 ##
 ## mesh generation
 ##
@@ -43,10 +55,16 @@ echo
 # backup important files addressing.txt and list*.txt
 cp OUTPUT_FILES/*.txt $BASEMPIDIR/
 
+fi
+
 
 ##
 ## forward simulation
 ##
+
+# set up addressing
+#cp $BASEMPIDIR/addr*.txt OUTPUT_FILES/
+#cp $BASEMPIDIR/list*.txt OUTPUT_FILES/
 
 sleep 2
 
