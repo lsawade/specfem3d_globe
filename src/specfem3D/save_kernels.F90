@@ -837,6 +837,9 @@
   character(len=MAX_STRING_LEN) :: filename
 #endif
 
+  ! overall stats
+  real(kind=CUSTOM_REAL) :: alphav_max,alphah_max,betav_max,betah_max,eta_kl_max,rho_max,Gc_prime_max,Gs_prime_max,cijkl_max
+
   ! checks if anything to do
   if (.not. ANISOTROPIC_KL) return
 
@@ -1290,6 +1293,85 @@
     enddo
   enddo
 
+  ! overall min/max value
+  if (SAVE_TRANSVERSE_KL_ONLY) then
+    ! transverse
+    call max_all_cr(maxval(alphav_kl_crust_mantle),alphav_max)
+    call max_all_cr(maxval(alphah_kl_crust_mantle),alphah_max)
+    call max_all_cr(maxval(betav_kl_crust_mantle),betav_max)
+    call max_all_cr(maxval(betah_kl_crust_mantle),betah_max)
+    call max_all_cr(maxval(eta_kl_crust_mantle),eta_kl_max)
+    call max_all_cr(maxval(rho_kl_crust_mantle),rho_max)
+    ! bulk
+    !call max_all_cr(maxval(bulk_c_kl_crust_mantle),bulk_c_max)
+    !call max_all_cr(maxval(bulk_betav_kl_crust_mantle),bulk_betav_max)
+    !call max_all_cr(maxval(bulk_betah_kl_crust_mantle),bulk_betah_max)
+    ! isotropic
+    !call max_all_cr(maxval(alpha_kl_crust_mantle),alpha_max)
+    !call max_all_cr(maxval(beta_kl_crust_mantle),beta_max)
+    !call max_all_cr(maxval(bulk_beta_kl_crust_mantle),bulk_beta_max)
+
+    ! user output
+    if (myrank == 0) then
+      write(IMAIN,*) 'crust/mantle kernels: transverse isotropic'
+      write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+      write(IMAIN,*) '  maximum value of alphav kernel     = ',alphav_max
+      write(IMAIN,*) '  maximum value of alphah kernel     = ',alphah_max
+      write(IMAIN,*) '  maximum value of betav kernel      = ',betav_max
+      write(IMAIN,*) '  maximum value of betah kernel      = ',betah_max
+      write(IMAIN,*) '  maximum value of eta kernel        = ',eta_kl_max
+      write(IMAIN,*)
+      call flush_IMAIN()
+    endif
+
+  else if (SAVE_AZIMUTHAL_ANISO_KL_ONLY) then
+    ! kernels for inversions involving azimuthal anisotropy
+    ! (alpha_v, alpha_h, beta_v, beta_h, eta, rho ) parameterization
+    call max_all_cr(maxval(alphav_kl_crust_mantle),alphav_max)
+    call max_all_cr(maxval(alphah_kl_crust_mantle),alphah_max)
+    call max_all_cr(maxval(betav_kl_crust_mantle),betav_max)
+    call max_all_cr(maxval(betah_kl_crust_mantle),betah_max)
+    call max_all_cr(maxval(eta_kl_crust_mantle),eta_kl_max)
+    call max_all_cr(maxval(rho_kl_crust_mantle),rho_max)
+    ! note: Gc' & Gs' are the normalized Gc & Gs kernels
+    call max_all_cr(maxval(Gc_prime_kl_crust_mantle),Gc_prime_max)
+    call max_all_cr(maxval(Gs_prime_kl_crust_mantle),Gs_prime_max)
+    ! (bulk_c, beta_v, beta_h, eta, Gc', Gs', rho ) parameterization
+    !call max_all_cr(maxval(bulk_c_kl_crust_mantle),bulk_c_max)
+    !call max_all_cr(maxval(bulk_betav_kl_crust_mantle),bulk_betav_max)
+    !call max_all_cr(maxval(bulk_betah_kl_crust_mantle),bulk_betah_max)
+
+    ! user output
+    if (myrank == 0) then
+      write(IMAIN,*) 'crust/mantle kernels: azimuthal anisotropic'
+      write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+      write(IMAIN,*) '  maximum value of alphav kernel     = ',alphav_max
+      write(IMAIN,*) '  maximum value of alphah kernel     = ',alphah_max
+      write(IMAIN,*) '  maximum value of betav kernel      = ',betav_max
+      write(IMAIN,*) '  maximum value of betah kernel      = ',betah_max
+      write(IMAIN,*) '  maximum value of eta kernel        = ',eta_kl_max
+      write(IMAIN,*)
+      write(IMAIN,*) '  maximum value of Gc prime kernel   = ',Gc_prime_max
+      write(IMAIN,*) '  maximum value of Gs prime kernel   = ',Gs_prime_max
+      write(IMAIN,*)
+      call flush_IMAIN()
+    endif
+
+  else
+    ! fully anisotropic kernels
+    call max_all_cr(maxval(rho_kl_crust_mantle),rho_max)
+    call max_all_cr(maxval(cijkl_kl_crust_mantle),cijkl_max)
+
+    ! user output
+    if (myrank == 0) then
+      write(IMAIN,*) 'crust/mantle kernels: fully anisotropic'
+      write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+      write(IMAIN,*) '  maximum value of cijkl kernel      = ',cijkl_max
+      write(IMAIN,*)
+      call flush_IMAIN()
+    endif
+  endif
+
   ! writes out kernels to files
   if (ADIOS_FOR_KERNELS) then
     call write_kernels_cm_ani_adios(alphav_kl_crust_mantle,alphah_kl_crust_mantle, &
@@ -1578,6 +1660,8 @@
   real(kind=CUSTOM_REAL), dimension(:,:,:,:),allocatable :: &
     bulk_c_kl_crust_mantle,bulk_beta_kl_crust_mantle
 
+  real(kind=CUSTOM_REAL) :: rho_max,kappa_max,mu_max
+
   ! checks if anything to do
   if (ANISOTROPIC_KL) return
 
@@ -1649,6 +1733,21 @@
       enddo
     enddo
   enddo
+
+  ! isotropic kernels
+  call max_all_cr(maxval(rhonotprime_kl_crust_mantle),rho_max)
+  call max_all_cr(maxval(kappa_kl_crust_mantle),kappa_max)
+  call max_all_cr(maxval(mu_kl_crust_mantle),mu_max)
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'crust/mantle kernels: isotropic'
+    write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+    write(IMAIN,*) '  maximum value of kappa kernel      = ',kappa_max
+    write(IMAIN,*) '  maximum value of mu kernel         = ',mu_max
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
 
   ! writes out kernels to files
   if (ADIOS_FOR_KERNELS) then
@@ -1722,8 +1821,9 @@
     rho_kl_outer_core,alpha_kl_outer_core
 
   ! local parameters
-  real(kind=CUSTOM_REAL):: scale_kl
+  real(kind=CUSTOM_REAL) :: scale_kl
   real(kind=CUSTOM_REAL) :: rhol,kappal,rho_kl,alpha_kl
+  real(kind=CUSTOM_REAL) :: rho_max,alpha_max
   integer :: ispec,i,j,k
 
   ! saftey check
@@ -1748,6 +1848,19 @@
       enddo
     enddo
   enddo
+
+  ! isotropic kernels
+  call max_all_cr(maxval(rho_kl_outer_core),rho_max)
+  call max_all_cr(maxval(alpha_kl_outer_core),alpha_max)
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'outer core kernels: isotropic'
+    write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+    write(IMAIN,*) '  maximum value of alpha kernel      = ',alpha_max
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
 
   ! writes out kernels to file
   if (ADIOS_FOR_KERNELS) then
@@ -1791,8 +1904,9 @@
     rho_kl_inner_core,beta_kl_inner_core, alpha_kl_inner_core
 
   ! local parameters
-  real(kind=CUSTOM_REAL):: scale_kl
+  real(kind=CUSTOM_REAL) :: scale_kl
   real(kind=CUSTOM_REAL) :: rhol,mul,kappal,rho_kl,alpha_kl,beta_kl
+  real(kind=CUSTOM_REAL) :: rho_max,alpha_max,beta_max
   integer :: ispec,i,j,k
 
   ! safety check
@@ -1821,6 +1935,21 @@
       enddo
     enddo
   enddo
+
+  ! isotropic kernels
+  call max_all_cr(maxval(rho_kl_inner_core),rho_max)
+  call max_all_cr(maxval(alpha_kl_inner_core),alpha_max)
+  call max_all_cr(maxval(beta_kl_inner_core),alpha_max)
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'inner core kernels: isotropic'
+    write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+    write(IMAIN,*) '  maximum value of alpha kernel      = ',alpha_max
+    write(IMAIN,*) '  maximum value of beta kernel       = ',beta_max
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
 
   ! writes out kernels to file
   if (ADIOS_FOR_KERNELS) then
@@ -1856,7 +1985,8 @@
   implicit none
 
   ! local parameters
-  real(kind=CUSTOM_REAL):: scale_kl
+  real(kind=CUSTOM_REAL) :: scale_kl
+  real(kind=CUSTOM_REAL) :: moho_max,d400_max,d670_max,cmb_max,icb_max
 
   ! saftey check
   if (.not. SAVE_KERNELS_BOUNDARY) return
@@ -1871,6 +2001,29 @@
   d670_kl(:,:,:) = d670_kl(:,:,:) * real(scale_kl * 1.d3,kind=CUSTOM_REAL)
   cmb_kl(:,:,:) = cmb_kl(:,:,:) * real(scale_kl * 1.d3,kind=CUSTOM_REAL)
   icb_kl(:,:,:) = icb_kl(:,:,:) * real(scale_kl * 1.d3,kind=CUSTOM_REAL)
+
+  ! boundary kernels
+  if (.not. SUPPRESS_CRUSTAL_MESH .and. HONOR_1D_SPHERICAL_MOHO) then
+    call max_all_cr(maxval(moho_kl),moho_max)
+  endif
+  call max_all_cr(maxval(d400_kl),d400_max)
+  call max_all_cr(maxval(d670_kl),d670_max)
+  call max_all_cr(maxval(cmb_kl),cmb_max)
+  call max_all_cr(maxval(icb_kl),icb_max)
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'boundary kernels:'
+    if (.not. SUPPRESS_CRUSTAL_MESH .and. HONOR_1D_SPHERICAL_MOHO) then
+      write(IMAIN,*) '  maximum value of rho kernel        = ',moho_max
+    endif
+    write(IMAIN,*) '  maximum value of d400 kernel       = ',d400_max
+    write(IMAIN,*) '  maximum value of d670 kernel       = ',d670_max
+    write(IMAIN,*) '  maximum value of CMB kernel        = ',cmb_max
+    write(IMAIN,*) '  maximum value of ICB kernel        = ',icb_max
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
 
   ! writes out kernels to file
   if (ADIOS_FOR_KERNELS) then
@@ -2009,12 +2162,31 @@
 
   ! local parameters
   real(kind=CUSTOM_REAL) :: scale_kl
+  real(kind=CUSTOM_REAL) :: hess_max,hess_rho_max,hess_kappa_max,hess_mu_max
 
   ! scaling factors
   scale_kl = real(scale_t * scale_displ_inv * 1.d9,kind=CUSTOM_REAL)
 
   ! scales approximate Hessian
   hess_kl_crust_mantle(:,:,:,:) = 2._CUSTOM_REAL * hess_kl_crust_mantle(:,:,:,:) * scale_kl
+
+  ! Hessian kernels
+  call max_all_cr(maxval(hess_kl_crust_mantle),hess_max)
+  call max_all_cr(maxval(hess_rho_kl_crust_mantle),hess_rho_max)
+  call max_all_cr(maxval(hess_kappa_kl_crust_mantle),hess_kappa_max)
+  call max_all_cr(maxval(hess_mu_kl_crust_mantle),hess_mu_max)
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'Hessian kernels:'
+    write(IMAIN,*) '  maximum value of Hessian kernel       = ',hess_max
+    write(IMAIN,*) '  maximum value of Hessian rho kernel   = ',hess_rho_max
+    write(IMAIN,*) '  maximum value of Hessian kappa kernel = ',hess_kappa_max
+    write(IMAIN,*) '  maximum value of Hessian mu kernel    = ',hess_mu_max
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
 
   ! writes out kernels to file
   if (ADIOS_FOR_KERNELS) then
@@ -2040,7 +2212,6 @@
     open(unit=IOUT,file=trim(prname)//'hess_mu_kernel.bin',status='unknown',form='unformatted',action='write')
     write(IOUT) hess_mu_kl_crust_mantle
     close(IOUT)
-
   endif
 
   end subroutine save_kernels_Hessian
