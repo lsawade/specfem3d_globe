@@ -137,11 +137,25 @@ void FC_FUNC_ (prepare_constants_device,
   // safety checks
   // constants defined in constants.h and mesh_constants_gpu.h have to match
   if (*h_NGLLX != NGLLX) { exit_on_error ("NGLLX must be set to 5 for GPU devices in constants.h; please re-compile"); }
+
+  // uses "dynamic" variable and sets it to value from setup/constants.h
+  mp->GPU_ASYNC_COPY = *GPU_ASYNC_COPY_f;
+#ifdef GPU_ASYNC_COPY
+  // for static compilation
+  // check with usage of define GPU_ASYNC_COPY == .. in mesh_constants_gpu.h
+  mp->GPU_ASYNC_COPY = GPU_ASYNC_COPY;
+  // check with setting from setup/constants.h
   if (*GPU_ASYNC_COPY_f) {
-    if (! GPU_ASYNC_COPY) { exit_on_error ("GPU_ASYNC_COPY must be set to 1 for GPU devices in mesh_constants_gpu.h; please re-compile"); }
+    if (! mp->GPU_ASYNC_COPY) {
+      exit_on_error ("GPU_ASYNC_COPY must match setting in constants.h and be set to 1 for GPU devices in mesh_constants_gpu.h; please re-compile");
+    }
   }else{
-    if (GPU_ASYNC_COPY) { exit_on_error ("GPU_ASYNC_COPY must be set to 0 for GPU devices in mesh_constants_gpu.h; please re-compile"); }
+    if (mp->GPU_ASYNC_COPY) {
+      exit_on_error ("GPU_ASYNC_COPY must match setting in constants.h and be set to 0 for GPU devices in mesh_constants_gpu.h; please re-compile");
+    }
   }
+#endif
+
 #ifdef USE_MESH_COLORING_GPU
   if (! *USE_MESH_COLORING_GPU_f) { exit_on_error("Error with USE_MESH_COLORING_GPU constant; please re-compile\n"); }
 #endif
@@ -179,8 +193,33 @@ void FC_FUNC_ (prepare_constants_device,
   // compute stream
   gpuStreamCreate(&mp->compute_stream);
   // copy stream (needed to transfer MPI buffers)
-  if (GPU_ASYNC_COPY) gpuStreamCreate(&mp->copy_stream);
+  if (mp->GPU_ASYNC_COPY) gpuStreamCreate(&mp->copy_stream);
 
+  // OpenCL uses command kernel queues instead of streams
+#ifdef USE_OPENCL
+  mocl.command_queue = NULL;
+  mocl.copy_queue = NULL;
+//#pragma message ("\n\nCompiling with: OPENCL target version " VAR_NAME_VALUE(CL_TARGET_OPENCL_VERSION) "\n")
+  cl_int errcode;
+  // clCreateCommandQueue feature in OpenCL 1.2, will be deprecated in OpenCL 2.0
+#if defined(CL_VERSION_2_0) || defined(CL_VERSION_2_1) || defined(CL_VERSION_2_2) || defined(CL_VERSION_3_0)
+  // version 2.x, 3.x
+#pragma message ("\nCompiling for OpenCL version > 1\n")
+  mocl.command_queue = clCreateCommandQueueWithProperties(mocl.context, mocl.device, 0, clck_(&errcode));
+  if (mp->GPU_ASYNC_COPY) {
+    mocl.copy_queue = clCreateCommandQueueWithProperties(mocl.context, mocl.device, 0, clck_(&errcode));
+  }
+#else
+  // version 1.0, 1.1, 1.2, mostly CL_VERSION_1_2
+#pragma message ("\nCompiling for OpenCL version 1.x\n")
+  mocl.command_queue = clCreateCommandQueue(mocl.context, mocl.device, 0, clck_(&errcode));
+  if (mp->GPU_ASYNC_COPY) {
+    mocl.copy_queue = clCreateCommandQueue(mocl.context, mocl.device, 0, clck_(&errcode));
+  }
+#endif
+#endif
+
+  // CUDA graphs
 #ifdef USE_CUDA
   if (run_cuda) {
     // graphs
@@ -215,7 +254,7 @@ void FC_FUNC_ (prepare_constants_device,
       mp->use_graph_call_acoustic = 0;
       // debug
       //if (mp->myrank == 0) printf("Graph: using CUDA graph\n");
-      if (GPU_ASYNC_COPY){
+      if (mp->GPU_ASYNC_COPY){
         // check norm and norm strain graphs require async copies between host-device
         mp->init_graph_norm = 1;              // check norm graph
         mp->use_graph_call_norm = 0;
@@ -451,7 +490,7 @@ void FC_FUNC_ (prepare_constants_device,
       // adjoint simulations or strain seismograms
       // seismograms will still be computed on CPU, no need for interpolators hxi,heta,hgamma
       // for transferring values from GPU to CPU
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
         if (run_opencl) {
           ALLOC_PINNED_BUFFER_OCL (station_seismo_field, NDIM * NGLL3 * mp->nrec_local * sizeof(realw));
@@ -534,7 +573,7 @@ void FC_FUNC_ (prepare_constants_device,
   gpuMemset_realw (&mp->d_norm_strain_max, 6 * size_block_norm_strain, 0);
 
   // creates pinned host buffer
-  if (GPU_ASYNC_COPY) {
+  if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
     if (run_opencl) {
         ALLOC_PINNED_BUFFER_OCL(norm_max, 3 * size_block_norm * sizeof(realw));
@@ -635,7 +674,7 @@ void FC_FUNC_ (prepare_constants_adjoint_device,
     }
 
     // temporary array to prepare extracted source array values
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
       if (run_opencl) {
         ALLOC_PINNED_BUFFER_OCL(stf_array_adjoint, mp->nadj_rec_local * NDIM * sizeof(realw));
@@ -1167,7 +1206,7 @@ void FC_FUNC_ (prepare_mpi_buffers_device,
     }
 
     // asynchronous MPI buffer
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
       if (run_opencl) {
         ALLOC_PINNED_BUFFER_OCL(send_accel_buffer_cm, sizeof(realw)* size_mpi_buffer);
@@ -1233,7 +1272,7 @@ void FC_FUNC_ (prepare_mpi_buffers_device,
     }
 
     // asynchronous MPI buffer
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
       if (run_opencl) {
         ALLOC_PINNED_BUFFER_OCL(send_accel_buffer_ic, sizeof(realw)* size_mpi_buffer);
@@ -1302,7 +1341,7 @@ void FC_FUNC_ (prepare_mpi_buffers_device,
     }
 
     // asynchronous MPI buffer
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
       if (run_opencl) {
         ALLOC_PINNED_BUFFER_OCL(send_accel_buffer_oc, sizeof(realw)* size_mpi_buffer);
@@ -2593,7 +2632,7 @@ void FC_FUNC_ (prepare_cleanup_device,
   if (mp->nrec_local > 0) {
 
     if (mp->simulation_type == 2 ) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
         if (run_opencl) RELEASE_PINNED_BUFFER_OCL (station_seismo_field);
 #endif
@@ -2611,7 +2650,7 @@ void FC_FUNC_ (prepare_cleanup_device,
 
   // adjoint source arrays
   if (mp->nadj_rec_local > 0) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
       if (run_opencl) RELEASE_PINNED_BUFFER_OCL (stf_array_adjoint);
 #endif
@@ -2630,7 +2669,7 @@ void FC_FUNC_ (prepare_cleanup_device,
 #ifdef USE_OPENCL
   if (run_opencl) {
     if (mp->num_interfaces_crust_mantle > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         RELEASE_PINNED_BUFFER_OCL (send_accel_buffer_cm);
         RELEASE_PINNED_BUFFER_OCL (recv_accel_buffer_cm);
 
@@ -2641,7 +2680,7 @@ void FC_FUNC_ (prepare_cleanup_device,
       }
     }
     if (mp->num_interfaces_inner_core > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         RELEASE_PINNED_BUFFER_OCL (send_accel_buffer_ic);
         RELEASE_PINNED_BUFFER_OCL (recv_accel_buffer_ic);
 
@@ -2652,7 +2691,7 @@ void FC_FUNC_ (prepare_cleanup_device,
       }
     }
     if (mp->num_interfaces_outer_core > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         RELEASE_PINNED_BUFFER_OCL (send_accel_buffer_oc);
         RELEASE_PINNED_BUFFER_OCL (recv_accel_buffer_oc);
         if (mp->simulation_type == 3) {
@@ -2666,7 +2705,7 @@ void FC_FUNC_ (prepare_cleanup_device,
 #ifdef USE_CUDA
   if (run_cuda) {
     if (mp->num_interfaces_crust_mantle > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         cudaFreeHost(mp->h_send_accel_buffer_cm);
         cudaFreeHost(mp->h_recv_accel_buffer_cm);
         if (mp->simulation_type == 3) {
@@ -2676,7 +2715,7 @@ void FC_FUNC_ (prepare_cleanup_device,
       }
     }
     if (mp->num_interfaces_inner_core > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         cudaFreeHost(mp->h_send_accel_buffer_ic);
         cudaFreeHost(mp->h_recv_accel_buffer_ic);
         if (mp->simulation_type == 3) {
@@ -2686,7 +2725,7 @@ void FC_FUNC_ (prepare_cleanup_device,
       }
     }
     if (mp->num_interfaces_outer_core > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         cudaFreeHost(mp->h_send_accel_buffer_oc);
         cudaFreeHost(mp->h_recv_accel_buffer_oc);
         if (mp->simulation_type == 3) {
@@ -2700,7 +2739,7 @@ void FC_FUNC_ (prepare_cleanup_device,
 #ifdef USE_HIP
   if (run_hip) {
     if (mp->num_interfaces_crust_mantle > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         hipHostFree(mp->h_send_accel_buffer_cm);
         hipHostFree(mp->h_recv_accel_buffer_cm);
         if (mp->simulation_type == 3) {
@@ -2710,7 +2749,7 @@ void FC_FUNC_ (prepare_cleanup_device,
       }
     }
     if (mp->num_interfaces_inner_core > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         hipHostFree(mp->h_send_accel_buffer_ic);
         hipHostFree(mp->h_recv_accel_buffer_ic);
         if (mp->simulation_type == 3) {
@@ -2720,7 +2759,7 @@ void FC_FUNC_ (prepare_cleanup_device,
       }
     }
     if (mp->num_interfaces_outer_core > 0) {
-      if (GPU_ASYNC_COPY) {
+      if (mp->GPU_ASYNC_COPY) {
         hipHostFree(mp->h_send_accel_buffer_oc);
         hipHostFree(mp->h_recv_accel_buffer_oc);
         if (mp->simulation_type == 3) {
@@ -2788,7 +2827,7 @@ void FC_FUNC_ (prepare_cleanup_device,
     }
   }
 
-  if (GPU_ASYNC_COPY){
+  if (mp->GPU_ASYNC_COPY){
 #ifdef USE_OPENCL
     if (run_opencl){
       RELEASE_PINNED_BUFFER_OCL (norm_max);
@@ -3288,13 +3327,13 @@ void FC_FUNC_ (prepare_cleanup_device,
   if (run_opencl) {
     // cleans up queues
     clReleaseCommandQueue (mocl.command_queue);
-    if (GPU_ASYNC_COPY) clReleaseCommandQueue (mocl.copy_queue);
+    if (mp->GPU_ASYNC_COPY) clReleaseCommandQueue (mocl.copy_queue);
   }
 #endif
 #ifdef USE_CUDA
   if (run_cuda) {
     cudaStreamDestroy(mp->compute_stream);
-    if (GPU_ASYNC_COPY) cudaStreamDestroy(mp->copy_stream);
+    if (mp->GPU_ASYNC_COPY) cudaStreamDestroy(mp->copy_stream);
     // graphs
 #ifdef USE_CUDA_GRAPHS
     if (mp->use_graph_call_elastic) {
@@ -3319,7 +3358,7 @@ void FC_FUNC_ (prepare_cleanup_device,
 #ifdef USE_HIP
   if (run_hip) {
     hipStreamDestroy(mp->compute_stream);
-    if (GPU_ASYNC_COPY) hipStreamDestroy(mp->copy_stream);
+    if (mp->GPU_ASYNC_COPY) hipStreamDestroy(mp->copy_stream);
   }
 #endif
 

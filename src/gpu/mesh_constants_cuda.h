@@ -87,7 +87,6 @@ static inline void print_CUDA_error_if_any(cudaError_t err, int num) {
 
 #if CUSTOM_REAL == 4
 // textures
-// textures
 // note: texture templates are supported only for CUDA versions <= 11.x
 //       since CUDA 12.x, these are deprecated and texture objects should be used instead
 //       see: https://developer.nvidia.com/blog/cuda-pro-tip-kepler-texture-objects-improve-performance-and-flexibility/
@@ -100,7 +99,6 @@ typedef const float* __restrict__ realw_const_p; // otherwise use: //typedef con
 typedef float* __restrict__ realw_p; // otherwise use: //typedef float* realw_p;
 
 #elif CUSTOM_REAL == 8
-// textures
 // textures
 // note: texture templates are supported only for CUDA versions <= 11.x
 //       since CUDA 12.x, these are deprecated and texture objects should be used instead

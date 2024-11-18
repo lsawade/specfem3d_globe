@@ -222,27 +222,27 @@ void FC_FUNC_ (check_norm_elastic_acoustic_from_device,
   //debug
 #if (DEBUG_FIELDS == 1)
   {
-    printf ("rank %d - check norm max: nglob outer_core %d crust_mantle %d inner_core %d\n",
-            mp->myrank, mp->NGLOB_OUTER_CORE,mp->NGLOB_CRUST_MANTLE,mp->NGLOB_INNER_CORE);
-    fflush (stdout);
-    synchronize_mpi ();
+    printf ("rank %d - check norm max: nglob outer_core/crust_mantle/inner_core = %d / %d / %d - FORWARD_OR_ADJOINT = %i\n",
+            mp->myrank,mp->NGLOB_OUTER_CORE,mp->NGLOB_CRUST_MANTLE,mp->NGLOB_INNER_CORE,*FORWARD_OR_ADJOINT);
+    fflush(stdout);
+    synchronize_mpi();
     realw max_d, max_v, max_a;
     max_d = get_device_array_maximum_value(mp->d_displ_outer_core, mp->NGLOB_OUTER_CORE);
     max_v = get_device_array_maximum_value(mp->d_veloc_outer_core, mp->NGLOB_OUTER_CORE);
     max_a = get_device_array_maximum_value(mp->d_accel_outer_core, mp->NGLOB_OUTER_CORE);
-    printf ("rank %d - check norm max outer_core displ: %e veloc: %e accel: %e, %i\n", mp->myrank, max_d, max_v, max_a, *FORWARD_OR_ADJOINT);
-    fflush (stdout);
+    printf ("rank %d - check norm max: outer_core   displ/veloc/accel = %e / %e / %e\n", mp->myrank, max_d, max_v, max_a);
+    fflush(stdout);
     max_d = get_device_array_maximum_value(mp->d_displ_crust_mantle, NDIM * mp->NGLOB_CRUST_MANTLE);
     max_v = get_device_array_maximum_value(mp->d_veloc_crust_mantle, NDIM * mp->NGLOB_CRUST_MANTLE);
     max_a = get_device_array_maximum_value(mp->d_accel_crust_mantle, NDIM * mp->NGLOB_CRUST_MANTLE);
-    printf ("rank %d - check norm max crust_mantle displ: %e veloc: %e accel: %e, %i\n", mp->myrank, max_d, max_v, max_a, *FORWARD_OR_ADJOINT);
-    fflush (stdout);
+    printf ("rank %d - check norm max: crust_mantle displ/veloc/accel = %e / %e / %e\n", mp->myrank, max_d, max_v, max_a);
+    fflush(stdout);
     max_d = get_device_array_maximum_value(mp->d_displ_inner_core, NDIM * mp->NGLOB_INNER_CORE);
     max_v = get_device_array_maximum_value(mp->d_veloc_inner_core, NDIM * mp->NGLOB_INNER_CORE);
     max_a = get_device_array_maximum_value(mp->d_accel_inner_core, NDIM * mp->NGLOB_INNER_CORE);
-    printf ("rank %d - check norm max inner_core displ: %e veloc: %e accel: %e, %i\n", mp->myrank, max_d, max_v, max_a, *FORWARD_OR_ADJOINT);
-    fflush (stdout);
-    synchronize_mpi ();
+    printf ("rank %d - check norm max: inner_core   displ/veloc/accel = %e / %e / %e\n", mp->myrank, max_d, max_v, max_a);
+    fflush(stdout);
+    synchronize_mpi();
   }
 #endif
 
@@ -530,13 +530,12 @@ void FC_FUNC_ (check_norm_elastic_acoustic_from_device,
   realw *h_norm_max = mp->h_norm_max;
 
   // determines fluid max for all blocks
+  max = 0.0f;
   if (mp->NGLOB_OUTER_CORE > 0) {
     max = h_norm_max[0];
     for (int i = 1; i < size_block_fluid; i++) {
       if (max < h_norm_max[i]) max = h_norm_max[i];
     }
-  }else{
-    max = 0.0f;
   }
   // return result
   *fluidnorm = max;
@@ -550,13 +549,12 @@ void FC_FUNC_ (check_norm_elastic_acoustic_from_device,
   max_crust_mantle = max;
 
   // determines max for all blocks inner_core
+  max = 0.0f;
   if (mp->NGLOB_INNER_CORE > 0) {
     max = h_norm_max[size_block_fluid + size_block_cm];
     for (int i = size_block_fluid + size_block_cm + 1; i < size_block_fluid + size_block_cm + size_block_ic; i++) {
       if (max < h_norm_max[i]) max = h_norm_max[i];
     }
-  }else{
-    max = 0.0f;
   }
   max_inner_core = max;
 
@@ -567,11 +565,14 @@ void FC_FUNC_ (check_norm_elastic_acoustic_from_device,
   //debug
 #if (DEBUG_FIELDS == 1)
   {
-    printf ("rank %d - norm elastic: size fluid %d cm %d ic %d\n",mp->myrank,size_block_fluid,size_block_cm,size_block_ic);
-    printf ("rank %d - norm elastic: size total used %d - crust_mantle = %e inner_core = %e\n",
-            mp->myrank,(size_block_fluid + size_block_cm + size_block_ic),max_crust_mantle,max_inner_core);
-    fflush (stdout);
-    synchronize_mpi ();
+    printf ("rank %d - norm elastic: size fluid/cm/ic = %d / %d / %d\n",
+            mp->myrank,size_block_fluid,size_block_cm,size_block_ic);
+    printf ("rank %d - norm elastic: size total used  = %d\n",
+            mp->myrank,(size_block_fluid + size_block_cm + size_block_ic));
+    printf ("rank %d - norm elastic: max crust_mantle/inner_core = %e / %e\n",
+            mp->myrank,max_crust_mantle,max_inner_core);
+    fflush(stdout);
+    synchronize_mpi();
   }
 #endif
 
@@ -606,21 +607,22 @@ void FC_FUNC_ (check_norm_strain_from_device,
 
   // checks if anything to do
   if (! mp->compute_and_store_strain) return;
+  if (mp->NSPEC_CRUST_MANTLE_STRAIN_ONLY <= 1) return;
 
   //debug
 #if (DEBUG_FIELDS == 1)
   {
     printf ("rank %d - norm strain: blocksize_transfer %d nspec_strain_only = %d\n",
             mp->myrank,BLOCKSIZE_TRANSFER,mp->NSPEC_CRUST_MANTLE_STRAIN_ONLY);
-    fflush (stdout);
-    synchronize_mpi ();
+    fflush(stdout);
+    synchronize_mpi();
     realw max_1, max_2, max_3;
     max_1 = get_device_array_maximum_value(mp->d_epsilondev_xx_crust_mantle, NGLL3 * mp->NSPEC_CRUST_MANTLE);
     max_2 = get_device_array_maximum_value(mp->d_epsilondev_yy_crust_mantle, NGLL3 * mp->NSPEC_CRUST_MANTLE);
     max_3 = get_device_array_maximum_value(mp->d_epsilondev_xy_crust_mantle, NGLL3 * mp->NSPEC_CRUST_MANTLE);
     printf ("rank %d - norm strain: max xx: %e yy: %e xy: %e\n", mp->myrank, max_1, max_2, max_3);
-    fflush (stdout);
-    synchronize_mpi ();
+    fflush(stdout);
+    synchronize_mpi();
   }
 #endif
 
@@ -857,6 +859,7 @@ void FC_FUNC_ (check_norm_strain_from_device,
   realw *h_max = mp->h_norm_strain_max;
 
   // determines maximum
+  max = 0.0f;
   // strain trace
   if (mp->NSPEC_CRUST_MANTLE_STRAIN_ONLY > 1){
     max = h_max[0];
@@ -868,9 +871,12 @@ void FC_FUNC_ (check_norm_strain_from_device,
   }
 
   // strain
-  max = h_max[size_block_strain];
-  for (int i = size_block_strain + 1; i < size_block_strain + 5 * size_block; i++) {
-    if (max < h_max[i]) max = h_max[i];
+  max = 0.0f;
+  if (size_block > 0){
+    max = h_max[size_block_strain];
+    for (int i = size_block_strain + 1; i < size_block_strain + 5 * size_block; i++) {
+      if (max < h_max[i]) max = h_max[i];
+    }
   }
   //max_eps = MAX (max_eps, max);
   // strain maximum
@@ -881,8 +887,8 @@ void FC_FUNC_ (check_norm_strain_from_device,
   {
     printf ("rank %d - norm strain: size used %d - strain trace = %e strain = %e \n",
             mp->myrank,(size_block_strain + 5 * size_block),*strain_norm,*strain_norm);
-    fflush (stdout);
-    synchronize_mpi ();
+    fflush(stdout);
+    synchronize_mpi();
   }
 #endif
 

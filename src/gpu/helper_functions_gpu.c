@@ -534,7 +534,7 @@ void gpuCopy_from_device_realw_asyncEvent (Mesh *mp, gpu_realw_mem *d_array_addr
 #ifdef USE_OPENCL
   if (run_opencl) {
     // non-blocking copy
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // asynchronuous copy
       //
       // note: if host array is not pinned, then call will become blocking
@@ -559,7 +559,7 @@ void gpuCopy_from_device_realw_asyncEvent (Mesh *mp, gpu_realw_mem *d_array_addr
 #endif
 #ifdef USE_CUDA
   if (run_cuda) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // asynchronuous copy
       //
       // note: if host array is not pinned, then call will become blocking
@@ -588,7 +588,7 @@ void gpuCopy_from_device_realw_asyncEvent (Mesh *mp, gpu_realw_mem *d_array_addr
 #endif
 #ifdef USE_HIP
   if (run_hip) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // asynchronuous copy
       print_HIP_error_if_any(hipStreamWaitEvent(mp->copy_stream, mp->kernel_event, 0),32000);
 
@@ -618,7 +618,7 @@ void gpuRecordEvent(Mesh *mp){
 #endif
 #ifdef USE_CUDA
   if (run_cuda) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // record event on compute stream
       print_CUDA_error_if_any(cudaEventRecord(mp->kernel_event, mp->compute_stream),31000);
     }
@@ -626,7 +626,7 @@ void gpuRecordEvent(Mesh *mp){
 #endif
 #ifdef USE_HIP
   if (run_hip) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // record event on compute stream
       print_HIP_error_if_any(hipEventRecord(mp->kernel_event, mp->compute_stream),31000);
     }
@@ -643,7 +643,7 @@ void gpuWaitEvent (Mesh *mp) {
   TRACE ("gpuWaitEvent");
 
   // waits for event in copy stream to finish
-  if (GPU_ASYNC_COPY) {
+  if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
     if (run_opencl){
       // waits until previous copy finished
@@ -958,7 +958,7 @@ void gpuSynchronize() {
 #ifdef USE_OPENCL
   if (run_opencl) {
     clFinish (mocl.command_queue);
-    if (GPU_ASYNC_COPY) clFinish (mocl.copy_queue);
+    if (mocl.copy_queue != NULL) clFinish (mocl.copy_queue);
   }
 #endif
   // cuda version
