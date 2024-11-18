@@ -477,20 +477,33 @@ void FC_FUNC_ (check_norm_elastic_acoustic_from_device,
 #ifdef USE_CUDA_GRAPHS
   if (! mp->use_graph_call_norm){
 #endif
-
   // note: we use event synchronization to make sure that compute stream has finished before copying data to host.
   //       the same for continuing only after copy to host has finished.
   //
   //       capturing graphs seems only to work with this sort of event synchronization...
 
+#if defined(__HIP_CPU_RT__)
+  // HIP-CPU: the current version seems to have some issue with Event recording
+  //          it would stall and wait forever.
+  // as a work-around we do explicit synchronization here
+  gpuSynchronize();
+#else
   // create event for synchronizing with async copy
   gpuRecordEvent(mp);
+#endif
 
   // copies to CPU
   gpuCopy_from_device_realw_asyncEvent(mp, &mp->d_norm_max, mp->h_norm_max, size_block_fluid + size_block_cm + size_block_ic);
 
+#if defined(__HIP_CPU_RT__)
+  // HIP-CPU: the current version seems to have some issue with Event recording
+  //          it would stall and wait forever.
+  // as a work-around we do explicit synchronization here
+  gpuSynchronize();
+#else
   // makes sure copy has finished
   gpuWaitEvent(mp);
+#endif
 
 #ifdef USE_CUDA_GRAPHS
   } // graph
@@ -805,14 +818,28 @@ void FC_FUNC_ (check_norm_strain_from_device,
   //
   //       capturing graphs seems only to work with this sort of event synchronization...
 
+#if defined(__HIP_CPU_RT__)
+  // HIP-CPU: the current version seems to have some issue with Event recording
+  //          it would stall and wait forever.
+  // as a work-around we do explicit synchronization here
+  gpuSynchronize();
+#else
   // create event for synchronizing with async copy
   gpuRecordEvent(mp);
+#endif
 
   // copies array to CPU
-  gpuCopy_from_device_realw_asyncEvent (mp, &mp->d_norm_strain_max, mp->h_norm_strain_max, size_block_strain + 5 * size_block);
+  gpuCopy_from_device_realw_asyncEvent(mp, &mp->d_norm_strain_max, mp->h_norm_strain_max, size_block_strain + 5 * size_block);
 
+#if defined(__HIP_CPU_RT__)
+  // HIP-CPU: the current version seems to have some issue with Event recording
+  //          it would stall and wait forever.
+  // as a work-around we do explicit synchronization here
+  gpuSynchronize();
+#else
   // makes sure copy has finished
   gpuWaitEvent(mp);
+#endif
 
   // graph
 #ifdef USE_CUDA_GRAPHS
