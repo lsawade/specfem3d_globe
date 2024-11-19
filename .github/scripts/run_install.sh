@@ -159,7 +159,7 @@ if [ "${EMC_MODEL}" == "true" ]; then
   echo
   echo "current dir: `pwd`"
   cd DATA/IRIS_EMC/
-  wget --tries=3 https://ds.iris.edu/files/products/emc/emc-files/Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc
+  wget --quiet --tries=3 https://ds.iris.edu/files/products/emc/emc-files/Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc
   # checks exit code
   if [[ $? -ne 0 ]]; then exit 1; fi
   ln -s Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc model.nc

@@ -44,16 +44,16 @@ my_kernel_test(){
   RHO=`grep -E 'maximum value of rho[[:space:]]+kernel' $file_ref | cut -d = -f 2 | tr -d ' '`
   KAPPA=`grep -E 'maximum value of kappa[[:space:]]+kernel' $file_ref | cut -d = -f 2 | tr -d ' '`
   MU=`grep -E 'maximum value of mu[[:space:]]+kernel' $file_ref | cut -d = -f 2 | tr -d ' '`
-  KAPPAV=`grep -E 'maximum value of kappav[[:space:]]+kernel' $file_ref | cut -d = -f 2 | tr -d ' '`
-  MUV=`grep -E 'maximum value of muv[[:space:]]+kernel' $file_ref | cut -d = -f 2 | tr -d ' '`
+  ALPHAV=`grep -E 'maximum value of alphav[[:space:]]+kernel' $file_ref | cut -d = -f 2 | tr -d ' '`
+  BETAV=`grep -E 'maximum value of betav[[:space:]]+kernel' $file_ref | cut -d = -f 2 | tr -d ' '`
 
   # need at least rho & kappa (for acoustic kernels)
   if [ "$RHO" == "" ]; then
-    echo "  missing reference kernel values: RHO=$RHO | KAPPA=$KAPPA KAPPAV=$KAPPAV | MU=$MU MUV=$MUV"
+    echo "  missing reference kernel values: RHO=$RHO | KAPPA=$KAPPA MU=$MU | ALPHAV=$ALPHAV BETAV=$BETAV"
     echo
     exit 1
   else
-    echo "  reference kernel values: RHO=$RHO | KAPPA=$KAPPA KAPPAV=$KAPPAV | MU=$MU MUV=$MUV"
+    echo "  reference kernel values: RHO=$RHO | KAPPA=$KAPPA MU=$MU | ALPHAV=$ALPHAV BETAV=$BETAV"
   fi
   # compares with test output - using a relative tolerance of 0.001 (1 promille) with respect to expected value
   # final test result
@@ -72,13 +72,6 @@ my_kernel_test(){
     echo "" | awk '{diff=ex-val;diff_abs=(diff >= 0)? diff:-diff;diff_rel=diff_abs/ex;print "  value: expected = "ex" gotten = "val" - difference absolute = "diff_abs" relative = "diff_rel; if (diff_rel>0.001){print "  failed"; exit 1;}else{print "  good"; exit 0;} }' ex=$KAPPA val=$VAL
     if [[ $? -ne 0 ]]; then PASSED=1; fi
   fi
-  # checks kappav kernel value (if anisotropic kernels)
-  if [ "$KAPPAV" != "" ]; then
-    VAL=`grep -E 'maximum value of kappav[[:space:]]+kernel' $file_out | cut -d = -f 2 | tr -d ' '`
-    echo "kernel kappav: $VAL"
-    echo "" | awk '{diff=ex-val;diff_abs=(diff >= 0)? diff:-diff;diff_rel=diff_abs/ex;print "  value: expected = "ex" gotten = "val" - difference absolute = "diff_abs" relative = "diff_rel; if (diff_rel>0.001){print "  failed"; exit 1;}else{print "  good"; exit 0;} }' ex=$KAPPAV val=$VAL
-    if [[ $? -ne 0 ]]; then PASSED=1; fi
-  fi
   # checks mu kernel value
   if [ "$MU" != "" ]; then
     VAL=`grep -E 'maximum value of mu[[:space:]]+kernel' $file_out | cut -d = -f 2 | tr -d ' '`
@@ -86,11 +79,18 @@ my_kernel_test(){
     echo "" | awk '{diff=ex-val;diff_abs=(diff >= 0)? diff:-diff;diff_rel=diff_abs/ex;print "  value: expected = "ex" gotten = "val" - difference absolute = "diff_abs" relative = "diff_rel; if (diff_rel>0.001){print "  failed"; exit 1;}else{print "  good"; exit 0;} }' ex=$MU val=$VAL
     if [[ $? -ne 0 ]]; then PASSED=1; fi
   fi
-  # checks muv kernel value (if anisotropic kernels)
-  if [ "$MUV" != "" ]; then
-    VAL=`grep -E 'maximum value of muv[[:space:]]+kernel' $file_out | cut -d = -f 2 | tr -d ' '`
-    echo "kernel muv   : $VAL"
-    echo "" | awk '{diff=ex-val;diff_abs=(diff >= 0)? diff:-diff;diff_rel=diff_abs/ex;print "  value: expected = "ex" gotten = "val" - difference absolute = "diff_abs" relative = "diff_rel; if (diff_rel>0.001){print "  failed"; exit 1;}else{print "  good"; exit 0;} }' ex=$MUV val=$VAL
+  # checks alphav kernel value (if anisotropic kernels)
+  if [ "$ALPHAV" != "" ]; then
+    VAL=`grep -E 'maximum value of alphav[[:space:]]+kernel' $file_out | cut -d = -f 2 | tr -d ' '`
+    echo "kernel alphav: $VAL"
+    echo "" | awk '{diff=ex-val;diff_abs=(diff >= 0)? diff:-diff;diff_rel=diff_abs/ex;print "  value: expected = "ex" gotten = "val" - difference absolute = "diff_abs" relative = "diff_rel; if (diff_rel>0.001){print "  failed"; exit 1;}else{print "  good"; exit 0;} }' ex=$ALPHAV val=$VAL
+    if [[ $? -ne 0 ]]; then PASSED=1; fi
+  fi
+  # checks betav kernel value (if anisotropic kernels)
+  if [ "$BETAV" != "" ]; then
+    VAL=`grep -E 'maximum value of betav[[:space:]]+kernel' $file_out | cut -d = -f 2 | tr -d ' '`
+    echo "kernel betav : $VAL"
+    echo "" | awk '{diff=ex-val;diff_abs=(diff >= 0)? diff:-diff;diff_rel=diff_abs/ex;print "  value: expected = "ex" gotten = "val" - difference absolute = "diff_abs" relative = "diff_rel; if (diff_rel>0.001){print "  failed"; exit 1;}else{print "  good"; exit 0;} }' ex=$BETAV val=$VAL
     if [[ $? -ne 0 ]]; then PASSED=1; fi
   fi
   # overall pass

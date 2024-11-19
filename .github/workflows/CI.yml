@@ -638,6 +638,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true      # needs submodule content in folder external_libs/ROCm-HIP-CPU/
 
     - name: Install packages
       env:
