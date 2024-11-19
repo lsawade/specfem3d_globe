@@ -70,6 +70,16 @@ else
   hdf=()
 fi
 
+## HIP
+if [ "${HIP}" == "true" ]; then
+  echo
+  echo "enabling HIP"
+  echo
+  hip=(--with-hip HIPCC=g++ HIP_FLAGS="-O2 -g -std=c++17" HIP_PLATFORM=cpu HIP_INC=./external_libs/ROCm-HIP-CPU/include HIP_LIBS="-ltbb -lpthread -lstdc++")
+else
+  hip=()
+fi
+
 ## special testflags
 if [ "${TESTFLAGS}" == "check-mcmodel-medium" ]; then
   # note: this is a work-around as using the 'env:' parameter in the workflow 'CI.yml' with TESTFLAGS: FLAGS_CHECK=".."
@@ -94,6 +104,7 @@ set -- ${TESTFLAGS}
 "${adios[@]}" \
 "${netcdf[@]}" \
 "${hdf[@]}" \
+"${hip[@]}" \
 "${petsc[@]}" \
 "${flags[@]}" \
 FC=gfortran MPIFC=mpif90 CC=gcc "$@"
@@ -112,10 +123,12 @@ sed -i "s:IMAIN .*:IMAIN = ISTANDARD_OUTPUT:" setup/constants.h
 # compilation
 echo
 echo "clean:"
+echo
 make clean
 
 echo
 echo "compilation:"
+echo
 make -j4 all
 
 # checks

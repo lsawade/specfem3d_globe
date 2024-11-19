@@ -65,6 +65,18 @@ if [ "${PETSC}" == "true" ]; then
   echo; echo "done PETSc"; echo
 fi
 
+## HIP
+if [ "${HIP}" == "true" ]; then
+  echo
+  echo "HIP additionals installation:"
+  echo
+  sudo apt-get install -yq --no-install-recommends libtbb-dev
+fi
+
+# checks exit code
+if [[ $? -ne 0 ]]; then exit 1; fi
+echo
+
 # python3 pip upgrade might complain: "ERROR: launchpadlib 1.10.13 requires testresources"
 sudo apt-get install -yq --no-install-recommends python3-testresources
 # checks exit code
