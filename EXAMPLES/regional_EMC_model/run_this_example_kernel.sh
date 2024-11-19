@@ -25,7 +25,10 @@ mkdir -p OUTPUT_FILES
 rm -rf DATABASES_MPI/*
 rm -rf OUTPUT_FILES/*
 
+if [ ! -f ./change_simulation_type.pl ]; then
 ln -s ../../utils/change_simulation_type.pl
+fi
+
 ./change_simulation_type.pl -F
 
 # DATABASES directory
@@ -68,13 +71,13 @@ cp ../../bin/xmeshfem3D ./bin/
 cp ../../bin/xspecfem3D ./bin/
 cp ../../bin/xcombine_vol_data ./bin/
 cp ../../bin/xcombine_vol_data_vtk ./bin/
+cp ../../bin/xcombine_vol_data_vtu ./bin/
 
 # links data directories needed to run example in this current directory with s362ani
 cd DATA/
-ln -s ../../../DATA/s40rts
-ln -s ../../../DATA/s20rts
-ln -s ../../../DATA/crust2.0
+ln -s ../../../DATA/IRIS_EMC
 ln -s ../../../DATA/topo_bathy
+ln -s ../../../DATA/crust1.0
 cd ../
 
 

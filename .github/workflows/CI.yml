@@ -586,6 +586,7 @@ jobs:
 
     - name: Install packages
       env:
+        EMC_MODEL: true
         NETCDF: true
       run: ./.github/scripts/run_install.sh
       shell: bash
@@ -612,6 +613,7 @@ jobs:
 
     - name: Install packages
       env:
+        EMC_MODEL: true
         NETCDF: true
       run: ./.github/scripts/run_install.sh
       shell: bash
@@ -639,6 +641,7 @@ jobs:
 
     - name: Install packages
       env:
+        EMC_MODEL: true
         NETCDF: true
         HIP: true
       run: ./.github/scripts/run_install.sh

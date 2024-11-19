@@ -152,6 +152,20 @@ if [ "${ADIOS2}" == "true" ]; then
   echo; echo "done ADIOS2"; echo
 fi
 
+## EMC model
+if [ "${EMC_MODEL}" == "true" ]; then
+  echo
+  echo "EMC model installation:"
+  echo
+  echo "current dir: `pwd`"
+  cd DATA/IRIS_EMC/
+  wget --tries=3 https://ds.iris.edu/files/products/emc/emc-files/Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  ln -s Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc model.nc
+  cd ../../
+fi
+
 # MPI
 # github actions uses for Linux virtual machines a 2-core CPU environment
 # see: https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
