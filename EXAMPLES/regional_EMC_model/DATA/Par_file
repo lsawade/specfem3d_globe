@@ -152,7 +152,7 @@ SPONGE_RADIUS_IN_DEGREES        = 25.d0
 # use one (and only one) of the two flags below. UNDO_ATTENUATION is much better (it is exact)
 # but requires a significant amount of disk space for temporary storage.
 PARTIAL_PHYS_DISPERSION_ONLY    = .false.
-UNDO_ATTENUATION                = .false.
+UNDO_ATTENUATION                = .true.
 
 ## undo attenuation memory
 # How much memory (in GB) is installed on your machine per CPU core
@@ -172,7 +172,7 @@ UNDO_ATTENUATION                = .false.
 # and run your job with "aprun -n$NPROC -N1 -S1 -j1"
 # (each host has 32 GB on Titan, each GPU has 6 GB, thus even if all the GPU arrays are duplicated on the host
 #  this leaves 32 - 6 = 26 GB free on the host; leaving 1 GB for the Linux system, we can safely use 100% of 25 GB)
-MEMORY_INSTALLED_PER_CORE_IN_GB = 4.d0
+MEMORY_INSTALLED_PER_CORE_IN_GB = 1.d0
 # What percentage of this total do you allow us to use for arrays to undo attenuation, keeping in mind that you
 # need to leave some memory available for the GNU/Linux system to run
 # (a typical value is 85%; any value below is fine but the code will then save a lot of data to disk;
@@ -363,7 +363,7 @@ SAVE_AZIMUTHAL_ANISO_KL_ONLY    = .false.
 
 # output approximate Hessian in crust mantle region.
 # means to save the preconditioning for gradients, they are cross correlations between forward and adjoint accelerations.
-APPROXIMATE_HESS_KL             = .false.
+APPROXIMATE_HESS_KL             = .true.
 
 # forces transverse isotropy for all mantle elements
 # (default is to use transverse isotropy only between crust and 220)
@@ -435,10 +435,10 @@ BROADCAST_SAME_MESH_AND_MODEL   = .false.
 # set to true to use GPUs
 GPU_MODE                        = .false.
 # Only used if GPU_MODE = .true. :
-GPU_RUNTIME                     = 1
+GPU_RUNTIME                     = 0
 # 2 (OpenCL), 1 (Cuda) ou 0 (Compile-time -- does not work if configured with --with-cuda *AND* --with-opencl)
-GPU_PLATFORM                    = NVIDIA
-GPU_DEVICE                      = Tesla
+GPU_PLATFORM                    = *
+GPU_DEVICE                      = *
 
 # set to true to use the ADIOS library for I/Os
 ADIOS_ENABLED                   = .false.

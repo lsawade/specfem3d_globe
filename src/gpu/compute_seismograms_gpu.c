@@ -118,7 +118,7 @@ void FC_FUNC_ (compute_seismograms_gpu,
       // however, note that asynchronous copies in the copy stream would also require pinned host memory.
       // This is not use here yet for seismograms, thus the copy becomes blocking by default as well.
       // we'll leave the if-case here as a todo for future...
-      //if (GPU_ASYNC_COPY && (it != it_end)) {
+      //if (mp->GPU_ASYNC_COPY && (it != it_end)) {
       //  // waits until kernel is finished before starting async memcpy
       //  clCheck (clFinish (mocl.command_queue));
       //
@@ -162,7 +162,7 @@ void FC_FUNC_ (compute_seismograms_gpu,
       // however, note that asynchronous copies in the copy stream would also require pinned host memory.
       // This is not use here yet for seismograms, thus the copy becomes blocking by default as well.
       // we'll leave the if-case here as a todo for future...
-      //if (GPU_ASYNC_COPY &&  (it != it_end)) {
+      //if (mp->GPU_ASYNC_COPY &&  (it != it_end)) {
       //  // waits until kernel is finished before starting async memcpy
       //  cudaStreamSynchronize(mp->compute_stream);
       //  // copies buffer to CPU
@@ -200,7 +200,7 @@ void FC_FUNC_ (compute_seismograms_gpu,
       // however, note that asynchronous copies in the copy stream would also require pinned host memory.
       // This is not use here yet for seismograms, thus the copy becomes blocking by default as well.
       // we'll leave the if-case here as a todo for future...
-      //if (GPU_ASYNC_COPY &&  (it != it_end)) {
+      //if (mp->GPU_ASYNC_COPY &&  (it != it_end)) {
       //  // waits until kernel is finished before starting async memcpy
       //  hipStreamSynchronize(mp->compute_stream);
       //  // copies buffer to CPU

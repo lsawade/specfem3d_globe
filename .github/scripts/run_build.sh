@@ -70,17 +70,44 @@ else
   hdf=()
 fi
 
+## HIP
+if [ "${HIP}" == "true" ]; then
+  echo
+  echo "enabling HIP"
+  echo
+  hip=(--with-hip HIPCC=g++ HIP_FLAGS="-O2 -g -std=c++17" HIP_PLATFORM=cpu HIP_INC=./external_libs/ROCm-HIP-CPU/include HIP_LIBS="-ltbb -lpthread -lstdc++ -lmpi_cxx")
+else
+  hip=()
+fi
+
+## special testflags
+if [ "${TESTFLAGS}" == "check-mcmodel-medium" ]; then
+  # note: this is a work-around as using the 'env:' parameter in the workflow 'CI.yml' with TESTFLAGS: FLAGS_CHECK=".."
+  #       won't work as the FLAGS_CHECK string will then get split up and ./configure .. complains about unknown parameters.
+  #       here, we re-define TESTFLAGS with a single quote around FLAGS_CHECK=".." to avoid the splitting.
+  # use FLAGS_CHECK
+  flags=(FLAGS_CHECK="-O3 -mcmodel=medium -std=f2008 -Wall -Wno-do-subscript -Wno-conversion -Wno-maybe-uninitialized")
+  TESTFLAGS=""  # reset
+else
+  flags=()
+fi
+
 # configuration
 echo
 echo "configuration:"
 echo
 
+# split TESTFLAGS into individual items
+set -- ${TESTFLAGS}
+
 ./configure \
-${adios[@]} \
-${netcdf[@]} \
-${hdf[@]} \
-${petsc[@]} \
-FC=gfortran MPIFC=mpif90 CC=gcc "${TESTFLAGS}"
+"${adios[@]}" \
+"${netcdf[@]}" \
+"${hdf[@]}" \
+"${hip[@]}" \
+"${petsc[@]}" \
+"${flags[@]}" \
+FC=gfortran MPIFC=mpif90 CC=gcc "$@"
 
 # checks
 if [[ $? -ne 0 ]]; then echo "configuration failed:"; cat config.log; echo ""; echo "exiting..."; exit 1; fi
@@ -95,8 +122,14 @@ sed -i "s:IMAIN .*:IMAIN = ISTANDARD_OUTPUT:" setup/constants.h
 
 # compilation
 echo
-echo "clean compilation:"
-make clean; #make -j2 all
+echo "clean:"
+echo
+make clean
+
+echo
+echo "compilation:"
+echo
+make -j4 all
 
 # checks
 if [[ $? -ne 0 ]]; then exit 1; fi

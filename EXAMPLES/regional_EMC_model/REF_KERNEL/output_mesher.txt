@@ -57,7 +57,7 @@
 
    topography/bathymetry: min/max =        -7747        5507
 
-   Elapsed time for reading in seconds =    5.1342000000000006E-002
+   Elapsed time for reading in seconds =    5.2344000000000002E-002
 
 
    VTK topo output: topo resolution in minutes =    4.00000000
@@ -225,14 +225,14 @@
    creating layer            1 out of            3
      number of regular elements  =           96
      number of doubling elements =          128
-     33.3%    current clock (NOT elapsed) time is: 18h 33min 15sec
+     33.3%    current clock (NOT elapsed) time is: 10h 08min 58sec
    creating layer            2 out of            3
      number of regular elements  =           64
      number of doubling elements =          512
-     66.7%    current clock (NOT elapsed) time is: 18h 33min 15sec
+     66.7%    current clock (NOT elapsed) time is: 10h 08min 58sec
    creating layer            3 out of            3
      number of regular elements  =          256
-    100.0%    current clock (NOT elapsed) time is: 18h 33min 15sec
+    100.0%    current clock (NOT elapsed) time is: 10h 08min 58sec
    layers done
 
    number of elements (per slice)        =         1056
@@ -258,14 +258,14 @@
    creating layer            1 out of            3
      number of regular elements  =           96
      number of doubling elements =          128
-     33.3%    current clock (NOT elapsed) time is: 18h 33min 15sec
+     33.3%    current clock (NOT elapsed) time is: 10h 08min 58sec
    creating layer            2 out of            3
      number of regular elements  =           64
      number of doubling elements =          512
-     66.7%    current clock (NOT elapsed) time is: 18h 33min 15sec
+     66.7%    current clock (NOT elapsed) time is: 10h 08min 58sec
    creating layer            3 out of            3
      number of regular elements  =          256
-    100.0%    current clock (NOT elapsed) time is: 18h 33min 15sec
+    100.0%    current clock (NOT elapsed) time is: 10h 08min 58sec
    layers done
 
    number of elements (per slice)        =         1056
@@ -409,7 +409,7 @@
  smallest and largest possible floating-point numbers are:    1.17549435E-38   3.40282347E+38
 
 
- Elapsed time for mesh generation and buffer creation in seconds =    7.96033096
+ Elapsed time for mesh generation and buffer creation in seconds =    7.98358393
  Elapsed time for mesh generation and buffer creation in hh:mm:ss =    0 h 00 m 07 s
 
  End of mesh generation

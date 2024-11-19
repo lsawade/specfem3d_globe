@@ -376,7 +376,7 @@ AC_FC_FREEFORM()
 
 AC_FC_PP_DEFINE()
 AC_SUBST([FC_DEFINE])
-AC_FC_PP_SRCEXT(F90)dnl Because AC_FC_PP_DEFINE messes with things.
+AC_FC_PP_SRCEXT(F90) dnl Because AC_FC_PP_DEFINE messes with things.
 
 AC_PROG_CC
 
@@ -511,10 +511,12 @@ AS_IF([test x"$want_hip" != xno], [
     AC_ARG_VAR(HIPCC, [AMD HIP compiler command])
     AC_ARG_VAR(HIP_FLAGS, [HIP compiler flags])
     AC_ARG_VAR(HIP_INC, [Location of HIP include files])
-    AC_ARG_VAR(HIP_LIB, [Location of HIP library libhip_hcc])
+    AC_ARG_VAR(HIP_LIBS, [HIP linking flags])
+    AC_ARG_VAR(HIP_PLATFORM, [target HIP platform (amd/nvidia/cpu; default amd)])
 
     # tests HIPCC variable
     AS_IF([test x"$HIPCC" = x],[
+        AC_MSG_NOTICE([using default hip compiler: `hipcc`])
         HIPCC=hipcc
     ])
 
@@ -522,7 +524,7 @@ AS_IF([test x"$want_hip" != xno], [
     # checks if program in path
     AC_PATH_PROG(HIPCC_PROG, $HIPCC)
     if test -z "$HIPCC_PROG" ; then
-        AC_MSG_ERROR([cannot find '$HIPCC' program, please check your PATH.])
+        AC_MSG_ERROR([cannot find '$HIPCC' program; try setting HIPCC, and please check your PATH.])
     fi
 
     # sets default HIP path
@@ -541,21 +543,21 @@ AS_IF([test x"$want_hip" != xno], [
     #])
 
     # adds default HIP library
-    AS_IF([test x"$HIP_LIB" = x -a x"${HIP_PATH}" != x],[
-        HIP_LIB="${HIP_PATH}/lib"
-        AC_MSG_NOTICE([adding default HIP library path: ${HIP_LIB}])
+    AS_IF([test x"$HIP_LIBS" = x -a x"${HIP_PATH}" != x],[
+        HIP_LIBS="-L${HIP_PATH}/lib"
+        AC_MSG_NOTICE([adding default HIP library path: ${HIP_LIBS}])
     ])
 
     # checks platform
-    if test x"$HIPCONFIG_PROG" != x ; then
-      GPU_PLATFORM=`$HIPCONFIG_PROG --platform`
-      AS_IF([test x"$GPU_PLATFORM" = xnvidia], [
+    AS_IF([test x"$HIPCONFIG_PROG" != x -a x"$HIP_PLATFORM" = x],[
+      HIP_PLATFORM=`$HIPCONFIG_PROG --platform`
+      AS_IF([test x"$HIP_PLATFORM" = xnvidia], [
           AC_MSG_NOTICE([HIP PLATFORM NVIDIA detected.])
           HIP_PLATFORM=nvidia
           FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_NVIDIA__"
       ])
 
-      AS_IF([test x"$GPU_PLATFORM" = xamd], [
+      AS_IF([test x"$HIP_PLATFORM" = xamd], [
           AC_MSG_NOTICE([HIP PLATFORM AMD detected.])
           HIP_PLATFORM=amd
           FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_AMD__"
@@ -563,14 +565,10 @@ AS_IF([test x"$want_hip" != xno], [
       # compiler might require a platform selection flag
       case "${HIP_FLAGS}" in
         *HIP_PLATFORM*) AC_MSG_NOTICE([hip flags contain platform specifier: ${HIP_FLAGS}]) ;;
-        *) AC_MSG_NOTICE([adding flag for platform specifier ${FLAG_PLATFORM}]);
+        *) AC_MSG_NOTICE([adding flag for platform specifier: ${FLAG_PLATFORM}]);
            HIP_FLAGS="${HIP_FLAGS} ${FLAG_PLATFORM}"
            AC_MSG_NOTICE([HIP_FLAGS: ${HIP_FLAGS}]) ;;
       esac
-    fi
-    # sets default platform to AMD if not set
-    AS_IF([test x"$GPU_PLATFORM" = x],[
-      GPU_PLATFORM=amd
     ])
 
     # for compilation errors like:
@@ -586,14 +584,10 @@ AS_IF([test x"$want_hip" != xno], [
       *) AC_MSG_NOTICE([consider adding compilation flag for position independent code: HIP_FLAGS="-fPIC"]);;
     esac
 
-    # test lib & include
-    AS_IF([test x"$HIP_LIB" != x],[
-        HIP_LDFLAGS="-L$HIP_LIB"
-    ])
+    # test include
     AS_IF([test x"$HIP_INC" != x],[
         HIP_CPPFLAGS="-I$HIP_INC"
     ])
-    HIP_LIBS="-lamdhip64"
 
     # checks header file
     AC_LANG_PUSH(C)
@@ -608,6 +602,7 @@ AS_IF([test x"$want_hip" != xno], [
       HIP_CPPFLAGS="-I$HIP_INC"
       CFLAGS="$CFLAGS $HIP_CPPFLAGS"
     fi
+    AC_MSG_NOTICE([using hip compilation flags: $CFLAGS])
 
     AC_MSG_CHECKING([for hip/hip_runtime.h])
     ac_compile='$HIPCC -c $CFLAGS conftest.$ac_ext >&5'
@@ -620,16 +615,8 @@ AS_IF([test x"$want_hip" != xno], [
         AC_MSG_ERROR([HIP runtime header not found; try setting HIP_INC.])
     ])
 
-    # checks for HIP library
-    if test "x$HIP_LIB" != "x"; then
-      HIP_LDFLAGS="-L$HIP_LIB"
-      LDFLAGS="$HIP_LDFLAGS $LDFLAGS"
-    fi
-    HIP_LIBS="-lamdhip64"
-    LIBS="$HIP_LIBS $LIBS"
-
     # runs compilation test with hipcc
-    AC_MSG_CHECKING([hipcc compilation with hipMalloc in -lamdhip64])
+    AC_MSG_CHECKING([for hip compilation with hipMalloc])
     ac_compile='$HIPCC -c $CFLAGS conftest.$ac_ext >&5'
     AC_COMPILE_IFELSE([
       AC_LANG_PROGRAM([[#include <hip/hip_runtime.h>]],[[void* ptr = 0;hipMalloc(&ptr, 1);]])
@@ -637,12 +624,28 @@ AS_IF([test x"$want_hip" != xno], [
       AC_MSG_RESULT(yes)
     ], [
       AC_MSG_RESULT(no)
-      AC_MSG_ERROR([HIP library function with hipcc compilation failed; try setting HIP_INC.])
+      AC_MSG_ERROR([HIP library function with hipcc compilation failed; try setting HIP_FLAGS and HIP_INC.])
     ])
 
+    # sets default platform to AMD if not set
+    AS_IF([test x"$HIP_PLATFORM" = x],[
+        HIP_PLATFORM=amd
+    ])
+    AC_MSG_NOTICE([HIP_PLATFORM: $HIP_PLATFORM])
+
+    # linking library
+    AS_IF([test x"$HIP_PLATFORM" = xamd],[
+      AC_MSG_NOTICE([adding default '-lamdhip64' linking for HIP platform AMD])
+      HIP_LIBS="-lamdhip64"
+    ])
+
+    # test lib
+    LIBS="$HIP_LIBS $LIBS $LDFLAGS"
+    AC_MSG_NOTICE([using hip linking flags: $LIBS])
+
     # runs linking test with hipcc
-    AC_MSG_CHECKING([hipcc linking with hipMalloc in -lamdhip64])
-    ac_link='$HIPCC -o conftest$ac_exeext $CFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+    AC_MSG_CHECKING([for hip linking with hipMalloc])
+    ac_link='$HIPCC -o conftest$ac_exeext $CFLAGS conftest.$ac_ext $LIBS >&5'
     AC_LINK_IFELSE([
       AC_LANG_PROGRAM([[
 #include <stdio.h>
@@ -651,7 +654,7 @@ AS_IF([test x"$want_hip" != xno], [
       AC_MSG_RESULT(yes)
     ],[
       AC_MSG_RESULT(no)
-      AC_MSG_ERROR([HIP library linking with HIP failed; try setting HIP_LIB.])
+      AC_MSG_ERROR([HIP library linking with HIP failed; try setting HIP_LIBS and HIP_PLATFORM.])
     ])
 
     #HIP_HEADER_H="hip/hip_runtime.h"
@@ -666,11 +669,11 @@ AS_IF([test x"$want_hip" != xno], [
 
     # export flags
     AC_SUBST([HIP_CPPFLAGS])
-    AC_SUBST([HIP_LDFLAGS])
     AC_SUBST([HIP_LIBS])
 ])
-AM_CONDITIONAL([COND_HIP_PLATFORM_AMD], [test x"$GPU_PLATFORM" = xamd])
-AM_CONDITIONAL([COND_HIP_PLATFORM_NVIDIA], [test x"$GPU_PLATFORM" = xnvidia])
+AM_CONDITIONAL([COND_HIP_PLATFORM_AMD], [test x"$HIP_PLATFORM" = xamd])
+AM_CONDITIONAL([COND_HIP_PLATFORM_NVIDIA], [test x"$HIP_PLATFORM" = xnvidia])
+AM_CONDITIONAL([COND_HIP_PLATFORM_CPU], [test x"$HIP_PLATFORM" = xcpu])
 
 # CUDA-aware MPI setting
 AS_IF([test x"$want_cuda_aware_mpi" != xno], [
@@ -1059,6 +1062,7 @@ AC_CONFIG_LINKS([
     DATA/s40rts:DATA/s40rts
     DATA/sglobe:DATA/sglobe
     DATA/spiral1.4:DATA/spiral1.4
+    DATA/SEMUCB_A3d:DATA/SEMUCB_A3d
     DATA/Simons_model:DATA/Simons_model
     DATA/topo_bathy:DATA/topo_bathy
     DATA/Zhao_JP_model:DATA/Zhao_JP_model
@@ -1086,9 +1090,9 @@ AS_BOX([$PACKAGE_NAME $PACKAGE_VERSION])
 AC_MSG_RESULT([])
 AC_MSG_RESULT([$0 has completed and set up a default configuration to build.])
 AC_MSG_RESULT([])
-AC_MSG_RESULT([You may wish to modify the following files before building:])
+AC_MSG_RESULT([You may wish to modify the following files before running a simulation:])
 AC_MSG_RESULT([AS_HELP_STRING([DATA/Par_file],
-                              [Set parameters affecting the build and simulation before running make and compiling.])])
+                              [Set parameters affecting the simulation (before running make and compiling when enabling static compilation).])])
 AC_MSG_RESULT([AS_HELP_STRING([DATA/CMTSOLUTION],
                               [Set the source parameters before running the solver.])])
 AC_MSG_RESULT([AS_HELP_STRING([DATA/STATIONS],

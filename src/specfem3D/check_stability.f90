@@ -90,6 +90,12 @@
   double precision :: r,phi,theta
   logical, parameter :: DEBUG = .false.
 
+  ! initializes
+  Usolidnorm = 0._CUSTOM_REAL
+  Usolidnorm_all = 0._CUSTOM_REAL
+  Ufluidnorm = 0._CUSTOM_REAL
+  Ufluidnorm_all = 0._CUSTOM_REAL
+
   ! slow node detection
   I_am_running_on_a_slow_node = .false.
 
@@ -172,9 +178,15 @@
 
   ! compute the maximum of the maxima for all the slices using an MPI reduction
   call max_all_cr(Usolidnorm,Usolidnorm_all)
-  call max_all_cr(Ufluidnorm,Ufluidnorm_all)
+  if (NSPEC_OUTER_CORE > 0) call max_all_cr(Ufluidnorm,Ufluidnorm_all)
 
   if (SIMULATION_TYPE == 3) then
+    ! initializes
+    b_Usolidnorm = 0._CUSTOM_REAL
+    b_Usolidnorm_all = 0._CUSTOM_REAL
+    b_Ufluidnorm = 0._CUSTOM_REAL
+    b_Ufluidnorm_all = 0._CUSTOM_REAL
+
     if (.not. GPU_MODE) then
       ! on CPU
       norm_cm = maxval( (b_displ_crust_mantle(1,:)**2 + b_displ_crust_mantle(2,:)**2 + b_displ_crust_mantle(3,:)**2) )
@@ -205,18 +217,22 @@
 
     ! compute the maximum of the maxima for all the slices using an MPI reduction
     call max_all_cr(b_Usolidnorm,b_Usolidnorm_all)
-    call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
+    if (NSPEC_OUTER_CORE > 0) call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
   endif
 
   if (COMPUTE_AND_STORE_STRAIN) then
+    ! initializes
+    Strain_norm = 0._CUSTOM_REAL
+    Strain2_norm = 0._CUSTOM_REAL
+
     if (.not. GPU_MODE) then
       ! on CPU
       if (NSPEC_CRUST_MANTLE_STRAIN_ONLY > 0) Strain_norm = maxval(abs(eps_trace_over_3_crust_mantle))
-      Strain2_norm= max( maxval(abs(epsilondev_xx_crust_mantle)), &
-                         maxval(abs(epsilondev_yy_crust_mantle)), &
-                         maxval(abs(epsilondev_xy_crust_mantle)), &
-                         maxval(abs(epsilondev_xz_crust_mantle)), &
-                         maxval(abs(epsilondev_yz_crust_mantle)) )
+      Strain2_norm = max( maxval(abs(epsilondev_xx_crust_mantle)), &
+                          maxval(abs(epsilondev_yy_crust_mantle)), &
+                          maxval(abs(epsilondev_xy_crust_mantle)), &
+                          maxval(abs(epsilondev_xz_crust_mantle)), &
+                          maxval(abs(epsilondev_yz_crust_mantle)) )
     else
       ! on GPU
       call check_norm_strain_from_device(Strain_norm,Strain2_norm,Mesh_pointer)
@@ -226,8 +242,8 @@
     call max_all_cr(Strain2_norm,Strain2_norm_all)
   endif
 
+  ! user output
   if (myrank == 0) then
-
     ! this is in the case of restart files, when a given run consists of several partial runs
     ! information about the current run only
     SHOW_SEPARATE_RUN_INFORMATION = ( NUMBER_OF_RUNS > 1 .and. NUMBER_OF_THIS_RUN < NUMBER_OF_RUNS )
@@ -270,17 +286,20 @@
     Usolidnorm_all = Usolidnorm_all * sngl(scale_displ)
     if (SIMULATION_TYPE == 1) then
       write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for forward prop. (m) = ',Usolidnorm_all
-      write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
+      if (NSPEC_OUTER_CORE > 0) &
+        write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
     else
       write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for adjoint prop. (m)= ',Usolidnorm_all
-      write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
+      if (NSPEC_OUTER_CORE > 0) &
+        write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
     endif
 
     if (SIMULATION_TYPE == 3) then
       b_Usolidnorm_all = b_Usolidnorm_all * sngl(scale_displ)
       if (.not. UNDO_ATTENUATION) then
         write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for back prop.(m) = ',b_Usolidnorm_all
-        write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
+        if (NSPEC_OUTER_CORE > 0) &
+          write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
       endif
     endif
 
@@ -487,6 +506,12 @@
   ! checks if anything to do
   if (SIMULATION_TYPE /= 3 ) return
 
+  ! initializes
+  b_Usolidnorm = 0._CUSTOM_REAL
+  b_Usolidnorm_all = 0._CUSTOM_REAL
+  b_Ufluidnorm = 0._CUSTOM_REAL
+  b_Ufluidnorm_all = 0._CUSTOM_REAL
+
   ! compute maximum of norm of displacement in each slice
   if (.not. GPU_MODE) then
     ! on CPU
@@ -517,10 +542,10 @@
 
   ! compute the maximum of the maxima for all the slices using an MPI reduction
   call max_all_cr(b_Usolidnorm,b_Usolidnorm_all)
-  call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
+  if (NSPEC_OUTER_CORE > 0) call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
 
+  ! user output
   if (myrank == 0) then
-
     ! this is in the case of restart files, when a given run consists of several partial runs
     ! information about the current run only
     SHOW_SEPARATE_RUN_INFORMATION = ( NUMBER_OF_RUNS > 1 .and. NUMBER_OF_THIS_RUN < NUMBER_OF_RUNS )
@@ -545,7 +570,8 @@
     ! rescale maximum displacement to correct dimensions
     b_Usolidnorm_all = b_Usolidnorm_all * sngl(scale_displ)
     write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for back prop.(m) = ',b_Usolidnorm_all
-    write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
 
     ! no timing info, things get confusing with forward check timing
     !write(IMAIN,*) 'Elapsed time in seconds = ',tCPU
@@ -600,7 +626,8 @@
 
   use specfem_par, only: &
     SIMULATION_TYPE,OUTPUT_FILES,DT,t0, &
-    NSTEP,it,it_begin,it_end,NUMBER_OF_RUNS,NUMBER_OF_THIS_RUN
+    NSTEP,it,it_begin,it_end,NUMBER_OF_RUNS,NUMBER_OF_THIS_RUN, &
+    NSPEC_OUTER_CORE
 
   implicit none
 
@@ -652,16 +679,19 @@
   write(IOUT,*)
   if (SIMULATION_TYPE == 1) then
     write(IOUT,*) 'Max norm displacement vector U in solid in all slices for forward prop. (m) = ',Usolidnorm_all
-    write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
   else
     write(IOUT,*) 'Max norm displacement vector U in solid in all slices (m) for adjoint prop. (m) = ',Usolidnorm_all
-    write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
   endif
   write(IOUT,*)
 
   if (SIMULATION_TYPE == 3) then
     write(IOUT,*) 'Max norm displacement vector U in solid in all slices for back prop. (m) = ',b_Usolidnorm_all
-    write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
     write(IOUT,*)
   endif
 

@@ -282,7 +282,7 @@ void FC_FUNC_ (compute_add_sources_adjoint_gpu,
     cl_event *copy_evt = NULL;
     cl_uint num_evt = 0;
 
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // waits for previous copy to finish
       clCheck (clFinish (mocl.copy_queue));
       if (mp->has_last_copy_evt) {
@@ -312,7 +312,7 @@ void FC_FUNC_ (compute_add_sources_adjoint_gpu,
     clCheck (clEnqueueNDRangeKernel (mocl.command_queue, mocl.kernels.compute_add_sources_adjoint_kernel, 3, NULL,
                                      global_work_size, local_work_size, num_evt, copy_evt, NULL));
 
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       if (mp->has_last_copy_evt) {
         clCheck (clReleaseEvent (mp->last_copy_evt));
         mp->has_last_copy_evt = 0;
@@ -323,7 +323,7 @@ void FC_FUNC_ (compute_add_sources_adjoint_gpu,
 #ifdef USE_CUDA
   if (run_cuda) {
     // waits for previous transfer_** calls to be finished
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // waits for asynchronous copy to finish
       cudaStreamSynchronize(mp->copy_stream);
     }
@@ -345,7 +345,7 @@ void FC_FUNC_ (compute_add_sources_adjoint_gpu,
 #ifdef USE_HIP
   if (run_hip) {
     // waits for previous transfer_** calls to be finished
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // waits for asynchronous copy to finish
       hipStreamSynchronize(mp->copy_stream);
     }
@@ -439,8 +439,8 @@ void FC_FUNC_(transfer_adj_to_device_async,
   if (mp->nadj_rec_local == 0) return;
 
   // checks async-memcpy
-  if (! GPU_ASYNC_COPY) {
-    exit_on_error("transfer_adj_to_device_async must be called with GPU_ASYNC_COPY == 1, please check mesh_constants_cuda.h");
+  if (! mp->GPU_ASYNC_COPY) {
+    exit_on_error("transfer_adj_to_device_async must be called with GPU_ASYNC_COPY == 1, please check constants.h");
   }
 
   // total number of receivers/adjoint sources

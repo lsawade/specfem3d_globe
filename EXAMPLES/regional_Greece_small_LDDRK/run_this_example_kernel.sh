@@ -14,7 +14,7 @@ currentdir=`pwd`
 echo
 echo "  setting up example..."
 echo
-./setup_this_example.kernel.bash
+./setup_this_example_kernel.bash
 # checks exit code
 if [[ $? -ne 0 ]]; then exit 1; fi
 
@@ -22,7 +22,7 @@ if [[ $? -ne 0 ]]; then exit 1; fi
 echo
 echo "  running script..."
 echo
-./run_mesher_solver.kernel.bash
+./run_mesher_solver_kernel.bash
 # checks exit code
 if [[ $? -ne 0 ]]; then exit 1; fi
 

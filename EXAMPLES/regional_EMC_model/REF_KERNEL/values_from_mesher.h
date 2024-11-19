@@ -79,10 +79,10 @@
  !  by typing "size -d bin/xspecfem3D"
  !  after compiling the code with the DATA/Par_file you plan to use)
  !
- ! size of static arrays per slice =    91.972099999999998       MB
- !                                 =    87.711429595947266       MiB
- !                                 =    9.1972100000000001E-002  GB
- !                                 =    8.5655692964792252E-002  GiB
+ ! size of static arrays per slice =    108.32669600000000       MB
+ !                                 =    103.30838775634766       MiB
+ !                                 =   0.10832669600000000       GB
+ !                                 =   0.10088709741830826       GiB
  !
  ! (should be below to 80% or 90% of the memory installed per core)
  ! (if significantly more, the job will not run by lack of memory )
@@ -91,12 +91,12 @@
  ! (but that can be perfectly acceptable if you can afford it and
  !  want faster results by using more cores)
  !
- ! size of static arrays for all slices =    367.88839999999999       MB
- !                                      =    350.84571838378906       MiB
- !                                      =   0.36788840000000000       GB
- !                                      =   0.34262277185916901       GiB
- !                                      =    3.6788840000000000E-004  TB
- !                                      =    3.3459255064371973E-004  TiB
+ ! size of static arrays for all slices =    433.30678399999999       MB
+ !                                      =    413.23355102539062       MiB
+ !                                      =   0.43330678400000000       GB
+ !                                      =   0.40354838967323303       GiB
+ !                                      =    4.3330678400000001E-004  TB
+ !                                      =    3.9409022429026663E-004  TiB
  !
 
  integer, parameter :: NEX_XI_VAL =           32
@@ -126,19 +126,19 @@
  integer, parameter :: NSPEC_CRUST_MANTLE_STR_OR_ATT =         1056
  integer, parameter :: NSPEC_INNER_CORE_STR_OR_ATT =            0
 
- integer, parameter :: NSPEC_CRUST_MANTLE_STR_AND_ATT =            0
+ integer, parameter :: NSPEC_CRUST_MANTLE_STR_AND_ATT =         1056
  integer, parameter :: NSPEC_INNER_CORE_STR_AND_ATT =            0
 
- integer, parameter :: NSPEC_CRUST_MANTLE_STRAIN_ONLY =            0
+ integer, parameter :: NSPEC_CRUST_MANTLE_STRAIN_ONLY =         1056
  integer, parameter :: NSPEC_INNER_CORE_STRAIN_ONLY =            0
 
- integer, parameter :: NSPEC_CRUST_MANTLE_ADJOINT =            0
+ integer, parameter :: NSPEC_CRUST_MANTLE_ADJOINT =         1056
  integer, parameter :: NSPEC_OUTER_CORE_ADJOINT =            0
  integer, parameter :: NSPEC_INNER_CORE_ADJOINT =            0
  integer, parameter :: NSPEC_TRINFINITE_ADJOINT =            0
  integer, parameter :: NSPEC_INFINITE_ADJOINT =            0
 
- integer, parameter :: NGLOB_CRUST_MANTLE_ADJOINT =            0
+ integer, parameter :: NGLOB_CRUST_MANTLE_ADJOINT =        72961
  integer, parameter :: NGLOB_OUTER_CORE_ADJOINT =            0
  integer, parameter :: NGLOB_INNER_CORE_ADJOINT =            0
  integer, parameter :: NGLOB_TRINFINITE_ADJOINT =            0

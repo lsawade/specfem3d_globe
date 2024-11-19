@@ -62,7 +62,7 @@ void write_seismograms_transfer_from_device (Mesh *mp,
     cl_event *copy_evt = NULL;
     cl_uint num_evt = 0;
 
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // waits for previous copy
       clCheck (clFinish (mocl.copy_queue));
 
@@ -91,7 +91,7 @@ void write_seismograms_transfer_from_device (Mesh *mp,
 #ifdef USE_CUDA
   if (run_cuda) {
     // waits for previous copy call to be finished
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       cudaStreamSynchronize(mp->copy_stream);
     }
     dim3 grid(num_blocks_x,num_blocks_y);
@@ -109,7 +109,7 @@ void write_seismograms_transfer_from_device (Mesh *mp,
 #ifdef USE_HIP
   if (run_hip) {
     // waits for previous copy call to be finished
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       hipStreamSynchronize(mp->copy_stream);
     }
     dim3 grid(num_blocks_x,num_blocks_y);
@@ -127,7 +127,7 @@ void write_seismograms_transfer_from_device (Mesh *mp,
 #endif
 
   // copies array to CPU
-  if (GPU_ASYNC_COPY) {
+  if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
     if (run_opencl) {
       // waits until kernel is finished
@@ -178,7 +178,7 @@ void write_seismograms_transfer_from_device (Mesh *mp,
   if (run_opencl) clReleaseEvent (kernel_evt);
 #endif
 
-  if (! GPU_ASYNC_COPY) {
+  if (! mp->GPU_ASYNC_COPY) {
     for (irec_local = 0; irec_local < mp->nrec_local; irec_local++) {
       irec = number_receiver_global[irec_local] - 1;
       ispec = h_ispec_selected[irec] - 1;
@@ -244,7 +244,7 @@ void write_seismograms_transfer_strain_from_device (Mesh *mp,
 #ifdef USE_CUDA
   if (run_cuda) {
     // waits for previous copy call to be finished
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       cudaStreamSynchronize(mp->copy_stream);
     }
 
@@ -263,7 +263,7 @@ void write_seismograms_transfer_strain_from_device (Mesh *mp,
 #ifdef USE_HIP
   if (run_hip) {
     // waits for previous copy call to be finished
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       hipStreamSynchronize(mp->copy_stream);
     }
 
@@ -402,8 +402,8 @@ void FC_FUNC_(transfer_seismo_from_device_async,
   if (mp->nrec_local == 0) return;
 
   // checks async-memcpy
-  if (! GPU_ASYNC_COPY) {
-    exit_on_error("transfer_seismo_from_device_async must be called with GPU_ASYNC_COPY == 1, please check mesh_constants_gpu.h");
+  if (! mp->GPU_ASYNC_COPY) {
+    exit_on_error("transfer_seismo_from_device_async must be called with GPU_ASYNC_COPY == 1, please check constants.h");
   }
 
   // waits for previous copy call to be finished

@@ -534,7 +534,7 @@ void gpuCopy_from_device_realw_asyncEvent (Mesh *mp, gpu_realw_mem *d_array_addr
 #ifdef USE_OPENCL
   if (run_opencl) {
     // non-blocking copy
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // asynchronuous copy
       //
       // note: if host array is not pinned, then call will become blocking
@@ -559,7 +559,7 @@ void gpuCopy_from_device_realw_asyncEvent (Mesh *mp, gpu_realw_mem *d_array_addr
 #endif
 #ifdef USE_CUDA
   if (run_cuda) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // asynchronuous copy
       //
       // note: if host array is not pinned, then call will become blocking
@@ -588,8 +588,15 @@ void gpuCopy_from_device_realw_asyncEvent (Mesh *mp, gpu_realw_mem *d_array_addr
 #endif
 #ifdef USE_HIP
   if (run_hip) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // asynchronuous copy
+#if defined(__HIP_CPU_RT__)
+      // HIP-CPU: the current version has some issue with hipMemcpyAsync(..) and then waiting for the Event recorded afterwards.
+      //          it would stall and wait forever.
+      // as a work-around we use the Memcpy command here - this seems to work fine for now.
+      print_HIP_error_if_any(hipMemcpy(h_array,d_array_addr_ptr->hip, sizeof(realw)*size, hipMemcpyDeviceToHost),34001);
+#else
+      // wait on copy stream to finish the compute event
       print_HIP_error_if_any(hipStreamWaitEvent(mp->copy_stream, mp->kernel_event, 0),32000);
 
       // copies buffer to CPU
@@ -597,6 +604,7 @@ void gpuCopy_from_device_realw_asyncEvent (Mesh *mp, gpu_realw_mem *d_array_addr
 
       // creates event record
       print_HIP_error_if_any(hipEventRecord(mp->kernel_event, mp->copy_stream),32001);
+#endif
     }else{
       // blocking
       print_HIP_error_if_any(hipMemcpy(h_array,d_array_addr_ptr->hip, sizeof(realw)*size, hipMemcpyDeviceToHost),34001);
@@ -618,7 +626,7 @@ void gpuRecordEvent(Mesh *mp){
 #endif
 #ifdef USE_CUDA
   if (run_cuda) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // record event on compute stream
       print_CUDA_error_if_any(cudaEventRecord(mp->kernel_event, mp->compute_stream),31000);
     }
@@ -626,7 +634,7 @@ void gpuRecordEvent(Mesh *mp){
 #endif
 #ifdef USE_HIP
   if (run_hip) {
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // record event on compute stream
       print_HIP_error_if_any(hipEventRecord(mp->kernel_event, mp->compute_stream),31000);
     }
@@ -643,7 +651,7 @@ void gpuWaitEvent (Mesh *mp) {
   TRACE ("gpuWaitEvent");
 
   // waits for event in copy stream to finish
-  if (GPU_ASYNC_COPY) {
+  if (mp->GPU_ASYNC_COPY) {
 #ifdef USE_OPENCL
     if (run_opencl){
       // waits until previous copy finished
@@ -958,7 +966,7 @@ void gpuSynchronize() {
 #ifdef USE_OPENCL
   if (run_opencl) {
     clFinish (mocl.command_queue);
-    if (GPU_ASYNC_COPY) clFinish (mocl.copy_queue);
+    if (mocl.copy_queue != NULL) clFinish (mocl.copy_queue);
   }
 #endif
   // cuda version

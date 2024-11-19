@@ -34,6 +34,11 @@
 
 #ifdef USE_OPENCL
 
+// explicitly specify a target OpenCL version
+//#if !defined(CL_TARGET_OPENCL_VERSION)
+//#define CL_TARGET_OPENCL_VERSION 200
+//#endif
+
 #ifdef __APPLE__
 #include <OpenCL/cl.h>
 #else

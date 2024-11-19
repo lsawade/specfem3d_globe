@@ -44,6 +44,7 @@
    no inner-core anisotropy
    no general mantle anisotropy
 
+
  Reference radius of the globe used is    6371.0000000000000       km
 
  Central cube is at a radius of    952.00000000000000       km
@@ -106,38 +107,38 @@
      number of regular elements  =            0
      number of doubling elements =          448
    setting tiso flags in mantle model
-      9.1%    current clock (NOT elapsed) time is: 18h 59min 01sec
+      9.1%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            2 out of           11
      number of regular elements  =          128
-     18.2%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     18.2%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            3 out of           11
      number of regular elements  =           16
-     27.3%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     27.3%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            4 out of           11
      number of regular elements  =          112
      number of doubling elements =          128
-     36.4%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     36.4%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            5 out of           11
      number of regular elements  =          512
-     45.5%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     45.5%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            6 out of           11
      number of regular elements  =           64
-     54.5%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     54.5%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            7 out of           11
      number of regular elements  =           64
-     63.6%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     63.6%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            8 out of           11
      number of regular elements  =          128
-     72.7%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     72.7%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            9 out of           11
      number of regular elements  =          128
-     81.8%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     81.8%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer           10 out of           11
      number of regular elements  =          256
-     90.9%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     90.9%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer           11 out of           11
      number of regular elements  =          256
-    100.0%    current clock (NOT elapsed) time is: 18h 59min 01sec
+    100.0%    current clock (NOT elapsed) time is: 11h 54min 19sec
    layers done
 
    number of elements (per slice)        =         2240
@@ -146,7 +147,7 @@
 
    ...creating global addressing
      total number of points            :       280000
-     array memory required per process :    6.4086914062500000      MB
+     array memory required per process :    6.40869141     MB
      getting global points             : npointot =       280000  nspec =         2240
      creating indirect addressing
      ibool ok
@@ -163,38 +164,38 @@
    creating layer            1 out of           11
      number of regular elements  =            0
      number of doubling elements =          448
-      9.1%    current clock (NOT elapsed) time is: 18h 59min 01sec
+      9.1%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            2 out of           11
      number of regular elements  =          128
-     18.2%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     18.2%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            3 out of           11
      number of regular elements  =           16
-     27.3%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     27.3%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            4 out of           11
      number of regular elements  =          112
      number of doubling elements =          128
-     36.4%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     36.4%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            5 out of           11
      number of regular elements  =          512
-     45.5%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     45.5%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            6 out of           11
      number of regular elements  =           64
-     54.5%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     54.5%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            7 out of           11
      number of regular elements  =           64
-     63.6%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     63.6%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            8 out of           11
      number of regular elements  =          128
-     72.7%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     72.7%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer            9 out of           11
      number of regular elements  =          128
-     81.8%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     81.8%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer           10 out of           11
      number of regular elements  =          256
-     90.9%    current clock (NOT elapsed) time is: 18h 59min 01sec
+     90.9%    current clock (NOT elapsed) time is: 11h 54min 19sec
    creating layer           11 out of           11
      number of regular elements  =          256
-    100.0%    current clock (NOT elapsed) time is: 18h 59min 01sec
+    100.0%    current clock (NOT elapsed) time is: 11h 54min 19sec
    layers done
 
    number of elements (per slice)        =         2240
@@ -270,14 +271,12 @@
 
    ...element inner/outer separation
 
- for overlapping of communications with calculations:
+   for overlapping of communications with calculations:
+   percentage of edge elements in crust/mantle    20.8482151     %
+   percentage of volume elements in crust/mantle    79.1517868     %
 
- percentage of edge elements in crust/mantle    20.8482151     %
- percentage of volume elements in crust/mantle    79.1517868     %
 
-
-   ...element mesh coloring
-   mesh coloring:  F
+   ...element mesh permutation
 
    ...creating absorbing boundary arrays
 
@@ -307,10 +306,10 @@
    creating layer            1 out of            2
      number of regular elements  =           28
      number of doubling elements =           32
-     50.0%    current clock (NOT elapsed) time is: 18h 59min 02sec
+     50.0%    current clock (NOT elapsed) time is: 11h 54min 20sec
    creating layer            2 out of            2
      number of regular elements  =          112
-    100.0%    current clock (NOT elapsed) time is: 18h 59min 02sec
+    100.0%    current clock (NOT elapsed) time is: 11h 54min 20sec
    layers done
 
    number of elements (per slice)        =          172
@@ -319,7 +318,7 @@
 
    ...creating global addressing
      total number of points            :        21500
-     array memory required per process :   0.49209594726562500      MB
+     array memory required per process :   0.492095947     MB
      getting global points             : npointot =        21500  nspec =          172
      creating indirect addressing
      ibool ok
@@ -336,10 +335,10 @@
    creating layer            1 out of            2
      number of regular elements  =           28
      number of doubling elements =           32
-     50.0%    current clock (NOT elapsed) time is: 18h 59min 02sec
+     50.0%    current clock (NOT elapsed) time is: 11h 54min 20sec
    creating layer            2 out of            2
      number of regular elements  =          112
-    100.0%    current clock (NOT elapsed) time is: 18h 59min 02sec
+    100.0%    current clock (NOT elapsed) time is: 11h 54min 20sec
    layers done
 
    number of elements (per slice)        =          172
@@ -370,7 +369,7 @@
    Maximum suggested time step =   0.689999998      (s)
 
    for DT :   0.284999996      (s)
-   Max stability for wave velocities =   0.225912258
+   Max stability for wave velocities =   0.225912273
  ----------------------------------
 
    saving vtk mesh files for resolution res_minimum_period...
@@ -414,12 +413,13 @@
 
 
    ...element inner/outer separation
- percentage of edge elements in outer core    51.1627922     %
- percentage of volume elements in outer core    48.8372078     %
+
+   for overlapping of communications with calculations:
+   percentage of edge elements in outer core    51.1627922     %
+   percentage of volume elements in outer core    48.8372078     %
 
 
-   ...element mesh coloring
-   mesh coloring:  F
+   ...element mesh permutation
 
    ...creating absorbing boundary arrays
 
@@ -448,7 +448,7 @@
    ...creating mesh elements
    creating layer            1 out of            1
      number of regular elements  =            8
-    100.0%    current clock (NOT elapsed) time is: 18h 59min 02sec
+    100.0%    current clock (NOT elapsed) time is: 11h 54min 20sec
    layers done
 
    number of elements (per slice)        =            8
@@ -457,7 +457,7 @@
 
    ...creating global addressing
      total number of points            :         1000
-     array memory required per process :    2.2888183593750000E-002 MB
+     array memory required per process :    2.28881836E-02 MB
      getting global points             : npointot =         1000  nspec =            8
      creating indirect addressing
      ibool ok
@@ -473,7 +473,7 @@
    ...creating mesh elements
    creating layer            1 out of            1
      number of regular elements  =            8
-    100.0%    current clock (NOT elapsed) time is: 18h 59min 02sec
+    100.0%    current clock (NOT elapsed) time is: 11h 54min 20sec
    layers done
 
    number of elements (per slice)        =            8
@@ -548,12 +548,13 @@
 
 
    ...element inner/outer separation
- percentage of edge elements in inner core    75.0000000     %
- percentage of volume elements in inner core    25.0000000     %
+
+   for overlapping of communications with calculations:
+   percentage of edge elements in inner core    75.0000000     %
+   percentage of volume elements in inner core    25.0000000     %
 
 
-   ...element mesh coloring
-   mesh coloring:  F
+   ...element mesh permutation
 
    ...creating absorbing boundary arrays
 
@@ -567,7 +568,13 @@
                  top area:    4.43443097E-03
               bottom area:    2.69354903E-03
 
- calculated volume:    4.0076851593289949E-002
+ all mesh regions created - done
+
+ *******************************************
+
+ finalizing simulation:
+
+ calculated volume:    4.0076851593289865E-002
 
  Repartition of elements in regions:
  ----------------------------------
@@ -575,9 +582,9 @@
  number of elements in each slice      :         2420
  total number of elements in all slices:         9680
 
-  - crust and mantle:    92.5619812      %
-  - outer core:    7.10743809      %
-  - inner core:   0.330578506      %
+  - crust and mantle       :    92.5619812      %
+  - outer core             :    7.10743809      %
+  - inner core             :   0.330578506      %
 
  for some mesh statistics, see comments in file OUTPUT_FILES/values_from_mesher.h
 
@@ -591,7 +598,7 @@
  smallest and largest possible floating-point numbers are:    1.17549435E-38   3.40282347E+38
 
 
- Elapsed time for mesh generation and buffer creation in seconds =   0.292070001
+ Elapsed time for mesh generation and buffer creation in seconds =   0.344240010
  Elapsed time for mesh generation and buffer creation in hh:mm:ss =    0 h 00 m 00 s
 
  End of mesh generation

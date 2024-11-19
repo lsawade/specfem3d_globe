@@ -961,8 +961,8 @@
         ! term with adjoint acceleration and backward/reconstructed acceleration
         hess_kl_crust_mantle(INDEX_IJK,ispec) =  hess_kl_crust_mantle(INDEX_IJK,ispec) &
            + deltat_kl * (accel_crust_mantle(1,iglob) * b_accel_crust_mantle(1,iglob) &
-           + accel_crust_mantle(2,iglob) * b_accel_crust_mantle(2,iglob) &
-           + accel_crust_mantle(3,iglob) * b_accel_crust_mantle(3,iglob) )
+                        + accel_crust_mantle(2,iglob) * b_accel_crust_mantle(2,iglob) &
+                        + accel_crust_mantle(3,iglob) * b_accel_crust_mantle(3,iglob) )
 
       ENDDO_LOOP_IJK
 
@@ -975,7 +975,7 @@
       call compute_gradient_crust_mantle(veloc_crust_mantle, NGLOB_CRUST_MANTLE, veloc_grad, ispec)
 
       if ( USE_SOURCE_RECEIVER_Hessian ) then
-        ! if using source-recevier Hessian, calculate the velocity gradient of backward adjoint wavefield
+        ! if using source-receiver Hessian, calculate the velocity gradient of backward adjoint wavefield
         call compute_gradient_crust_mantle(b_veloc_crust_mantle, NGLOB_CRUST_MANTLE_ADJOINT, b_veloc_grad, ispec)
       else
         ! if using source-source Hessian, set the b_veloc_grad same as the wavefield
@@ -995,7 +995,7 @@
 
             ! hess_kappa = (Vx,x + Vy,y + Vz,z) * (b_Vx,x + b_Vy,y + b_Vz,z)
             hess_kappa = 3.0 * (vgrad(1, 1) + vgrad(2, 2) + vgrad(3, 3)) &
-                       * (b_vgrad(1, 1) + b_vgrad(2, 2) + b_vgrad(3, 3))
+                             * (b_vgrad(1, 1) + b_vgrad(2, 2) + b_vgrad(3, 3))
 
             !hess_mu = (Vx,y + Vy,x) * (b_Vx,y + b_Vy,x)
             !        + (Vy,z + Vz,y) * (b_Vy,z + b_Vz,y)

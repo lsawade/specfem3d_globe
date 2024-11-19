@@ -386,6 +386,13 @@
     endif
   enddo
 
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) '  saving regular gridded kernels'
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
   ! writes out kernels to file
   if (ADIOS_FOR_KERNELS) then
     ! check implementation

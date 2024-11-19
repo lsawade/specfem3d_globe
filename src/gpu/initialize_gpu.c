@@ -97,11 +97,6 @@ const int DEBUG_VERBOSE_OUTPUT = 0;
 // CUDA version output
 #ifdef USE_CUDA
 
-// macros for version output
-#define VALUE_TO_STRING(x) #x
-#define VALUE(x) VALUE_TO_STRING(x)
-#define VAR_NAME_VALUE(var) #var " = "  VALUE(var)
-
 #pragma message ("\n\nCompiling with: " VAR_NAME_VALUE(CUDA_VERSION) "\n")
 #if defined(__CUDA_ARCH__)
 #pragma message ("\n\nCompiling with: " VAR_NAME_VALUE(__CUDA_ARCH__) "\n")
@@ -152,16 +147,6 @@ static struct {
 };
 #endif  // USE_OPENCL
 
-
-// HIP version
-#ifdef USE_HIP
-
-// macros for version output
-#define VALUE_TO_STRING(x) #x
-#define VALUE(x) VALUE_TO_STRING(x)
-#define VAR_NAME_VALUE(var) #var " = "  VALUE(var)
-
-#endif  // USE_HIP
 
 /* ----------------------------------------------------------------------------------------------- */
 
@@ -397,12 +382,14 @@ static void output_cuda_device_infos(int myrank){
     exit_on_error("CUDA Compute capability major number should be at least 1.3\n");
   }
   // we use pinned memory for asynchronous copy
+#ifdef GPU_ASYNC_COPY
   if (GPU_ASYNC_COPY) {
     if (! deviceProp.canMapHostMemory) {
       fprintf(stderr,"Device capability should allow to map host memory, exiting...\n");
       exit_on_error("CUDA Device capability canMapHostMemory should be TRUE\n");
     }
   }
+#endif
 
   // checks kernel optimization setting
 #ifdef USE_LAUNCH_BOUNDS
@@ -993,22 +980,6 @@ void ocl_select_device(const char *platform_filter, const char *device_filter, i
 
   mocl.device = cdDevices[id_device];
   free(cdDevices);
-
-  // command kernel queues
-  // clCreateCommandQueue feature in OpenCL 1.2, will be deprecated in OpenCL 2.0
-#ifdef CL_VERSION_2_0
-  // version 2.0
-  mocl.command_queue = clCreateCommandQueueWithProperties(mocl.context, mocl.device, 0, clck_(&errcode));
-  if (GPU_ASYNC_COPY) {
-    mocl.copy_queue = clCreateCommandQueueWithProperties(mocl.context, mocl.device, 0, clck_(&errcode));
-  }
-#else
-  // version 1.2, CL_VERSION_1_2
-  mocl.command_queue = clCreateCommandQueue(mocl.context, mocl.device, 0, clck_(&errcode));
-  if (GPU_ASYNC_COPY) {
-    mocl.copy_queue = clCreateCommandQueue(mocl.context, mocl.device, 0, clck_(&errcode));
-  }
-#endif
 }
 
 #endif // USE_OPENCL
@@ -1252,12 +1223,14 @@ static void output_hip_device_infos(int myrank){
   }
 
   // we use pinned memory for asynchronous copy
+#ifdef GPU_ASYNC_COPY
   if (GPU_ASYNC_COPY) {
     if (! deviceProp.canMapHostMemory) {
       fprintf(stderr,"Device capability should allow to map host memory, exiting...\n");
       exit_on_error("HIP Device capability canMapHostMemory should be TRUE\n");
     }
   }
+#endif
 
   // checks kernel optimization setting
 #ifdef USE_LAUNCH_BOUNDS

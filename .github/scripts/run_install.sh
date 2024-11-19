@@ -65,6 +65,18 @@ if [ "${PETSC}" == "true" ]; then
   echo; echo "done PETSc"; echo
 fi
 
+## HIP
+if [ "${HIP}" == "true" ]; then
+  echo
+  echo "HIP additionals installation:"
+  echo
+  sudo apt-get install -yq --no-install-recommends libtbb-dev
+fi
+
+# checks exit code
+if [[ $? -ne 0 ]]; then exit 1; fi
+echo
+
 # python3 pip upgrade might complain: "ERROR: launchpadlib 1.10.13 requires testresources"
 sudo apt-get install -yq --no-install-recommends python3-testresources
 # checks exit code
@@ -138,6 +150,20 @@ if [ "${ADIOS2}" == "true" ]; then
   # environment for directory
   echo "ADIOS2_DIR=/opt/ADIOS2" >> $GITHUB_ENV
   echo; echo "done ADIOS2"; echo
+fi
+
+## EMC model
+if [ "${EMC_MODEL}" == "true" ]; then
+  echo
+  echo "EMC model installation:"
+  echo
+  echo "current dir: `pwd`"
+  cd DATA/IRIS_EMC/
+  wget --quiet --tries=3 https://ds.iris.edu/files/products/emc/emc-files/Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  ln -s Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc model.nc
+  cd ../../
 fi
 
 # MPI
