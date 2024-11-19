@@ -1,0 +1,138 @@
+running example: Tue Nov 19 10:08:48 CET 2024
+directory: /Users/Shared/SPECFEM3D_GLOBE/EXAMPLES/regional_EMC_model
+(will take about 7 minutes)
+
+
+   setting up example...
+
+Changed simulation_type to 1 and save_forward = .true. in Par_file 
+
+#########################################################
+forward simulation
+#########################################################
+(running forward simulation with saving forward wavefield)
+
+Changed simulation_type to 1 and save_forward = .true. in Par_file 
+
+  running script...
+
+forward simulation...
+
+Tue Nov 19 10:08:50 CET 2024
+starting MPI mesher on 4 processors
+
+ simulation time step size:
+   DT determined =   0.11500000000000000     
+   Par_file: user overrides with specified DT =    5.0000000000000003E-002
+
+ using local mesh layout:
+   number of layers in crust  =            4
+   number of layers in mantle =            8
+
+   number of doubling layers  =            2
+            doubling layer at =            2
+            doubling layer at =            5
+   fictitious moho at depth   :    40.0000000     (km)
+
+  mesher done: Tue Nov 19 10:08:59 CET 2024
+
+
+Tue Nov 19 10:09:01 CET 2024
+starting run in current directory /Users/Shared/SPECFEM3D_GLOBE/EXAMPLES/regional_EMC_model
+
+ simulation time step size:
+   DT determined =   0.11500000000000000     
+   Par_file: user overrides with specified DT =    5.0000000000000003E-002
+
+ using local mesh layout:
+   number of layers in crust  =            4
+   number of layers in mantle =            8
+
+   number of doubling layers  =            2
+            doubling layer at =            2
+            doubling layer at =            5
+   fictitious moho at depth   :    40.0000000     (km)
+
+finished successfully
+Tue Nov 19 10:09:15 CET 2024
+
+#########################################################
+adjoint sources
+#########################################################
+setting up adjoint sources
+
+
+creating adjoint source for station: IU.COLA
+
+OUTPUT_FILES/IU.COLA.BXE.sem.ascii -> SEM/IU.COLA.BXE.sem.ascii
+OUTPUT_FILES/IU.COLA.BXN.sem.ascii -> SEM/IU.COLA.BXN.sem.ascii
+OUTPUT_FILES/IU.COLA.BXZ.sem.ascii -> SEM/IU.COLA.BXZ.sem.ascii
+
+compiling xcreate_adjsrc_traveltime:
+  using fortran compiler = gfortran
+  using C compiler       = gcc
+
+gfortran -Wall -o xcreate_adjsrc_traveltime create_adjsrc_traveltime.o rw_ascfile_c.o
+xcreate_adjsrc_traveltime -> /Users/Shared/SPECFEM3D_GLOBE/EXAMPLES/regional_EMC_model/SEM/xcreate_adjsrc_traveltime
+
+running adjoint source creation
+
+ ifile =            0   lrot =  F
+  
+ reading asc file IU.COLA.BXE.sem.ascii ...
+ reading asc file IU.COLA.BXN.sem.ascii ...
+ reading asc file IU.COLA.BXZ.sem.ascii ...
+  
+ start time:  -4.5000000000000000     
+ time step:   5.0000190000000444E-002
+ number of steps:        3200
+  
+ i =            1 norm =    1.3382609814114356E-010
+ i =            2 norm =    7.4112161423547478E-010
+ i =            3 norm =    2.7333060200934709E-010
+  
+ write to asc file IU.COLA.BXE.sem.ascii.adj
+ write to asc file IU.COLA.BXN.sem.ascii.adj
+ write to asc file IU.COLA.BXZ.sem.ascii.adj
+
+IU.COLA.BXE.sem.ascii.adj -> IU.COLA.BXE.adj
+IU.COLA.BXN.sem.ascii.adj -> IU.COLA.BXN.adj
+IU.COLA.BXZ.sem.ascii.adj -> IU.COLA.BXZ.adj
+./STATIONS_ADJOINT -> ../DATA/STATIONS_ADJOINT
+
+
+#########################################################
+kernel simulation
+#########################################################
+(running kernel simulation: SIMULATION_TYPE == 3)
+
+Changed simulation_type to 3 in Par_file 
+
+  running script...
+
+backward/kernel simulation...
+
+Tue Nov 19 10:09:18 CET 2024
+starting run in current directory /Users/Shared/SPECFEM3D_GLOBE/EXAMPLES/regional_EMC_model
+
+ simulation time step size:
+   DT determined =   0.11500000000000000     
+   Par_file: user overrides with specified DT =    5.0000000000000003E-002
+
+ using local mesh layout:
+   number of layers in crust  =            4
+   number of layers in mantle =            8
+
+   number of doubling layers  =            2
+            doubling layer at =            2
+            doubling layer at =            5
+   fictitious moho at depth   :    40.0000000     (km)
+
+finished successfully
+Tue Nov 19 10:10:05 CET 2024
+
+see results in directory       : OUTPUT_FILES/
+    kernel outputs in directory:  ./DATABASES_MPI
+
+done
+Tue Nov 19 10:10:05 CET 2024

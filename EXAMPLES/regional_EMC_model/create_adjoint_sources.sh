@@ -10,8 +10,8 @@ compZ="BXZ"
 en="sem.ascii"
 
 # window start/end time (in seconds)
-t_start=100.0
-t_end=120.0
+t_start=40.0
+t_end=140.0
 
 #################################################
 
@@ -70,7 +70,7 @@ cd SEM/
 # uses all components for adjoint source
 type=0
 
-./xcreate_adjsrc_traveltime $t_start $t_end $type $sta.*.$en 
+./xcreate_adjsrc_traveltime $t_start $t_end $type $sta.*.$en
 # checks exit code
 if [[ $? -ne 0 ]]; then exit 1; fi
 
