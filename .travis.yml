@@ -17,6 +17,10 @@ compiler: gcc
 # deprecated
 #sudo: required
 
+# turns off submodule fetching by default
+git:
+  submodules: false
+
 env:
   global:
     - FC=gfortran
