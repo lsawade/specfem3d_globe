@@ -55,21 +55,18 @@
     HDF5_ENABLED
 
   use meshfem_par, only: &
-    myrank,nspec,nglob,iregion_code, &
+    myrank,nspec,iregion_code, &
     ibool,idoubling,xstore,ystore,zstore, &
     xstore_glob,ystore_glob,zstore_glob
 
   use meshfem_par, only: &
     NCHUNKS,SAVE_MESH_FILES,ABSORBING_CONDITIONS,LOCAL_PATH, &
     ADIOS_FOR_ARRAYS_SOLVER,ADIOS_FOR_SOLVER_MESHFILES, &
-    ROTATION,EXACT_MASS_MATRIX_FOR_ROTATION,GRAVITY_INTEGRALS, &
+    GRAVITY_INTEGRALS, &
     FULL_GRAVITY, &
     NGLOB1D_RADIAL_CORNER, &
     NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX, &
     volume_total,Earth_mass_total,Earth_center_of_mass_x_total,Earth_center_of_mass_y_total,Earth_center_of_mass_z_total
-
-  use meshfem_models_par, only: &
-    OCEANS
 
 #ifdef USE_CEM
   use meshfem_models_par, only: CEM_REQUEST
@@ -96,8 +93,8 @@
     mu0store,Gc_prime_store,Gs_prime_store, &
     rho_vp,rho_vs, &
     Qmu_store,tau_e_store, &
-    nglob_xy,rmassx,rmassy,rmassz,b_rmassx,b_rmassy, &
-    nglob_oceans,rmass_ocean_load, &
+    rmassx,rmassy,rmassz,b_rmassx,b_rmassy, &
+    rmass_ocean_load, &
     iMPIcut_xi,iMPIcut_eta, &
     ispec_is_tiso
 
@@ -128,9 +125,6 @@
 
   ! now perform two passes in this part to be able to save memory
   integer,intent(in) :: ipass
-
-  ! local parameters
-  integer :: ier
 
   ! user output
   if (myrank == 0) then
@@ -374,71 +368,6 @@
       write(IMAIN,*) '  ...creating mass matrix'
       call flush_IMAIN()
     endif
-
-    ! allocates mass matrices in this slice (will be fully assembled in the solver)
-    !
-    ! in the case of Stacey boundary conditions, add C*deltat/2 contribution to the mass matrix
-    ! on Stacey edges for the crust_mantle and outer_core regions but not for the inner_core region
-    ! thus the mass matrix must be replaced by three mass matrices including the "C" damping matrix
-    !
-    ! if absorbing_conditions are not set or if NCHUNKS=6, only one mass matrix is needed
-    ! for the sake of performance, only "rmassz" array will be filled and "rmassx" & "rmassy" will be obsolete
-    if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
-      select case (iregion_code)
-      case (IREGION_CRUST_MANTLE)
-        nglob_xy = nglob
-      case (IREGION_INNER_CORE, IREGION_OUTER_CORE)
-        nglob_xy = 1
-      case (IREGION_TRINFINITE, IREGION_INFINITE)
-        nglob_xy = 1
-      case default
-        call exit_mpi(myrank,'Invalid region code for nglob_xy')
-      end select
-    else
-       nglob_xy = 1
-    endif
-
-    if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
-      select case (iregion_code)
-      case (IREGION_CRUST_MANTLE,IREGION_INNER_CORE)
-         nglob_xy = nglob
-      case (IREGION_OUTER_CORE)
-         nglob_xy = 1
-      case (IREGION_TRINFINITE, IREGION_INFINITE)
-        nglob_xy = 1
-      case default
-        call exit_mpi(myrank,'Invalid region code for nglob_xy with EXACT_MASS_MATRIX_FOR_ROTATION')
-      end select
-    endif
-
-    allocate(rmassx(nglob_xy), &
-             rmassy(nglob_xy), &
-             stat=ier)
-    if (ier /= 0) stop 'Error in allocate 21'
-    rmassx(:) = 0.0_CUSTOM_REAL
-    rmassy(:) = 0.0_CUSTOM_REAL
-
-    allocate(b_rmassx(nglob_xy), &
-             b_rmassy(nglob_xy),stat=ier)
-    if (ier /= 0) stop 'Error in allocate b_21'
-    b_rmassx(:) = 0.0_CUSTOM_REAL
-    b_rmassy(:) = 0.0_CUSTOM_REAL
-
-    allocate(rmassz(nglob),stat=ier)
-    if (ier /= 0) stop 'Error in allocate 22'
-    rmassz(:) = 0.0_CUSTOM_REAL
-
-    ! allocates ocean load mass matrix as well if oceans
-    if (OCEANS .and. iregion_code == IREGION_CRUST_MANTLE) then
-      nglob_oceans = nglob
-    else
-      ! allocate dummy array if no oceans
-      nglob_oceans = 1
-    endif
-    allocate(rmass_ocean_load(nglob_oceans),stat=ier)
-    if (ier /= 0) stop 'Error in allocate 22'
-    rmass_ocean_load(:) = 0.0_CUSTOM_REAL
-
     ! creating mass matrices in this slice (will be fully assembled in the solver)
     ! note: for Stacey boundaries, needs indexing nimin,.. filled in the first pass
     call create_mass_matrices(idoubling,ibool, &
@@ -522,25 +451,6 @@
 
     endif ! .not. GRAVITY_INTEGRALS
 
-    ! synchronizes processes before clean up memory
-    call synchronize_all()
-
-    ! frees memory
-    deallocate(rmassx,rmassy,rmassz)
-    deallocate(b_rmassx,b_rmassy)
-    deallocate(rmass_ocean_load)
-    ! frees allocated mesh memory
-    deallocate(xstore_glob,ystore_glob,zstore_glob)
-    ! frees MPI arrays memory
-    call crm_free_MPI_arrays()
-    ! free Stacey helper arrays (not needed anymore)
-    if (allocated(nimin)) deallocate(nimin,nimax,njmin,njmax,nkmin_xi,nkmin_eta)
-    if (allocated(abs_boundary_ispec)) then
-      deallocate(abs_boundary_ispec,abs_boundary_npoin,abs_boundary_ijk)
-      deallocate(abs_boundary_jacobian2Dw)
-      deallocate(abs_boundary_normal)
-    endif
-
     ! compute volume, bottom and top area of that part of the slice, and then the total
     call compute_volumes_and_areas(NCHUNKS,iregion_code,nspec,wxgll,wygll,wzgll, &
                                    xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore,gammaxstore,gammaystore,gammazstore, &
@@ -567,6 +477,25 @@
                                      xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore,gammaxstore,gammaystore,gammazstore, &
                                      rhostore,idoubling)
 
+    endif
+
+    ! synchronizes processes before clean up memory
+    call synchronize_all()
+
+    ! frees memory
+    deallocate(rmassx,rmassy,rmassz)
+    deallocate(b_rmassx,b_rmassy)
+    deallocate(rmass_ocean_load)
+    ! frees allocated mesh memory
+    deallocate(xstore_glob,ystore_glob,zstore_glob)
+    ! frees MPI arrays memory
+    call crm_free_MPI_arrays()
+    ! free Stacey helper arrays (not needed anymore)
+    if (allocated(nimin)) deallocate(nimin,nimax,njmin,njmax,nkmin_xi,nkmin_eta)
+    if (allocated(abs_boundary_ispec)) then
+      deallocate(abs_boundary_ispec,abs_boundary_npoin,abs_boundary_ijk)
+      deallocate(abs_boundary_jacobian2Dw)
+      deallocate(abs_boundary_normal)
     endif
 
   case default

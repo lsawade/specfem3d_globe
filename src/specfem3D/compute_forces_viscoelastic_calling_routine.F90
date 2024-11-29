@@ -850,9 +850,7 @@
 ! (left in this file to let compiler decide about inlining)
 
   use constants_solver, only: CUSTOM_REAL,NDIM,NGLLX,NGLLY,NGLLZ,USE_DEVILLE_PRODUCTS_VAL, &
-    ATT5_VAL,N_SLS,NSPEC_INNER_CORE_STRAIN_ONLY,NCHUNKS_VAL
-
-  use shared_parameters, only: ABSORBING_CONDITIONS
+    ATT5_VAL,N_SLS,NSPEC_INNER_CORE_STRAIN_ONLY
 
   ! note: passes sum_terms array as subroutine argument which will help for performance (better than use-statement)
   use specfem_par_innercore, only: sum_terms_inner_core,factor_common_inner_core,NSPEC_INNER_CORE
@@ -891,8 +889,6 @@
   real(kind=CUSTOM_REAL), dimension(NGLOB),intent(in) :: pgrav_inner_core
 
   ! checks if anything to
-  ! no need for inner core, absorbing boundaries placed at outer core bottom surface
-  if (NCHUNKS_VAL /= 6 .and. ABSORBING_CONDITIONS) return
   ! for regional mesh cut-offs, there are no inner core elements
   if (NSPEC_INNER_CORE == 0) return
 
