@@ -148,7 +148,7 @@ end module model_crust_berkeley_par
 
   depth = (1.d0 - x) * EARTH_R_KM
 
-  call get_crust_val_csem(theta,phi,depth,rho,vp,vsv,vsh,moho_depth)
+  call get_crust_val_csem(theta,phi,depth,rho,vp,vsv,vsh,moho_depth,moho_only)
 
   ! using crustal values
   if (USE_OLD_VERSION_FORMAT) then
@@ -226,7 +226,7 @@ end module model_crust_berkeley_par
 
   depth = (1.d0 - x) * EARTH_R_KM
 
-  call get_crust_val_csem(theta,phi,depth,rho,vp,vsv,vsh,moho_depth)
+  call get_crust_val_csem(theta,phi,depth,rho,vp,vsv,vsh,moho_depth,moho_only)
 
   ! using crustal values
   if (USE_OLD_VERSION_FORMAT) then
@@ -266,7 +266,7 @@ end module model_crust_berkeley_par
 !--------------------------------------------------------------------------------------------------
 !
 
-  subroutine get_crust_val_csem(theta,phi,z,rho,vp,vsv,vsh,moho_depth)
+  subroutine get_crust_val_csem(theta,phi,z,rho,vp,vsv,vsh,moho_depth,moho_only)
 
   use model_crust_berkeley_par
 
@@ -274,6 +274,7 @@ end module model_crust_berkeley_par
 
   double precision,intent(in) :: theta,phi,z
   double precision,intent(out) :: rho,vp,vsv,vsh,moho_depth
+  logical,intent(in) :: moho_only
 
   ! local parameters
   ! 4-th order GLL positions
@@ -290,12 +291,21 @@ end module model_crust_berkeley_par
   double precision,external :: moho_filtre
   double precision,external :: lagrange
 
+  ! initialize
+  rho = 0.d0
+  vp = 0.d0
+  vsv = 0.d0
+  vsh = 0.d0
+
   ! get moho depth
   moho_depth = moho1D_depth - moho_filtre(theta,phi)
 
   !debug
   !print *,"debug: [get_crust_val_csem] Moho depth:",moho_depth, &
   !        "moho1D_depth:",moho1D_depth,"moho_filtre:",moho_filtre(theta,phi)
+
+  ! check if anything further to do or return only moho
+  if (moho_only) return
 
   !
   ! horizontal interpolation for all registered depths

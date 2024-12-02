@@ -524,6 +524,10 @@
       ! for flat topography, NEX = 32 setting still okay
       nex_minimum = 32
     endif
+
+    ! Berkeley coarse global mesh modification (to allow for small testing examples)
+    if (REFERENCE_1D_MODEL == REFERENCE_MODEL_SEMUCB) nex_minimum = 32
+
     ! checks nex
     if (NEX_XI < nex_minimum) &
       stop 'NEX_XI must be greater to cut the sphere into slices with positive Jacobian'
