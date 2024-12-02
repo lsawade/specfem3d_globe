@@ -222,10 +222,6 @@
   integer :: i,j,k,k_corresp,ispec,ispec2D,iglob_cm,iglob_oc,iglob_ic,ispec_selected
 
   ! for surface elements exactly on the CMB
-
-  ! checks if anything to do
-  if (NSPEC_OUTER_CORE == 0) return
-
 ! openmp solver
 !$OMP PARALLEL if (nspec2D_top > 500) &
 !$OMP DEFAULT(SHARED) &
@@ -361,10 +357,6 @@
   integer :: i,j,k,k_corresp,ispec,ispec2D,iglob_cm,iglob_oc,ispec_selected
 
   ! for surface elements exactly on the CMB
-
-  ! checks if anything to do
-  if (NSPEC_OUTER_CORE == 0) return
-
 ! openmp solver
 !$OMP PARALLEL if (nspec2D_top > 500) &
 !$OMP DEFAULT(SHARED) &
@@ -456,10 +448,6 @@
   integer :: i,j,k,k_corresp,ispec,ispec2D,iglob_oc,iglob_ic,ispec_selected
 
   ! for surface elements exactly on the ICB
-
-  ! checks if anything to do
-  if (NSPEC_OUTER_CORE == 0) return
-
 ! openmp solver
 !$OMP PARALLEL if (nspec_bottom > 500) &
 !$OMP DEFAULT(SHARED) &
@@ -756,10 +744,6 @@
   integer :: i,j,k,k_corresp,ispec,ispec2D,iglob,iglob_mantle,iglob_inner_core,ispec_selected
 
   ! for surface elements exactly on the CMB
-
-  ! checks if anything to do
-  if (NSPEC_OUTER_CORE == 0) return
-
 ! openmp solver
 !$OMP PARALLEL if (nspec_bottom > 500) &
 !$OMP DEFAULT(SHARED) &
@@ -820,6 +804,7 @@
   enddo
 !$OMP ENDDO NOWAIT
 
+  ! for surface elements exactly on the ICB
 !$OMP DO
   do ispec2D = 1,nspec2D_top ! NSPEC2D_TOP(IREGION_INNER_CORE)
 
@@ -926,10 +911,6 @@
   integer :: i,j,k,k_corresp,ispec,ispec2D,iglob,iglob_mantle,ispec_selected
 
   ! for surface elements exactly on the CMB
-
-  ! checks if anything to do
-  if (NSPEC_OUTER_CORE == 0) return
-
 ! openmp solver
 !$OMP PARALLEL if (nspec_bottom > 500) &
 !$OMP DEFAULT(SHARED) &
@@ -1041,10 +1022,6 @@
   integer :: i,j,k,k_corresp,ispec,ispec2D,iglob,iglob_inner_core,ispec_selected
 
   ! for surface elements exactly on the ICB
-
-  ! checks if anything to do
-  if (NSPEC_OUTER_CORE == 0) return
-
 ! openmp solver
 !$OMP PARALLEL if (nspec2D_top > 500) &
 !$OMP DEFAULT(SHARED) &

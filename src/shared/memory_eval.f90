@@ -555,12 +555,12 @@
   !
   ! if absorbing_conditions are not set or if NCHUNKS=6, only one mass matrix is needed
   ! for the sake of performance, only "rmassz" array will be filled and "rmassx" & "rmassy" will be fictitious / unused
-  if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
-     NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
-  else
-     NGLOB_XY_CM = 0
-  endif
+  NGLOB_XY_CM = 0
   NGLOB_XY_IC = 0
+
+  if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
+    NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
+  endif
 
   if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
     NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)

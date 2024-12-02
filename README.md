@@ -62,6 +62,11 @@ involved in the community and keep them in the specfem3d github wiki:
 [specfem3d wiki](https://github.com/SPECFEM/specfem3d/wiki)
 
 
+## Our contributors :sparkles:
+
+[![SPECFEM3D_GLOBE contributors](https://contrib.rocks/image?repo=SPECFEM/specfem3d_globe)](https://github.com/SPECFEM/specfem3d_globe/graphs/contributors)
+
+
 ## Computational Infrastructure for Geodynamics (CIG)
 
 SPECFEM3D_GLOBE is part of the software that is hosted by the Computational Infrastructure for Geodynamics (CIG). It is available on the CIG website [here (SPECFEM3D_GLOBE)](https://geodynamics.org/resources/specfem3d).

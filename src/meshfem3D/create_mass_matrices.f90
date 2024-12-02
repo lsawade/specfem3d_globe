@@ -56,8 +56,8 @@
   use regions_mesh_par2, only: &
     xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore, &
     gammaxstore,gammaystore,gammazstore,rhostore,kappavstore, &
-    rmassx,rmassy,rmassz,b_rmassx,b_rmassy, &
-    nglob_xy
+    rmassx,rmassy,rmassz,b_rmassx,b_rmassy,rmass_ocean_load, &
+    nglob_xy,nglob_oceans
 
   implicit none
 
@@ -75,10 +75,61 @@
   ! local parameters
   double precision :: weight
   real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl,jacobianl
+  integer :: ispec,i,j,k,iglob,ier
 
-  integer :: ispec,i,j,k,iglob
+  ! initializes
+  nglob_xy = 0      ! for rmassx/rmassy
+  nglob_oceans = 0  ! for ocean load mass matrix
 
-  ! initializes matrices
+  ! if absorbing_conditions are not set or if NCHUNKS=6, only one mass matrix is needed
+  ! for the sake of performance, only "rmassz" array will be filled and "rmassx" & "rmassy" will be obsolete
+  if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
+    ! crust/mantle region uses different rmassx/rmassy/rmassz for absorbing boundary
+    if (iregion_code == IREGION_CRUST_MANTLE) nglob_xy = nglob
+  endif
+
+  if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
+    ! rotation in solid domains uses different rmassx/rmassy/rmassz
+    if (iregion_code == IREGION_CRUST_MANTLE .or. &
+        iregion_code == IREGION_INNER_CORE) nglob_xy = nglob
+  endif
+
+  ! ocean load mass matrix
+  if (OCEANS) then
+    ! ocean load only applies in crust/mantle region
+    if (iregion_code == IREGION_CRUST_MANTLE) nglob_oceans = nglob
+  endif
+
+  ! allocates mass matrices in this slice (will be fully assembled in the solver)
+  allocate(rmassz(nglob),stat=ier)
+  if (ier /= 0) stop 'Error in allocate 22'
+  rmassz(:) = 0.0_CUSTOM_REAL
+
+  allocate(rmassx(nglob_xy), &
+           rmassy(nglob_xy), &
+           stat=ier)
+  if (ier /= 0) stop 'Error in allocate 21'
+  rmassx(:) = 0.0_CUSTOM_REAL
+  rmassy(:) = 0.0_CUSTOM_REAL
+
+  allocate(b_rmassx(nglob_xy), &
+           b_rmassy(nglob_xy),stat=ier)
+  if (ier /= 0) stop 'Error in allocate b_21'
+  b_rmassx(:) = 0.0_CUSTOM_REAL
+  b_rmassy(:) = 0.0_CUSTOM_REAL
+
+  ! allocates ocean load mass matrix as well if oceans
+  allocate(rmass_ocean_load(nglob_oceans),stat=ier)
+  if (ier /= 0) stop 'Error in allocate 22'
+  rmass_ocean_load(:) = 0.0_CUSTOM_REAL
+
+  ! checks if anything to do
+  if (iregion_code == IREGION_TRINFINITE .or. iregion_code == IREGION_INFINITE) return
+
+  ! check if anything to do (must have region domain points)
+  if (nglob == 0) return
+
+  ! setup matrices
   !
   ! in the case of Stacey boundary conditions, add C*delta/2 contribution to the mass matrix
   ! on the Stacey edges for the crust_mantle and outer_core regions but not for the inner_core region
@@ -89,18 +140,7 @@
   !
   ! Now also handle EXACT_MASS_MATRIX_FOR_ROTATION, which requires similar corrections
 
-  rmassx(:) = 0._CUSTOM_REAL
-  rmassy(:) = 0._CUSTOM_REAL
-  rmassz(:) = 0._CUSTOM_REAL
-
-  b_rmassx(:) = 0._CUSTOM_REAL
-  b_rmassy(:) = 0._CUSTOM_REAL
-
-  ! checks if anything to do
-  if (iregion_code == IREGION_TRINFINITE .or. iregion_code == IREGION_INFINITE) return
-
   ! first create the main standard mass matrix with no corrections
-
 ! openmp mesher
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec,i,j,k,iglob,weight, &
@@ -427,6 +467,14 @@
   ! adds contributions to mass matrix to stabilize Stacey conditions
   select case (iregion_code)
   case (IREGION_CRUST_MANTLE)
+
+    ! compatibility with old versions (6.x, 7.x)
+    if (USE_OLD_VERSION_FORMAT) then
+      ! note: this will override the rotation contributions added in case before this routine call
+      rmassx(:) = rmassz(:)
+      rmassy(:) = rmassz(:)
+    endif
+
     do iface = 1,num_abs_boundary_faces
 
       ispec = abs_boundary_ispec(iface)

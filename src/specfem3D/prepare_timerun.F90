@@ -336,6 +336,7 @@
      endif
   endif
   rmassz_inner_core = 1._CUSTOM_REAL / rmassz_inner_core
+
   ! outer core
   rmass_outer_core = 1._CUSTOM_REAL / rmass_outer_core
 
