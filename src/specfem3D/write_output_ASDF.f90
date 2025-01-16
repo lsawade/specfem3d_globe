@@ -1301,9 +1301,9 @@
   use constants, only: IIN,myrank
 
   implicit none
-  character(len=*) :: filestring
-  character(len=*) :: filename
-  integer,intent(out) :: filesize
+  character(len=*), intent(inout) :: filestring
+  character(len=*), intent(in) :: filename
+  integer, intent(out) :: filesize
 
   ! local parameters
   integer :: ier

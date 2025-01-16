@@ -33,6 +33,8 @@
 
   module model_sea1d_par
 
+  implicit none
+
   ! number of layers in DATA/Lebedev_sea99 1D model
   integer, parameter :: NR_SEA1D = 163
 

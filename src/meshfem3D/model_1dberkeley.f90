@@ -579,7 +579,7 @@ end module model_1dberkeley_par
 
   ! local parameters
   double precision :: moho_radius
-  double precision :: earthradius = 6371.d0
+  double precision, parameter :: earthradius = 6371.d0
 
   ! get moho radius (in km)
   call determine_1dberkeley_moho_radius(moho_radius)

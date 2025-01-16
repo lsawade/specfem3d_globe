@@ -53,6 +53,8 @@
 
   module model_1dref_par
 
+  implicit none
+
   ! number of layers in DATA/s362ani/REF
   integer, parameter :: NR_REF = 750
 

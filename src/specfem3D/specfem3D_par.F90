@@ -1533,6 +1533,7 @@ end module my_libxsmm
   use constants_solver, only: NPROCTOT_VAL,MAX_STRING_LEN,CUSTOM_REAL
   use manager_hdf5
 
+  implicit none
 
   integer :: info, comm
   character(len=MAX_STRING_LEN) :: file_name, group_name

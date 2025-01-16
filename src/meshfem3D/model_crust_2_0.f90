@@ -48,6 +48,8 @@
 
   module model_crust_2_0_par
 
+  implicit none
+
   ! crustal_model_constants
   ! crustal model parameters for crust2.0
   integer, parameter :: CRUST_NP = 8

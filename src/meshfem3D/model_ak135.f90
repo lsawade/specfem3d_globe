@@ -54,6 +54,8 @@
 
   module model_ak135_par
 
+  implicit none
+
   ! number of layers in DATA/ak135/ak135.dat
   integer, parameter :: NR_AK135F_NO_MUD = 136
 

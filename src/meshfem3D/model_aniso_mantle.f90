@@ -42,6 +42,8 @@
 
   module model_aniso_mantle_par
 
+  implicit none
+
   ! model_aniso_mantle_variables
   double precision,dimension(:,:,:,:),allocatable :: AMM_V_beta
   double precision,dimension(:),allocatable :: AMM_V_pro

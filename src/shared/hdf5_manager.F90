@@ -607,7 +607,7 @@ contains
     character(len=64) :: tempstr
 
     ! flag if dataset exists
-    logical           :: exists = .false.
+    logical           :: exists
 
     ! saves mesh file external_mesh.h5
     tempstr = "/external_mesh.h5"
@@ -629,7 +629,9 @@ contains
     if (myrank == 0) then
       call h5_open_file(filename)
       ! check if dataset exists
+      exists = .false.
       call h5_check_dataset_exists(dset_name, exists)
+
       if (.not. exists) then
         call h5_create_dataset_gen(dset_name, (/sum(offset(:))/), 1, CUSTOM_REAL)
       endif
@@ -1115,7 +1117,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     integer, dimension(:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 1
+    integer, parameter                :: rank = 1
     integer(HSIZE_T), dimension(1)    :: dim
 
     dim = size(data)
@@ -1143,7 +1145,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     integer, dimension(:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 1
+    integer, parameter                :: rank = 1
     integer(HSIZE_T), dimension(1)    :: dim
 
     dim = size(data)
@@ -1174,7 +1176,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 1
+    integer, parameter                :: rank = 1
     integer(HSIZE_T), dimension(1)    :: dim
 
     dim = size(data)
@@ -1212,7 +1214,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 1
+    integer, parameter                :: rank = 1
     integer(HSIZE_T), dimension(1)    :: dim
 
     dim = size(data)
@@ -1252,7 +1254,7 @@ contains
     character(len=*), dimension(:), intent(in)        :: data_in
     integer(HID_T)                                    :: dspace_id ! dataspace id is local.
     character(len=str_len), dimension(:), allocatable, target ::  data
-    integer                                           :: rank = 1
+    integer, parameter                                :: rank = 1
     integer(HSIZE_T), dimension(1)                    :: dim
     integer                                           :: i
 
@@ -1290,7 +1292,7 @@ contains
     character(len=*), dimension(:), intent(in)        :: data_in
     integer(HID_T)                                    :: dspace_id ! dataspace id is local.
     character(len=str_len), dimension(:), allocatable, target ::  data
-    integer                                           :: rank = 1
+    integer, parameter                                :: rank = 1
     integer(HSIZE_T), dimension(1)                    :: dim
     integer                                           :: i
 
@@ -1329,7 +1331,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     integer, dimension(:,:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 2
+    integer, parameter                :: rank = 2
     integer(HSIZE_T), dimension(2)    :: dim
 
     dim = shape(data)
@@ -1358,7 +1360,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     double precision, dimension(:,:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 2
+    integer, parameter                :: rank = 2
     integer(HSIZE_T), dimension(2)    :: dim
 
     dim = shape(data)
@@ -1387,7 +1389,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:,:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 2
+    integer, parameter                :: rank = 2
     integer(HSIZE_T), dimension(2)    :: dim
 
     dim = shape(data)
@@ -1425,7 +1427,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:,:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 2
+    integer, parameter                :: rank = 2
     integer(HSIZE_T), dimension(2)    :: dim
 
     dim = shape(data)
@@ -1464,7 +1466,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:,:,:,:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 4
+    integer, parameter                :: rank = 4
     integer(HSIZE_T), dimension(4)    :: dim
 
     dim = shape(data)
@@ -1502,7 +1504,7 @@ contains
     character(len=*), intent(in)      :: dataset_name
     character(len=*), dimension(:,:), intent(in) :: data
     integer(HID_T)                    :: dspace_id ! dataspace id is local.
-    integer                           :: rank = 2
+    integer, parameter                :: rank = 2
     integer(HSIZE_T), dimension(2)    :: dim
 
     ! write string array for undef_mat_prop
@@ -1530,7 +1532,7 @@ contains
   subroutine h5_add_attribute_i(attribute_name, data)
     implicit none
     integer(HID_T)                             :: aspace_id, atype_id, attr_id ! attribute id
-    integer                                    :: rank = 1 ! attribute rank
+    integer, parameter                         :: rank = 1 ! attribute rank
     integer, dimension(:), intent(in)          :: data
     integer(HSIZE_T)                           :: taglen
     character(len=*), intent(in)               :: attribute_name
@@ -1589,8 +1591,8 @@ contains
 
   subroutine h5_set_sieve_buffer_size()
     implicit none
-    integer(hsize_t)       :: buf_size  = 1*1024*1024   ! 1 MB
-    integer(hsize_t)       :: alig_size = 1*1024*1024   ! 1 MB
+    integer(hsize_t), parameter :: buf_size  = 1*1024*1024   ! 1 MB
+    integer(hsize_t), parameter :: alig_size = 1*1024*1024   ! 1 MB
     call h5pset_sieve_buf_size_f(fplist_id, buf_size, error) ! buf_size may vary depending on machiens
     call check_error()
     call h5pset_alignment_f(fplist_id, buf_size, alig_size, error)
@@ -1603,7 +1605,7 @@ contains
 
   subroutine h5_set_buffer_size()
     implicit none
-    integer(hsize_t)       :: buf_size = 1*1024*1024    ! 1 MB
+    integer(hsize_t), parameter :: buf_size = 1*1024*1024    ! 1 MB
     call h5pset_buffer_f(plist_id, buf_size, error)
     call check_error()
   end subroutine h5_set_buffer_size
@@ -2386,7 +2388,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2434,7 +2436,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2483,7 +2485,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2537,7 +2539,7 @@ contains
     logical, intent(in)                                         :: if_collective
     ! local parameters
     integer, dimension(:), allocatable, target                  :: data
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2590,7 +2592,7 @@ contains
     logical, intent(in)                                         :: if_collective
     ! local parameters
     integer, dimension(:), allocatable, target                  :: data
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2643,7 +2645,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2696,7 +2698,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2751,7 +2753,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2806,7 +2808,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2861,7 +2863,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -2912,7 +2914,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -2962,7 +2964,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -3013,7 +3015,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -3069,7 +3071,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -3125,7 +3127,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -3175,7 +3177,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 3
+    integer, parameter                                          :: rank = 3
     integer(HSIZE_T), dimension(3)                              :: dim
     integer(HSIZE_T), dimension(3)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)                             :: offset ! the position where the datablock is inserted
@@ -3226,7 +3228,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 3
+    integer, parameter                                          :: rank = 3
     integer(HSIZE_T), dimension(3)                              :: dim
     integer(HSIZE_T), dimension(3)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)                             :: offset ! the position where the datablock is inserted
@@ -3278,7 +3280,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 3
+    integer, parameter                                          :: rank = 3
     integer(HSIZE_T), dimension(3)                              :: dim
     integer(HSIZE_T), dimension(3)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)                             :: offset ! the position where the datablock is inserted
@@ -3334,7 +3336,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 3
+    integer, parameter                                          :: rank = 3
     integer(HSIZE_T), dimension(3)                              :: dim
     integer(HSIZE_T), dimension(3)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)                             :: offset ! the position where the datablock is inserted
@@ -3391,7 +3393,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 4
+    integer, parameter                                          :: rank = 4
     integer(HSIZE_T), dimension(4)                              :: dim
     integer(HSIZE_T), dimension(4)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                             :: offset ! the position where the datablock is inserted
@@ -3443,7 +3445,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 4
+    integer, parameter                                          :: rank = 4
     integer(HSIZE_T), dimension(4)                              :: dim
     integer(HSIZE_T), dimension(4)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                             :: offset ! the position where the datablock is inserted
@@ -3495,7 +3497,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 4
+    integer, parameter                                          :: rank = 4
     integer(HSIZE_T), dimension(4)                              :: dim
     integer(HSIZE_T), dimension(4)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                             :: offset ! the position where the datablock is inserted
@@ -3552,7 +3554,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 4
+    integer, parameter                                          :: rank = 4
     integer(HSIZE_T), dimension(4)                              :: dim
     integer(HSIZE_T), dimension(4)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                             :: offset ! the position where the datablock is inserted
@@ -3610,7 +3612,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 5
+    integer, parameter                                          :: rank = 5
     integer(HSIZE_T), dimension(5)                              :: dim
     integer(HSIZE_T), dimension(5)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(5)                             :: offset ! the position where the datablock is inserted
@@ -3668,7 +3670,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 5
+    integer, parameter                                          :: rank = 5
     integer(HSIZE_T), dimension(5)                              :: dim
     integer(HSIZE_T), dimension(5)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(5)                             :: offset ! the position where the datablock is inserted
@@ -3730,15 +3732,15 @@ contains
     implicit none
     character(len=*), intent(in)         :: dataset_name
     integer, dimension(:), intent(in), target    :: data
-    integer                              :: rank = 1
+    integer, parameter                   :: rank = 1
     integer(HSIZE_T), dimension(1)       :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     ! dummy array for generate 0 length dataset
-    integer, dimension(1) :: dummy_1d_array = (/0/)
+    integer, dimension(1), parameter :: dummy_1d_array = (/0/)
 
     dim = shape(data)
 
@@ -3788,15 +3790,15 @@ contains
     character(len=*), intent(in)         :: attribute_name
     integer, dimension(:), intent(in), target    :: data
     integer, intent(in)                  :: attr_data
-    integer                              :: rank = 1
+    integer, parameter                   :: rank = 1
     integer(HSIZE_T), dimension(1)       :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     ! dummy array for generate 0 length dataset
-    integer, dimension(1) :: dummy_1d_array = (/0/)
+    integer, dimension(1), parameter :: dummy_1d_array = (/0/)
 
     dim = shape(data)
 
@@ -3846,11 +3848,11 @@ contains
     implicit none
     character(len=*), intent(in)                                :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:), intent(in), target    :: data
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
 
@@ -3895,11 +3897,11 @@ contains
     implicit none
     character(len=*), intent(in)         :: dataset_name
     integer, dimension(:,:), intent(in), target    :: data
-    integer                              :: rank = 2
+    integer, parameter                   :: rank = 2
     integer(HSIZE_T), dimension(2)       :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -3941,11 +3943,11 @@ contains
     character(len=*), intent(in)         :: attribute_name
     integer, dimension(:,:), intent(in), target    :: data
     integer, intent(in)                  :: attr_data
-    integer                              :: rank = 2
+    integer, parameter                   :: rank = 2
     integer(HSIZE_T), dimension(2)       :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -3988,11 +3990,11 @@ contains
     implicit none
     character(len=*), intent(in)                                  :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:,:), intent(in), target    :: data
-    integer                                                       :: rank = 2
+    integer, parameter                                            :: rank = 2
     integer(HSIZE_T), dimension(2)                                :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -4036,11 +4038,11 @@ contains
     implicit none
     character(len=*), intent(in)                                  :: dataset_name
     double precision, dimension(:,:), intent(in), target    :: data
-    integer                                                       :: rank = 2
+    integer, parameter                                            :: rank = 2
     integer(HSIZE_T), dimension(2)                                :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -4079,11 +4081,11 @@ contains
     implicit none
     character(len=*), intent(in)                     :: dataset_name
     integer, dimension(:,:,:), intent(in), target    :: data
-    integer                                          :: rank = 3
+    integer, parameter                               :: rank = 3
     integer(HSIZE_T), dimension(3)                   :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -4122,11 +4124,11 @@ contains
     implicit none
     character(len=*), intent(in)                                  :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:,:,:), intent(in), target  :: data
-    integer                                                       :: rank = 3
+    integer, parameter                                            :: rank = 3
     integer(HSIZE_T), dimension(3)                                :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -4171,11 +4173,11 @@ contains
     implicit none
     character(len=*), intent(in)                     :: dataset_name
     integer, dimension(:,:,:,:), intent(in), target  :: data
-    integer                                          :: rank = 4
+    integer, parameter                               :: rank = 4
     integer(HSIZE_T), dimension(4)                   :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -4214,11 +4216,11 @@ contains
     implicit none
     character(len=*), intent(in)                                   :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:,:,:,:), intent(in), target :: data
-    integer                                                        :: rank = 4
+    integer, parameter                                             :: rank = 4
     integer(HSIZE_T), dimension(4)                                 :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -4262,11 +4264,11 @@ contains
     implicit none
     character(len=*), intent(in)                                      :: dataset_name
     real(kind=CUSTOM_REAL), dimension(:,:,:,:,:), intent(in), target  :: data
-    integer                                                           :: rank = 5
+    integer, parameter                                                :: rank = 5
     integer(HSIZE_T), dimension(5)                                    :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data)
@@ -4315,11 +4317,11 @@ contains
     logical, dimension(:), intent(in)          :: data_in
     integer, dimension(:), allocatable, target :: data
 
-    integer                            :: rank = 1
+    integer, parameter                 :: rank = 1
     integer(HSIZE_T), dimension(1)     :: dim
 
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     dim = shape(data_in)
@@ -4366,7 +4368,7 @@ contains
     integer, dimension(2), intent(in)                           :: offset_in ! the position where the datablock is inserted
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset
@@ -4420,7 +4422,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(3)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)                             :: offset ! the position where the datablock is inserted
@@ -4475,7 +4477,7 @@ contains
     logical, intent(in)                                         :: if_collective
     ! local parameters
     integer, dimension(:), allocatable, target                  :: data
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4534,7 +4536,7 @@ contains
     logical, intent(in)                                         :: if_collective
     ! local parameters
     integer, dimension(:), allocatable, target                  :: data
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4594,7 +4596,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4646,7 +4648,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4698,7 +4700,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4755,7 +4757,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4811,7 +4813,7 @@ contains
 !    integer, dimension(:), intent(in)                           :: offset_in
 !    logical, intent(in)                                         :: if_collective
 !    ! local parameters
-!    integer                                                     :: rank = 1
+!    integer, parameter                                          :: rank = 1
 !    integer(HSIZE_T), dimension(1)                              :: dim
 !    integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
 !    integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4861,7 +4863,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 1
+    integer, parameter                                          :: rank = 1
     integer(HSIZE_T), dimension(1)                              :: dim
     integer(HSIZE_T), dimension(1)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(1)                             :: offset ! the position where the datablock is inserted
@@ -4914,7 +4916,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -4964,7 +4966,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -5015,7 +5017,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -5072,7 +5074,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -5130,7 +5132,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -5178,7 +5180,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 2
+    integer, parameter                                          :: rank = 2
     integer(HSIZE_T), dimension(2)                              :: dim
     integer(HSIZE_T), dimension(2)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(2)                             :: offset ! the position where the datablock is inserted
@@ -5227,7 +5229,7 @@ contains
     integer, dimension(:), intent(in)             :: offset_in
     logical, intent(in)                           :: if_collective
     ! local parameters
-    integer                                       :: rank = 3
+    integer, parameter                            :: rank = 3
     integer(HSIZE_T), dimension(3)                :: dim
     integer(HSIZE_T), dimension(3)                :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)               :: offset ! the position where the datablock is inserted
@@ -5279,7 +5281,7 @@ contains
     integer, dimension(:), intent(in)             :: offset_in
     logical, intent(in)                           :: if_collective
     ! local parameters
-    integer                                       :: rank = 3
+    integer, parameter                            :: rank = 3
     integer(HSIZE_T), dimension(3)                :: dim
     integer(HSIZE_T), dimension(3)                :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)               :: offset ! the position where the datablock is inserted
@@ -5333,7 +5335,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 3
+    integer, parameter                                          :: rank = 3
     integer(HSIZE_T), dimension(3)                              :: dim
     integer(HSIZE_T), dimension(3)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)                             :: offset ! the position where the datablock is inserted
@@ -5388,7 +5390,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 3
+    integer, parameter                                          :: rank = 3
     integer(HSIZE_T), dimension(3)                              :: dim
     integer(HSIZE_T), dimension(3)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(3)                             :: offset ! the position where the datablock is inserted
@@ -5443,7 +5445,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 4
+    integer, parameter                                          :: rank = 4
     integer(HSIZE_T), dimension(4)                              :: dim
     integer(HSIZE_T), dimension(4)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                             :: offset ! the position where the datablock is inserted
@@ -5493,7 +5495,7 @@ contains
     integer, dimension(:), intent(in)                           :: offset_in
     logical, intent(in)                                         :: if_collective
     ! local parameters
-    integer                                                     :: rank = 4
+    integer, parameter                                          :: rank = 4
     integer(HSIZE_T), dimension(4)                              :: dim
     integer(HSIZE_T), dimension(4)                              :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                             :: offset ! the position where the datablock is inserted
@@ -5544,7 +5546,7 @@ contains
     integer, dimension(:), intent(in)                              :: offset_in
     logical, intent(in)                                            :: if_collective
     ! local parameters
-    integer                                                        :: rank = 4
+    integer, parameter                                             :: rank = 4
     integer(HSIZE_T), dimension(4)                                 :: dim
     integer(HSIZE_T), dimension(4)                                 :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                                :: offset ! the position where the datablock is inserted
@@ -5599,7 +5601,7 @@ contains
     integer, dimension(:), intent(in)                              :: offset_in
     logical, intent(in)                                            :: if_collective
     ! local parameters
-    integer                                                        :: rank = 4
+    integer, parameter                                             :: rank = 4
     integer(HSIZE_T), dimension(4)                                 :: dim
     integer(HSIZE_T), dimension(4)                                 :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(4)                                :: offset ! the position where the datablock is inserted
@@ -5654,7 +5656,7 @@ contains
     integer, dimension(:), intent(in)                                :: offset_in
     logical, intent(in)                                              :: if_collective
     ! local parameters
-    integer                                                          :: rank = 5
+    integer, parameter                                               :: rank = 5
     integer(HSIZE_T), dimension(5)                                   :: dim
     integer(HSIZE_T), dimension(5)                                   :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(5)                                  :: offset ! the position where the datablock is inserted
@@ -5711,7 +5713,7 @@ contains
     integer, dimension(:), intent(in)                                :: offset_in
     logical, intent(in)                                              :: if_collective
     ! local parameters
-    integer                                                          :: rank = 5
+    integer, parameter                                               :: rank = 5
     integer(HSIZE_T), dimension(5)                                   :: dim
     integer(HSIZE_T), dimension(5)                                   :: count ! size of hyperslab
     integer(HSSIZE_T), dimension(5)                                  :: offset ! the position where the datablock is inserted
@@ -5846,7 +5848,7 @@ contains
     endif
 
     call synchronize_all()
-  end subroutine
+  end subroutine h5_gather_dsetsize
 
 !
 !-------------------------------------------------------------------------------
@@ -5866,7 +5868,7 @@ contains
     character(len=128)                            :: group_and_dataset_name
     integer(HID_T)                                :: dspace_id
     character(len=10) :: tempstr
-    character(len=5)  :: gname_proc_head = "proc_"
+    character(len=5), parameter :: gname_proc_head = "proc_"
     character(len=64) :: group_name
 
     ! gather dataset dimension of other processors

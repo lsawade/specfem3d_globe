@@ -45,7 +45,7 @@ module AVS_DX_global_mod
     real(kind=4), dimension(:), allocatable :: x_adios, y_adios, z_adios
     integer(kind=4), dimension(:), allocatable :: idoubling, iglob1, iglob2, &
         iglob3, iglob4, iglob5, iglob6, iglob7, iglob8
-  endtype
+  endtype avs_dx_global_t
 
 contains
 

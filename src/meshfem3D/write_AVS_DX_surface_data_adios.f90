@@ -38,7 +38,7 @@ module AVS_DX_surface_mod
     integer(kind=4), dimension(:), allocatable :: idoubling, iglob1, iglob2, &
         iglob3, iglob4
     real(kind=4), dimension(:), allocatable :: dvp, dvs
-  endtype
+  endtype avs_dx_surface_t
 
 contains
 
@@ -518,4 +518,4 @@ subroutine free_AVS_DX_surfaces_data_adios(avs_dx_adios, MODEL_3D_MANTLE_PERTUBA
 end subroutine free_AVS_DX_surfaces_data_adios
 
 
-end module
+end module AVS_DX_surface_mod

@@ -42,6 +42,8 @@
 
   module model_sea99_s_par
 
+  implicit none
+
   double precision,dimension(:,:,:), allocatable :: sea99_vs
   double precision,dimension(:), allocatable :: sea99_depth
   double precision :: sea99_ddeg

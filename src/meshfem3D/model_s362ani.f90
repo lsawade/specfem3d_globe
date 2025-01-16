@@ -50,6 +50,8 @@
 
   module model_s362ani_par
 
+  implicit none
+
   ! used for 3D Harvard models s362ani, s362wmani, s362ani_prem and s2.9ea
   integer, parameter :: maxker = 200
   integer, parameter :: maxl   = 72

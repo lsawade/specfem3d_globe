@@ -46,7 +46,7 @@
   ! flag to mask ocean-bottom degrees of freedom for ocean load
   logical, dimension(:), allocatable :: updated_dof_ocean_load
   real(kind=CUSTOM_REAL), dimension(:), allocatable :: valence, normx, normy, normz
-  real :: norm = 1.0
+  real(kind=CUSTOM_REAL) :: norm
 
   ! checks if anything to do
   if (.not. OCEANS_VAL) return

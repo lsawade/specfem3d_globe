@@ -67,6 +67,8 @@
 
   module model_sglobe_par
 
+  implicit none
+
   ! three_d_mantle_model_constants
   integer, parameter :: NK_20 = 20  ! radial basis
   integer, parameter :: NS_35 = 35  ! horizontal basis
@@ -250,7 +252,7 @@
   double precision, parameter :: SCALE_VP = 0.5d0    ! scaling factor used in the inversion by Chang et al.
 
   ! flag to use different vp scaling, the P12 model will be taken for vp perturbations to PREM
-  logical :: USE_P12_VP_PERTURBATION = .false.
+  logical, parameter :: USE_P12_VP_PERTURBATION = .false.
 
   !-----------------------------------------------------------------------------
 

@@ -44,6 +44,8 @@
 
   module model_full_sh_crust_par
 
+  implicit none
+
   ! three_d_mantle_model_constants
   integer, parameter :: NS_40 = 40
   integer, parameter :: NSH_40 = (NS_40+1)**2
@@ -379,6 +381,8 @@
 
 
   module model_full_sh_mantle_par
+
+  implicit none
 
   ! three_d_mantle_model_constants
   integer, parameter :: NK_20 = 20
@@ -1252,8 +1256,8 @@
   double precision,intent(inout) :: xelm(NGNOD),yelm(NGNOD),zelm(NGNOD)
 
   ! PREM reference values
-  double precision :: RTOPDDOUBLEPRIME_ = 3630000.d0
-  double precision :: RCMB_ = 3480000.d0
+  double precision, parameter :: RTOPDDOUBLEPRIME_ = 3630000.d0
+  double precision, parameter :: RCMB_ = 3480000.d0
 
   ! local parameters
   integer :: ia

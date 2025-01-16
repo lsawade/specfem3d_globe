@@ -31,10 +31,10 @@
 
   implicit none
 
-  integer value_to_read
-  character(len=*) name
-  character(len=256) string_read
-  integer ier
+  integer, intent(inout) :: value_to_read
+  character(len=*), intent(in) :: name
+  character(len=256) :: string_read
+  integer, intent(inout) :: ier
 
   call param_read(string_read, len(string_read), name, len(name), ier)
   if (ier /= 0) return
@@ -48,10 +48,10 @@
 
   implicit none
 
-  double precision value_to_read
-  character(len=*) name
+  double precision, intent(inout) :: value_to_read
+  character(len=*), intent(in) :: name
   character(len=256) string_read
-  integer ier
+  integer, intent(inout) :: ier
 
   call param_read(string_read, len(string_read), name, len(name), ier)
   if (ier /= 0) return
@@ -65,10 +65,10 @@
 
   implicit none
 
-  logical value_to_read
-  character(len=*) name
+  logical, intent(inout) :: value_to_read
+  character(len=*), intent(in) :: name
   character(len=256) string_read
-  integer ier
+  integer, intent(inout) :: ier
 
   call param_read(string_read, len(string_read), name, len(name), ier)
   if (ier /= 0) return
@@ -82,11 +82,11 @@
 
   implicit none
 
-  character(len=*) value_to_read
-  character(len=*) name
+  character(len=*), intent(inout) :: value_to_read
+  character(len=*), intent(in) :: name
   character(len=256) string_read
   integer length
-  integer ier
+  integer, intent(inout) :: ier
 
   call param_read(string_read, len(string_read), name, len(name), ier)
   if (ier /= 0) return
@@ -108,7 +108,7 @@
 
   implicit none
 
-  integer :: ier
+  integer, intent(inout) :: ier
   character(len=50) :: filename_main,filename_run0001
   logical :: exists_main_Par_file,exists_run0001_Par_file
 
@@ -159,8 +159,8 @@
 
   subroutine open_parameter_file(ier)
 
-  integer ier
-  character(len=50) filename_main,filename_run0001
+  integer, intent(inout) :: ier
+  character(len=50) :: filename_main,filename_run0001
 
   filename_main = 'DATA/Par_file'
 

@@ -380,7 +380,7 @@
   integer :: ispec_inner,ispec_outer
   integer :: ier
 
-  character(len=2),dimension(3) :: str_domain = (/ "cm", "oc", "ic" /)
+  character(len=2),dimension(3), parameter :: str_domain = (/ "cm", "oc", "ic" /)
   character(len=MAX_STRING_LEN) :: filename
   character(len=MAX_STRING_LEN) :: prname
 

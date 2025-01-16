@@ -40,7 +40,7 @@
 
   integer,intent(in) :: npow
 
-  complex(kind=CUSTOM_CMPLX),dimension(*) :: xi
+  complex(kind=CUSTOM_CMPLX),dimension(*),intent(inout) :: xi
   real(kind=CUSTOM_REAL),intent(in) :: zign,dtt
 
 ! here is the hardwired maximum size of the array
@@ -154,13 +154,13 @@
   integer,intent(in) :: npow
   real(kind=CUSTOM_REAL),intent(in)  :: dtt,zign
 
-  complex(kind=CUSTOM_CMPLX) :: s(*)
-  real(kind=CUSTOM_REAL) :: r(*)       ! note that this is real, not double precision
+  complex(kind=CUSTOM_CMPLX),intent(inout) :: s(*)
+  real(kind=CUSTOM_REAL),intent(inout) :: r(*)       ! note that this is real, not double precision
 
 ! here is the hardwired maximum size of the array
 ! Aug 2016: if this routine is called many times (for different mesh points at which the SEM is coupled with FK)
 ! Aug 2016: this should be moved to the calling program and precomputed once and for all
-  real(kind=CUSTOM_REAL) :: mpow(30)
+  real(kind=CUSTOM_REAL), intent(inout) :: mpow(30)
 
   ! local parameters
   integer :: nsmp, nhalf
@@ -186,7 +186,7 @@
 
   integer, parameter :: CUSTOM_CMPLX = 8
 
-  complex(kind=CUSTOM_CMPLX) :: s(*)
+  complex(kind=CUSTOM_CMPLX),intent(inout) :: s(*)
   integer, intent(in) :: np2
 
   ! local parameters
