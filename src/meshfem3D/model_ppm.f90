@@ -40,6 +40,8 @@
 
   module model_ppm_par
 
+  implicit none
+
   ! ----------------------
 
   ! scale perturbations in shear speed to perturbations in density and vp
@@ -477,7 +479,7 @@
   !    endif
   !  enddo
 
-  end subroutine
+  end subroutine get_PPMmodel_value
 
 !
 !--------------------------------------------------------------------------------------------------
@@ -499,7 +501,7 @@
   ! only exponential
   weight = exp(-0.5*x*x/(sigma*sigma))
 
-  end subroutine
+  end subroutine get_Gaussianweight
 
 !
 !--------------------------------------------------------------------------------------------------
@@ -1056,6 +1058,6 @@
   !endif
   !call synchronize_all()
 
-  end subroutine
+  end subroutine smooth_model
 
 

@@ -37,6 +37,8 @@
 
   use constants, only: CUSTOM_REAL
 
+  implicit none
+
   ! GLL model_variables
   type model_gll_variables
     !TODO: check if `sequence` is needed

@@ -41,6 +41,8 @@
 
   module model_crustmaps_par
 
+  implicit none
+
   ! General Crustmaps parameters
   integer, parameter :: NLAYERS_CRUSTMAP = 5
 

@@ -35,13 +35,17 @@
 
 
   module gapp2_mantle_model_constants
-    ! data file resolution
-    integer, parameter :: ma = 288,mo = 576,mr = 32,mr1 = 64
-    integer :: no,na,nnr,nr1
-    real :: dela,delo
-    ! allocatable model arrays
-    real,dimension(:),allocatable :: dep,dep1,vp1
-    real,dimension(:,:,:),allocatable :: vp3
+
+  implicit none
+
+  ! data file resolution
+  integer, parameter :: ma = 288,mo = 576,mr = 32,mr1 = 64
+  integer :: no,na,nnr,nr1
+  real :: dela,delo
+  ! allocatable model arrays
+  real,dimension(:),allocatable :: dep,dep1,vp1
+  real,dimension(:,:,:),allocatable :: vp3
+
   end module gapp2_mantle_model_constants
 
 !

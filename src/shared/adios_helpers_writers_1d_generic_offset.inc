@@ -15,7 +15,7 @@
   integer, intent(in) :: myrank, sizeprocs
   integer(kind=8), intent(in) :: local_dim
   integer(kind=8), intent(in) :: global_dim, offset
-  character(len=*) :: array_name
+  character(len=*), intent(in) :: array_name
   ! Variables
   integer :: adios_err
   integer(kind=8) :: array_size

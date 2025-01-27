@@ -631,7 +631,7 @@ contains
   type(adios2_io), intent(in) :: adios_group
 #endif
   character(len=*), intent(in) :: filename
-  character(len=*) :: group_name
+  character(len=*), intent(in) :: group_name
 
   ! local parameters
   integer :: ier
@@ -695,7 +695,7 @@ contains
   !integer :: step_status
 #endif
   character(len=*), intent(in) :: filename
-  character(len=*) :: group_name
+  character(len=*), intent(in) :: group_name
 
   ! local parameters
   integer :: ier

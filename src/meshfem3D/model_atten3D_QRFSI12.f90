@@ -49,6 +49,8 @@
 
   module model_atten3D_QRFSI12_par
 
+  implicit none
+
   ! QRFSI12 constants
   integer,parameter :: NKQ = 8,MAXL_Q = 12
   integer,parameter :: NSQ=(MAXL_Q+1)**2,NDEPTHS_REFQ = 913
@@ -110,7 +112,7 @@
   if (ier /= 0) stop 'Error allocating helper array'
   xlmvec(:) = 0.0
 
-  end subroutine
+  end subroutine model_atten3D_QRFSI12_broadcast
 
 !
 !-------------------------------------------------------------------------------------------------

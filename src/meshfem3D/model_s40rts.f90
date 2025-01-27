@@ -57,6 +57,8 @@
 
   module model_s40rts_par
 
+  implicit none
+
   ! three_d_mantle_model_constants
   integer, parameter :: NK_20 = 20
   integer, parameter :: NS_40 = 40

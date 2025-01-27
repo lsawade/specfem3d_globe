@@ -207,7 +207,7 @@
   A(i) = A(j)
   A(j) = tmp
 
-  end subroutine
+  end subroutine dswap
 
 !
 !--------------------
@@ -229,7 +229,7 @@
   A(i) = A(j)
   A(j) = tmp
 
-  end subroutine
+  end subroutine iswap
 
 !
 !--------------------

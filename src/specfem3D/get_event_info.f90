@@ -521,7 +521,7 @@ contains
     is_numeric = .true.
   endif
 
-  end function
+  end function is_numeric
 
   end subroutine get_event_info_serial
 

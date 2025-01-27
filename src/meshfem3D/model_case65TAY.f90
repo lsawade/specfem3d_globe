@@ -46,6 +46,8 @@
 
   module model_case65tay_par
 
+  implicit none
+
   ! number of layers in DATA/case65TAY/case65TAY.dat
   integer, parameter :: NR_case65TAY = 681
 

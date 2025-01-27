@@ -76,7 +76,7 @@
 
     rlog2 = log(x) / log(2.0)
 
-    end function
+    end function rlog2
 
     !---------------------------------------------------
     ! logarithm base 2 (double precision)
@@ -87,7 +87,7 @@
 
     dlog2 = log(x) / log(2.d0)
 
-    end function
+    end function dlog2
 
   end module model_scattering_par
 
@@ -175,7 +175,7 @@
   psd_vonKarman_3D = psd
   return
 
-  end function
+  end function psd_vonKarman_3D
 
 !
 !--------------------------------------------------------------------------------------------------

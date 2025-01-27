@@ -39,7 +39,7 @@ module AVS_DX_global_chunks_mod
         iglob3, iglob4
     real(kind=4), dimension(:), allocatable :: vmin, vmax
     real(kind=4), dimension(:), allocatable :: dvp, dvs
-  endtype
+  endtype avs_dx_global_chunks_t
 
 contains
 
@@ -1050,4 +1050,4 @@ contains
 
   end subroutine free_AVS_DX_global_chunks_data_adios
 
-end module
+end module AVS_DX_global_chunks_mod

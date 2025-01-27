@@ -106,7 +106,7 @@ contains
   complex(kind=CUSTOM_CMPLX) :: dphi
   complex(kind=CUSTOM_CMPLX), dimension(:), allocatable :: spectre
 
-  double precision :: pi = 4.d0 * datan(1.d0)
+  double precision, parameter :: pi = 4.d0 * datan(1.d0)
 
   ! check if anything to do
   if (.not. STF_IS_UCB_HEAVISIDE) return
@@ -154,7 +154,7 @@ contains
 
     call wtcoef(abs(freq),f1h,f2h,f3h,f4h,wt)
 
-    ! >>> STF TYPE IS SET HERE <  <  < 
+    ! STF TYPE IS SET HERE
     ! displacement
     ! if (j /= 1) spectre(j) = wt * dphi / cmplx(0.d0, 2.d0 * pi * freq)
     ! velocity
@@ -247,7 +247,7 @@ contains
   enddo
 
   return
-  end
+  end subroutine dfour1
 
   !---------------------------------------------------------------------------------
   ! subroutine 'SETGPFA'
@@ -342,7 +342,7 @@ contains
 60 continue
 
   return
-  END
+  END subroutine SETGPFA
 
   !---------------------------------------------------------------------------------
   ! subroutine 'GPFA'
@@ -441,7 +441,7 @@ contains
   endif
 
   return
-  END
+  END subroutine GPFA
 
   !---------------------------------------------------------------------------------
   !     Fortran version of *gpfa2* -
@@ -1435,7 +1435,7 @@ contains
 500 continue
 !-----( end of loop on blocks of transforms )
   return
-  end
+  end subroutine gpfa2f
 
   !---------------------------------------------------------------------------------
   !     Fortran version of *gpfa3* -
@@ -1875,7 +1875,7 @@ contains
 !-----( end of loop on blocks of transforms )
 !
   return
-  end
+  end subroutine gpfa3f
 
   !---------------------------------------------------------------------------------
   !     Fortran version of *gpfa5* -
@@ -2740,7 +2740,7 @@ contains
 !-----( end of loop on blocks of transforms )
 !
   return
-  end
+  end subroutine gpfa5f
 
 end module ucb_heaviside
 

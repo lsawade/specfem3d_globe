@@ -46,6 +46,8 @@
 
   module model_sh_mars_par
 
+  implicit none
+
   ! spherical harmonics mars model for 3D crust/mantle velocity variations
   ! model extend from the CMB at 1,550 km depth to surface, where a radius of 3,389.5 km is originally used for Mars
 

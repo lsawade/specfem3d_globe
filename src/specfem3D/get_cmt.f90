@@ -426,7 +426,7 @@
     is_numeric = .true.
   endif
 
-  end function
+  end function is_numeric
 
   !--------------------------------------------------------------
 
@@ -443,7 +443,7 @@
     is_digit = .true.
   endif
 
-  end function
+  end function is_digit
 
   end subroutine get_cmt
 
@@ -499,7 +499,7 @@
   ! return value (in dyne-cm)
   get_cmt_scalar_moment = scalar_moment * scaleM
 
-  end function
+  end function get_cmt_scalar_moment
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -527,7 +527,7 @@
   ! return value
   get_cmt_moment_magnitude = Mw
 
-  end function
+  end function get_cmt_moment_magnitude
 
 
 !
@@ -578,4 +578,4 @@
   ! return value
   get_cmt_moment_magnitude_from_M0 = Mw
 
-  end function
+  end function get_cmt_moment_magnitude_from_M0

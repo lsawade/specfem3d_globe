@@ -146,6 +146,8 @@
 
   module model_spiral_crust_par
 
+  implicit none
+
   ! crustal_model_constants
 
   ! crustal model parameters
@@ -1182,6 +1184,8 @@
 !-----------------------------------------------------------------------------------------
 
   module model_spiral_mantle_par
+
+  implicit none
 
   ! mantle_model_constants
   ! mantle model parameters
