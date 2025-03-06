@@ -141,7 +141,7 @@ end module model_1dberkeley_par
   subroutine read_1dberkeley()
 
   use model_1dberkeley_par
-  use constants, only: myrank,IMAIN,IIN,TINYVAL
+  use constants, only: myrank,IMAIN,IIN,TINYVAL,ATTENUATION_1D_WITH_3D_STORAGE
 
   implicit none
   ! local parameters
@@ -156,6 +156,23 @@ end module model_1dberkeley_par
     write(IMAIN,*) '  model file             = ',trim(berkeley_file_model1D)
     write(IMAIN,*)
     call flush_IMAIN()
+  endif
+
+  ! safety check
+  if (.not. ATTENUATION_1D_WITH_3D_STORAGE) then
+    ! note: The 1D Berkeley model as given in the SEMUCB_A3d/model1D.dat file uses 713 layers from core to top surface.
+    !       Attenuation parameters Qmu (and Qkappa) are interpolated with depth between layers.
+    !       This leads to smooth variations within elements and thus requires 3D storage for attenuation arrays.
+    !
+    !       We add this check to make sure the code is compiled with the correct setting to produce seismograms
+    !       for the most accurate Berkeley model possible.
+    print *,'Error: Invalid ATTENUATION_1D_WITH_3D_STORAGE == .false. flag for 1D Berkeley reference model!'
+    print *
+    print *,'Using the 1D Berkeley reference model needs attenuation parameters stored as 3D arrays.'
+    print *,'Please change the flag ATTENUATION_1D_WITH_3D_STORAGE to .true. in setup/constants.h, and re-compile the code.'
+    print *
+    ! stop
+    stop 'Invalid ATTENUATION_1D_WITH_3D_STORAGE flag for 1D Berkeley reference model'
   endif
 
   ! initializes number of layers
