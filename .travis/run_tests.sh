@@ -180,6 +180,8 @@ if [ "$TESTCOV" == "1" ] && [ "$TESTID" == "1" ]; then
   sed -i "s:^NTSTEP_BETWEEN_OUTPUT_INFO .*:NTSTEP_BETWEEN_OUTPUT_INFO    = 50:" DATA/Par_file
   ./run_this_example.sh
   if [[ $? -ne 0 ]]; then exit 1; fi
+  # cleanup
+  rm -rf OUTPUT_FILES* DATABASES_MPI*
   cd $WORKDIR
 fi
 echo -en 'travis_fold:end:coverage.regular-kernel\\r'
@@ -197,6 +199,8 @@ if [ "$TESTCOV" == "1" ] && [ "$TESTID" == "1" ]; then
   sed -i "s:^NTSTEP_BETWEEN_OUTPUT_INFO .*:NTSTEP_BETWEEN_OUTPUT_INFO    = 50:" DATA/Par_file
   ./run_this_example.sh
   if [[ $? -ne 0 ]]; then exit 1; fi
+  # cleanup
+  rm -rf OUTPUT_FILES* DATABASES_MPI*
   cd $WORKDIR
 fi
 echo -en 'travis_fold:end:coverage.regional-LDDRK\\r'
@@ -215,6 +219,8 @@ if [ "$TESTCOV" == "1" ] && [ "$TESTID" == "2" ]; then
   sed -i "s:^NTSTEP_BETWEEN_OUTPUT_INFO .*:NTSTEP_BETWEEN_OUTPUT_INFO    = 50:" DATA/Par_file
   ./run_this_example.sh
   if [[ $? -ne 0 ]]; then exit 1; fi
+  # cleanup
+  rm -rf OUTPUT_FILES* DATABASES_MPI*
   cd $WORKDIR
 fi
 echo -en 'travis_fold:end:coverage.regional-s40rts\\r'
@@ -225,6 +231,7 @@ echo -en 'travis_fold:end:coverage.regional-s40rts\\r'
 ## tested by github actions
 ## - EXAMPLES/regional_Greece_small
 ## - EXAMPLES/regional_sgloberani
+## - EXAMPLES/regional_Berkeley
 ## - EXAMPLES/point_force
 ## - EXAMPLES/moon_global
 ## - EXAMPLES/mars_regional
@@ -244,6 +251,8 @@ if [ "$TESTCOV" == "1" ] && [ "$TESTID" == "1" ]; then
   sed -i "s:^NTSTEP_BETWEEN_OUTPUT_INFO .*:NTSTEP_BETWEEN_OUTPUT_INFO    = 50:" DATA/Par_file
   ./run_this_example.sh
   if [[ $? -ne 0 ]]; then exit 1; fi
+  # cleanup
+  rm -rf OUTPUT_FILES* DATABASES_MPI*
   cd $WORKDIR
 fi
 echo -en 'travis_fold:end:coverage.point-force\\r'
@@ -261,6 +270,8 @@ if [ "$TESTCOV" == "1" ] && [ "$TESTID" == "2" ]; then
   sed -i "s:^NTSTEP_BETWEEN_OUTPUT_INFO .*:NTSTEP_BETWEEN_OUTPUT_INFO    = 50:" DATA/Par_file
   ./run_this_example.sh
   if [[ $? -ne 0 ]]; then exit 1; fi
+  # cleanup
+  rm -rf OUTPUT_FILES* DATABASES_MPI*
   cd $WORKDIR
 fi
 echo -en 'travis_fold:end:coverage.moon-global\\r'
@@ -278,9 +289,30 @@ if [ "$TESTCOV" == "1" ] && [ "$TESTID" == "2" ]; then
   sed -i "s:^NTSTEP_BETWEEN_OUTPUT_INFO .*:NTSTEP_BETWEEN_OUTPUT_INFO    = 50:" DATA/Par_file
   ./run_this_example.sh
   if [[ $? -ne 0 ]]; then exit 1; fi
+  # cleanup
+  rm -rf OUTPUT_FILES* DATABASES_MPI*
   cd $WORKDIR
 fi
 echo -en 'travis_fold:end:coverage.mars-regional\\r'
+
+echo 'Coverage...' && echo -en 'travis_fold:start:coverage.regional-Berkeley\\r'
+if [ "$TESTCOV" == "1" ] && [ "$TESTID" == "2" ]; then
+  ##
+  ## testing regional_Berkeley
+  ##
+  echo "##################################################################"
+  echo "EXAMPLES/regional_Berkeley/"
+  echo
+  cd EXAMPLES/regional_Berkeley/
+  sed -i "s:^RECORD_LENGTH_IN_MINUTES .*:RECORD_LENGTH_IN_MINUTES = 0.0:" DATA/Par_file
+  sed -i "s:^NTSTEP_BETWEEN_OUTPUT_INFO .*:NTSTEP_BETWEEN_OUTPUT_INFO    = 50:" DATA/Par_file
+  ./run_this_example.sh
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  # cleanup
+  rm -rf OUTPUT_FILES* DATABASES_MPI*
+  cd $WORKDIR
+fi
+echo -en 'travis_fold:end:coverage.regional-Berkeley\\r'
 
 
 # done
