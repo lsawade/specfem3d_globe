@@ -103,9 +103,7 @@ end module model_crust_berkeley_par
 
   ! gets moho depth from 1D model
   if (myrank == 0) then
-    call determine_1dberkeley_moho_depth(moho1D_depth)
-    !debug
-    !print *,'debug: [model_berkeley_crust_broadcast] moho1d_depth = ',moho1D_depth
+    call get_1dberkeley_moho_depth(moho1D_depth)
   endif
   ! broadcasts to all other processes
   call bcast_all_singledp(moho1D_depth)

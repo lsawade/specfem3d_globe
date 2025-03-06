@@ -62,11 +62,15 @@ module model_1dberkeley_par
     Mref_V_Qkappa_berkeley, &
     Mref_V_Qmu_berkeley
 
-  ! Utpal Kumar, Feb, 2022
-  ! define the berkeley 1D model
-  character (len=100) :: berk_model1D = trim(A3d_folder) // 'model1D.dat'
+  ! Berkeley 1D model
+  character (len=100) :: berkeley_file_model1D = trim(A3d_folder) // 'model1D.dat'
 
-  integer :: modemohoberk = -1
+  ! moho layer index
+  integer :: moho1D_layer_index = -1
+  ! moho radius from 1D reference model (in km)
+  double precision :: moho1D_radius = 0.0d0
+  ! moho depth from 1D reference model (in km)
+  double precision :: moho1D_depth = 0.0d0
 
 end module model_1dberkeley_par
 
@@ -82,6 +86,8 @@ end module model_1dberkeley_par
   use constants, only: myrank
 
   implicit none
+  ! local parameters
+  integer :: ier
 
   ! define the berkeley 1D model
   ! Utpal Kumar, Feb, 2022
@@ -90,13 +96,16 @@ end module model_1dberkeley_par
   if (myrank == 0) call read_1dberkeley()
 
   ! broadcast header values
-  call BCAST_ALL_SINGLEI(ifanis_berk       )
-  call BCAST_ALL_SINGLEI(tref_berk         )
-  call BCAST_ALL_SINGLEI(ifdeck_berk       )
-  call BCAST_ALL_SINGLEI(NR_REF_BERKELEY   )
-  call BCAST_ALL_SINGLEI(NR_inner_core_berk)
-  call BCAST_ALL_SINGLEI(NR_outer_core_berk)
-  call BCAST_ALL_SINGLEI(NR_water_berk     )
+  call bcast_all_singlei(ifanis_berk       )    ! ifanis_berk is not really needed any further, but just in case
+  call bcast_all_singlei(tref_berk         )    ! tref_berk is not really needed any further, but just in case
+  call bcast_all_singlei(ifdeck_berk       )    ! ifdeck_berk is not really needed any further, but just in case
+  call bcast_all_singlei(NR_REF_BERKELEY   )
+  call bcast_all_singlei(NR_inner_core_berk)
+  call bcast_all_singlei(NR_outer_core_berk)
+  call bcast_all_singlei(NR_water_berk     )
+  call bcast_all_singlei(moho1D_layer_index)    ! moho info
+  call bcast_all_singledp(moho1D_radius)        ! radius & depth only needed on main process, but just in case
+  call bcast_all_singledp(moho1D_depth)
 
   ! allocate arrays
   if (.not. allocated(Mref_V_radius_berkeley)) then
@@ -108,7 +117,8 @@ end module model_1dberkeley_par
              Mref_V_Qmu_berkeley(NR_REF_BERKELEY), &
              Mref_V_vph_berkeley(NR_REF_BERKELEY), &
              Mref_V_vsh_berkeley(NR_REF_BERKELEY), &
-             Mref_V_eta_berkeley(NR_REF_BERKELEY)      )
+             Mref_V_eta_berkeley(NR_REF_BERKELEY),stat=ier)
+    if (ier /= 0) stop 'Error allocating 1D Berkeley model arrays'
   endif
 
   ! broadcast data
@@ -122,16 +132,6 @@ end module model_1dberkeley_par
   call BCAST_ALL_DP(Mref_V_Qkappa_berkeley ,NR_REF_BERKELEY)
   call BCAST_ALL_DP(Mref_V_Qmu_berkeley    ,NR_REF_BERKELEY)
 
-  !! Utpal Kumar, Feb, 2022
-  ! determine node index where crust starts
-  if (myrank == 0) then
-    call determine_1dberkeley_moho_node(modemohoberk)
-    !debug
-    !print *,'debug: [model_1dberkeley_broadcast] modemohoberk = ',modemohoberk
-  endif
-  ! broadcasts to all other processes
-  call bcast_all_singlei(modemohoberk)
-
   end subroutine model_1dberkeley_broadcast
 
 !
@@ -141,26 +141,57 @@ end module model_1dberkeley_par
   subroutine read_1dberkeley()
 
   use model_1dberkeley_par
+  use constants, only: myrank,IMAIN,IIN,TINYVAL
 
   implicit none
-
+  ! local parameters
   integer :: i,ier
-  integer, parameter :: lunit = 54
   character (len=100) :: title
+  double precision :: r,rho,vpv,vph,vsv,vsh,eta,qmu,qkappa
+  double precision :: ifanis,tref,ifdeck
 
-  ! only main process reads in file
-
-  open(lunit,file=trim(berk_model1D),status='old',iostat=ier)
-  if (ier /= 0) then
-    print *,'Error opening file: ',trim(berk_model1D)
-    stop 'Error opening file model1D.dat for berkeley reference model'
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) 'reference model: 1D Berkeley'
+    write(IMAIN,*) '  model file             = ',trim(berkeley_file_model1D)
+    write(IMAIN,*)
+    call flush_IMAIN()
   endif
 
-  read(lunit,100,iostat=ier) title
-  read(lunit,*  ,iostat=ier) ifanis_berk, tref_berk, ifdeck_berk
+  ! initializes number of layers
+  NR_REF_BERKELEY = 0
+  NR_inner_core_berk = 0
+  NR_outer_core_berk = 0
+  NR_water_berk = 0
 
-  read(lunit,*  ,iostat=ier) NR_REF_BERKELEY, NR_inner_core_berk, &
-                             NR_outer_core_berk, NR_water_berk
+  ! only main process reads in file
+  open(IIN,file=trim(berkeley_file_model1D),status='old',iostat=ier)
+  if (ier /= 0) then
+    print *,'Error opening file: ',trim(berkeley_file_model1D)
+    stop 'Error opening file model1D.dat for Berkeley reference model'
+  endif
+
+  read(IIN,100,iostat=ier) title
+  if (ier /= 0) stop 'Error reading title in model1D.dat for Berkeley reference model'
+
+  read(IIN,*  ,iostat=ier) ifanis, tref, ifdeck
+  if (ier /= 0) stop 'Error reading ifanis/tref/ifdeck in model1D.dat for Berkeley reference model'
+
+  ! stores all as integers - not needed any further yet, but just in case...
+  ifanis_berk = int(ifanis)
+  tref_berk = int(tref)
+  ifdeck_berk = int(ifdeck)
+
+  read(IIN,*  ,iostat=ier) NR_REF_BERKELEY, NR_inner_core_berk, NR_outer_core_berk, NR_water_berk
+  if (ier /= 0) stop 'Error reading NR_REF/NR_inner_core/NR_outer_core/NR_water in model1D.dat for Berkeley reference model'
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) '  title                  = ',trim(title)
+    write(IMAIN,*) '  total number of layers = ',NR_REF_BERKELEY
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
 
   ! allocate arrays (only on main process)
   allocate(Mref_V_radius_berkeley(NR_REF_BERKELEY), &
@@ -171,22 +202,106 @@ end module model_1dberkeley_par
            Mref_V_Qmu_berkeley(NR_REF_BERKELEY), &
            Mref_V_vph_berkeley(NR_REF_BERKELEY), &
            Mref_V_vsh_berkeley(NR_REF_BERKELEY), &
-           Mref_V_eta_berkeley(NR_REF_BERKELEY)      )
+           Mref_V_eta_berkeley(NR_REF_BERKELEY),stat=ier)
+  if (ier /= 0) stop 'Error allocating 1D Berkeley model arrays'
+  Mref_V_radius_berkeley(:) = 0.d0
+  Mref_V_density_berkeley(:) = 0.d0
+  Mref_V_vpv_berkeley(:) = 0.d0
+  Mref_V_vsv_berkeley(:) = 0.d0
+  Mref_V_Qkappa_berkeley(:) = 0.d0
+  Mref_V_Qmu_berkeley(:) = 0.d0
+  Mref_V_vph_berkeley(:) = 0.d0
+  Mref_V_vsh_berkeley(:) = 0.d0
+  Mref_V_eta_berkeley(:) = 0.d0
 
   ! reads data
   do i = 1,NR_REF_BERKELEY
-    read(lunit,*) Mref_V_radius_berkeley(i), &
-                  Mref_V_density_berkeley(i), &
-                  Mref_V_vpv_berkeley(i), &
-                  Mref_V_vsv_berkeley(i), &
-                  Mref_V_Qkappa_berkeley(i), &
-                  Mref_V_Qmu_berkeley(i), &
-                  Mref_V_vph_berkeley(i), &
-                  Mref_V_vsh_berkeley(i), &
-                  Mref_V_eta_berkeley(i)
+    ! format: #radius #density #vpv #vsv #Qkappa #Qmu #vph #vsh #eta
+    read(IIN,*,iostat=ier) r,rho,vpv,vsv,qkappa,qmu,vph,vsh,eta
+    if (ier /= 0) then
+      print *,'Error: reading layer',i,' for reference Berkeley model'
+      print *,'Please check model format with routine read_1dberkeley() in file model_1dberkeley.f90 ...'
+      stop 'Error reading layer in model1D.dat for Berkeley reference model'
+    endif
+
+    ! stores layer values
+    Mref_V_radius_berkeley(i) = r
+    Mref_V_density_berkeley(i) = rho
+    Mref_V_vpv_berkeley(i) = vpv
+    Mref_V_vsv_berkeley(i) = vsv
+    Mref_V_Qkappa_berkeley(i) = qkappa
+    Mref_V_Qmu_berkeley(i) = qmu
+    Mref_V_vph_berkeley(i) = vph
+    Mref_V_vsh_berkeley(i) = vsh
+    Mref_V_eta_berkeley(i) = eta
   enddo
 
-  close(lunit)
+  close(IIN)
+
+  ! checks model consistency between number of layers and values given
+  do i = 1,NR_REF_BERKELEY
+    ! shear velocities in layer for checks
+    vsv = Mref_V_vsv_berkeley(i)
+    vsh = Mref_V_vsh_berkeley(i)
+
+    ! checks layer
+    if (i <= NR_inner_core_berk) then
+      ! inner core layers (solid)
+      ! must have non-zero vsv and vsh
+      ! Vsv
+      if (vsv < TINYVAL) then
+        print *,'Error: invalid Vsv velocity ',vsv,' (m/s) in inner core layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsv value in inner core'
+      endif
+      ! Vsh
+      if (vsh < TINYVAL) then
+        print *,'Error: invalid Vsh velocity ',vsh,' (m/s) in inner core layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsh value in inner core'
+      endif
+    else if (i <= NR_outer_core_berk) then
+      ! outer core layers (fluid)
+      ! must have zero vsv and vsh
+      ! Vsv
+      if (abs(vsv) > TINYVAL) then
+        print *,'Error: invalid Vsv velocity ',vsv,' (m/s) in outer core layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsv value in outer core'
+      endif
+      ! Vsh
+      if (abs(vsh) > TINYVAL) then
+        print *,'Error: invalid Vsh velocity ',vsh,' (m/s) in outer core layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsh value in outer core'
+      endif
+    else if (i <= NR_REF_BERKELEY - NR_water_berk) then
+      ! crust/mantle layers (solid)
+      ! must have non-zero vsv and vsh
+      ! Vsv
+      if (vsv < TINYVAL) then
+        print *,'Error: invalid Vsv velocity ',vsv,' (m/s) in crust/mantle layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsv value in crust/mantle'
+      endif
+      ! Vsh
+      if (vsh < TINYVAL) then
+        print *,'Error: invalid Vsh velocity ',vsh,' (m/s) in crust/mantle layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsh value in crust/mantle'
+      endif
+    else
+      ! water/ocean layers (fluid)
+      ! must have zero vsv and vsh
+      ! Vsv
+      if (abs(vsv) > TINYVAL) then
+        print *,'Error: invalid Vsv velocity ',vsv,' (m/s) in ocean layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsv value in ocean layer'
+      endif
+      ! Vsh
+      if (abs(vsh) > TINYVAL) then
+        print *,'Error: invalid Vsh velocity ',vsh,' (m/s) in ocean layer',i,' for reference Berkeley model'
+        stop 'Invalid Vsh value in ocean layer'
+      endif
+    endif
+  enddo
+
+  ! determine node index where crust starts
+  call determine_1dberkeley_moho_layer()
 
   !
   ! reading formats
@@ -232,7 +347,7 @@ end module model_1dberkeley_par
   ! local parameters
   double precision :: r,frac,scaleval
   integer :: i
-  logical, parameter :: mimic_native_specfem = .true.
+  logical, parameter :: MIMIC_NATIVE_SPECFEM = .true.
 
   ! compute real physical radius in meters
   r = x * EARTH_R
@@ -243,7 +358,7 @@ end module model_1dberkeley_par
   enddo
 
   ! make sure we stay in the right region
-  if (mimic_native_specfem) then
+  if (MIMIC_NATIVE_SPECFEM) then
     ! inner core bounds
     if (iregion_code == IREGION_INNER_CORE) then
       if (i > NR_inner_core_berk) i = NR_inner_core_berk
@@ -261,7 +376,7 @@ end module model_1dberkeley_par
     ! if crustal model is used, mantle gets expanded up to surface
     ! for any depth less than 24.4 km, values from mantle below moho are taken
     if (CRUSTAL) then
-      if (i > modemohoberk) i = modemohoberk ! Warning : may need to be changed if file is modified !
+      if (i > moho1D_layer_index) i = moho1D_layer_index ! Warning : may need to be changed if file is modified !
     endif
   endif
 
@@ -293,7 +408,7 @@ end module model_1dberkeley_par
 
   ! make sure Vs is zero in the outer core even if roundoff errors on depth
   ! also set fictitious attenuation to a very high value (attenuation is not used in the fluid)
-  if (mimic_native_specfem) then
+  if (MIMIC_NATIVE_SPECFEM) then
     if (iregion_code == IREGION_OUTER_CORE) then
       vsv = 0.d0
       vsh = 0.d0
@@ -318,107 +433,45 @@ end module model_1dberkeley_par
 !--------------------------------------------------------------------------------------------------
 !
 
-!! Utpal Kumar, Feb, 2022
-!! subroutine to decide whether the moho node has already been computed
+  subroutine determine_1dberkeley_moho_layer()
 
-! not used yet...
-!
-!  subroutine est_moho_node(estmohonode)
-!
-!  use model_1dberkeley_par, only: modemohoberk
-!
-!  implicit none
-!  integer :: estmohonode
-!
-!  if (modemohoberk < 0) then
-!    call determine_1dberkeley_moho_node(estmohonode)
-!    ! print *,"Determining Moho node ",estmohonode
-!  else
-!    estmohonode = modemohoberk
-!  endif
-!
-!  end subroutine est_moho_node
+! subroutine to determine the moho layer/node, radius and depth
 
-!
-!--------------------------------------------------------------------------------------------------
-!
-
-!! Utpal Kumar, Feb 2022
-!! subroutine to get the moho node number
-
-  subroutine determine_1dberkeley_moho_node(mohonodebrk)
-
-  use model_1dberkeley_par, only: berk_model1D
+  use model_1dberkeley_par
+  use constants, only: myrank,IIN,IMAIN
 
   implicit none
 
-  integer, intent(out) :: mohonodebrk
-
   ! local parameter
-  integer, parameter :: FID = 10
-  character (len=100) :: CTMP
-
-  double precision, allocatable :: radius(:),density(:),vpv(:),vsv(:),qkappa(:),qmu(:),vph(:),vsh(:),eta(:)
   double precision, allocatable :: derivdensity(:), derivVp(:), derivVs(:)
-  double precision :: maxderivdensity
+  double precision :: dr,maxderivdensity
 
   double precision, parameter :: tol = 2.0d0**(-5)
-  integer, parameter :: totalheadersval = 3
 
-  integer :: i,IERR
-  integer :: num_lines, totalDiscont
-  integer :: j
+  integer :: i,j,ier,totalDiscont
 
   ! initializes moho node
-  mohonodebrk = 1
+  moho1D_layer_index = 1
 
-  ! model_file = berk_model1D
-  num_lines = 0 !initialize num of nodes in the file
-  open(FID, file=trim(berk_model1D), status="old",iostat=IERR)
-  if (IERR /= 0) then
-    print *,'Error opening file: ',trim(berk_model1D)
-    stop 'Error opening berkeley 1d model'
-  endif
-
-  ! Get number of lines
-  do i = 1, totalheadersval
-    read(FID,*)   !! skip the header
-  enddo
-
-  do while (IERR == 0)
-    num_lines = num_lines + 1
-    read(FID,*,iostat=IERR) CTMP
-  enddo
-  num_lines = num_lines - 1
-
-  ! Allocate array of strings
-  allocate(radius(num_lines), density(num_lines), vpv(num_lines), vsv(num_lines), qkappa(num_lines))
-  allocate(qmu(num_lines), vph(num_lines),vsh(num_lines),eta(num_lines))
-  allocate(derivdensity(num_lines), derivVp(num_lines), derivVs(num_lines))
-
-  ! Read the file content
-  rewind(FID)
-  do i = 1, totalheadersval
-    read(FID,*)   !! skip the header
-  enddo
-  do i = 1, num_lines
-    read(FID,*) radius(i), density(i), vpv(i), vsv(i), qkappa(i), qmu(i), vph(i), vsh(i), eta(i)  !Read the data
-  enddo
-  close(FID)
+  ! Allocate temporary arrays
+  allocate(derivdensity(NR_REF_BERKELEY), derivVp(NR_REF_BERKELEY), derivVs(NR_REF_BERKELEY),stat=ier)
+  if (ier /= 0) stop 'Error allocating temporary deriv arrays'
 
   ! find the discontinuities
   totalDiscont = 0
-  do i = 1, num_lines-1
-    if (abs(radius(i+1)-radius(i)) < tol) then
-      derivdensity(i) = density(i+1)-density(i)
-      derivVp(i) = vpv(i+1)-vpv(i)
-      derivVs(i) = vsv(i+1)-vsv(i)
+  do i = 1, NR_REF_BERKELEY-1
+    dr = Mref_V_radius_berkeley(i+1) - Mref_V_radius_berkeley(i)
+
+    if (abs(dr) < tol) then
+      derivdensity(i) = Mref_V_density_berkeley(i+1) - Mref_V_density_berkeley(i)
+      derivVp(i) = Mref_V_vpv_berkeley(i+1) - Mref_V_vpv_berkeley(i)
+      derivVs(i) = Mref_V_vsv_berkeley(i+1) - Mref_V_vsv_berkeley(i)
 
       totalDiscont = totalDiscont + 1
     else
-      derivdensity(i) = (density(i+1)-density(i))/(radius(i+1)-radius(i))
-      derivVp(i) = (vpv(i+1)-vpv(i))/(radius(i+1)-radius(i))
-      derivVs(i) = (vsv(i+1)-vsv(i))/(radius(i+1)-radius(i))
+      derivdensity(i) = (Mref_V_density_berkeley(i+1) - Mref_V_density_berkeley(i)) / dr
+      derivVp(i) = (Mref_V_vpv_berkeley(i+1) - Mref_V_vpv_berkeley(i)) / dr
+      derivVs(i) = (Mref_V_vsv_berkeley(i+1) - Mref_V_vsv_berkeley(i)) / dr
     endif
   enddo
 
@@ -432,162 +485,71 @@ end module model_1dberkeley_par
   maxderivdensity = 0.d0
 
   j = 1
-  do i = 1, num_lines-1
-    if (abs(radius(i+1)-radius(i)) < tol) then
-      if ((abs(vsv(i)) > tol) .and. (abs(vsv(i+1)) > tol) .and. (abs(derivVs(i)) > tol) &
-          .and. (abs(radius(i)-6371000.) < 90000.)) then
+  do i = 1, NR_REF_BERKELEY-1
+    dr = Mref_V_radius_berkeley(i+1) - Mref_V_radius_berkeley(i)
+
+    if (abs(dr) < tol) then
+      if ((abs(Mref_V_vsv_berkeley(i)) > tol) &
+          .and. (abs(Mref_V_vsv_berkeley(i+1)) > tol) &
+          .and. (abs(derivVs(i)) > tol) &
+          .and. (abs(Mref_V_radius_berkeley(i)-6371000.) < 90000.)) then
 
         if (abs(derivdensity(i)) > maxderivdensity) then
           maxderivdensity = abs(derivdensity(i))
-          mohonodebrk = i
+          ! new moho layer
+          moho1D_layer_index = i
+          moho1D_radius = Mref_V_radius_berkeley(i+1) / 1000.d0  ! new moho radius (converted to km)
+          moho1D_depth = 6371.d0 - moho1D_radius                 ! new moho depth (in km)
         endif
       endif
       j = j + 1
     endif
   enddo
 
-  deallocate(radius,density,vpv,vsv,qkappa,qmu,vph,vsh,eta)
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) '  1D Moho layer index    = ',moho1D_layer_index
+    write(IMAIN,*) '           radius        = ',sngl(moho1D_radius),"(km)"
+    write(IMAIN,*) '           depth         = ',sngl(moho1D_depth),"(km)"
+    write(IMAIN,*)
+    call flush_IMAIN()
+  endif
+
+  ! free temporary arrays
   deallocate(derivdensity, derivVp, derivVs)
 
-  end subroutine determine_1dberkeley_moho_node
+  end subroutine determine_1dberkeley_moho_layer
 
 !
 !--------------------------------------------------------------------------------------------------
 !
 
   !! subroutine to determine moho radius from reference 1D earth model
-  subroutine determine_1dberkeley_moho_radius(moho_radius)
+  subroutine get_1dberkeley_moho_radius(moho_radius)
 
-  use model_1dberkeley_par, only: berk_model1D
-
-  use constants, only: EARTH_R_KM
+  use model_1dberkeley_par, only: moho1D_radius
 
   implicit none
 
   double precision, intent(out) :: moho_radius
 
-  ! local parameters
-  integer, parameter :: FID = 10
-  character (len=100) :: CTMP
+  ! return moho radius from 1D reference model (in km)
+  moho_radius = moho1D_radius
 
-  double precision, allocatable :: radius(:),density(:),vpv(:),vsv(:),qkappa(:),qmu(:),vph(:),vsh(:),eta(:)
-  double precision, allocatable :: derivdensity(:), derivVp(:), derivVs(:)
-  double precision :: maxderivdensity
-  double precision :: moho_r
-
-  double precision, parameter :: tol = 2.0d0**(-5)
-  integer, parameter :: totalheadersval = 3
-
-  integer :: i, IERR
-  integer :: num_lines, totalDiscont
-
-  ! initializes
-  moho_r = 0.d0
-
-  ! model_file = berk_model1D
-
-  num_lines = 0 !initialize num of nodes in the file
-  open(FID, file=trim(berk_model1D), status="old",iostat=IERR)
-  if (IERR /= 0) then
-    print *,'Error opening file: ',trim(berk_model1D)
-    stop 'Error opening berkeley 1d model'
-  endif
-
-  ! Get number of lines
-  do i = 1, totalheadersval
-    read(FID,*)   !! skip the header
-  enddo
-
-  do while (IERR == 0)
-    num_lines = num_lines + 1
-    read(FID,*,iostat=IERR) CTMP
-  enddo
-  num_lines = num_lines - 1
-
-  ! Allocate array of strings
-  allocate(radius(num_lines), density(num_lines), vpv(num_lines), vsv(num_lines), qkappa(num_lines))
-  allocate(qmu(num_lines), vph(num_lines),vsh(num_lines),eta(num_lines))
-  allocate(derivdensity(num_lines), derivVp(num_lines), derivVs(num_lines))
-
-  ! Read the file content
-  rewind(FID)
-  do i = 1, totalheadersval
-    read(FID,*)   !! skip the header
-  enddo
-  do i = 1, num_lines
-    read(FID,*) radius(i), density(i), vpv(i), vsv(i), qkappa(i), qmu(i), vph(i), vsh(i), eta(i)  !Read the data
-  enddo
-  close(FID)
-
-  ! find the discontinuities
-  totalDiscont = 0
-  do i = 1, num_lines-1
-    if (abs(radius(i+1)-radius(i)) < tol) then
-      derivdensity(i) = density(i+1)-density(i)
-      derivVp(i) = vpv(i+1)-vpv(i)
-      derivVs(i) = vsv(i+1)-vsv(i)
-
-      totalDiscont = totalDiscont + 1
-    else
-      derivdensity(i) = (density(i+1)-density(i))/(radius(i+1)-radius(i))
-      derivVp(i) = (vpv(i+1)-vpv(i))/(radius(i+1)-radius(i))
-      derivVs(i) = (vsv(i+1)-vsv(i))/(radius(i+1)-radius(i))
-    endif
-  enddo
-
-  ! Determine the Mohorovicic discontinuity node
-  ! Conditions to select the moho discontinuity:
-  ! 1. Radius don't change, hence discontinuity
-  ! 2. Vsv(i) and Vsv(i+1) > 0
-  ! 3. delta Vsv > 0
-  ! 4. max depth of 90km
-  ! 5. max density change within 90 km from surface
-  maxderivdensity = 0.d0
-
-  do i = 1, num_lines-1
-    if (abs(radius(i+1)-radius(i)) < tol) then
-      if ((abs(vsv(i)) > tol) .and. (abs(vsv(i+1)) > tol) .and. (abs(derivVs(i)) > tol) &
-          .and. (abs(radius(i)-6371000.) < 90000.)) then
-
-        if (abs(derivdensity(i)) > maxderivdensity) then
-          maxderivdensity = abs(derivdensity(i))
-          moho_r = radius(i+1)   ! new moho radius
-        endif
-      endif
-    endif
-  enddo
-
-  deallocate(radius,density,vpv,vsv,qkappa,qmu,vph,vsh,eta)
-  deallocate(derivdensity, derivVp, derivVs)
-
-  ! return moho radius (in km)
-  moho_radius = moho_r / 1000.d0 ! convert to km
-
-  !debug
-  !print *,'debug: [determine_1dberkeley_moho_radius] moho_radius = ',moho_radius
-
-  end subroutine determine_1dberkeley_moho_radius
+  end subroutine get_1dberkeley_moho_radius
 
 !
 !--------------------------------------------------------------------------------------------------
 !
 
-  subroutine determine_1dberkeley_moho_depth(moho_depth)
+  subroutine get_1dberkeley_moho_depth(moho_depth)
+
+  use model_1dberkeley_par, only: moho1D_depth
 
   implicit none
   double precision, intent(out) :: moho_depth
 
-  ! local parameters
-  double precision :: moho_radius
-  double precision, parameter :: earthradius = 6371.d0
+  ! return moho depth from 1D reference model (in km)
+  moho_depth = moho1D_depth
 
-  ! get moho radius (in km)
-  call determine_1dberkeley_moho_radius(moho_radius)
-
-  ! moho depth (in km)
-  moho_depth = earthradius - moho_radius
-
-  !debug
-  !print *,'debug: [determine_1dberkeley_moho_depth] moho_radius = ',moho_radius
-
-  end subroutine determine_1dberkeley_moho_depth
+  end subroutine get_1dberkeley_moho_depth

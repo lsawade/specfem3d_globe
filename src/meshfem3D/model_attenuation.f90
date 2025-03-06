@@ -389,6 +389,14 @@
     call exit_MPI(myrank, 'Error attenuation setup: Reference 1D Model values missing')
   end select
 
+  ! debugging
+  !if (myrank == 0) then
+  !  print *,'debug: Qmu '
+  !  do i = 1,Qn
+  !    print *,'  ',i,Qmu(i)
+  !  enddo
+  !endif
+
   ! sets up storage of relaxation times
   do i = 1,Qn
     call model_attenuation_getstored_tau(Qmu(i), tau_s_store, tau_e)
