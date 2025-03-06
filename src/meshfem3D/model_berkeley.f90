@@ -111,7 +111,7 @@ end module model_berkeley_par
   ! determine moho radius from 1D reference model
   if (myrank == 0) then
     ! gets exact 1D moho radius (in km)
-    call determine_1dberkeley_moho_radius(moho1D_radius)
+    call get_1dberkeley_moho_radius(moho1D_radius)
 
     ! adjust radius slightly to be in mantle
     moho1D_radius = moho1D_radius - 0.1d0

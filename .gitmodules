@@ -3,4 +3,4 @@
 	url = https://github.com/geodynamics/autoconf_cig.git
 [submodule "external_libs/ROCm-HIP-CPU"]
 	path = external_libs/ROCm-HIP-CPU
-	url = git@github.com:ROCm/HIP-CPU.git
+	url = https://github.com/ROCm/HIP-CPU.git

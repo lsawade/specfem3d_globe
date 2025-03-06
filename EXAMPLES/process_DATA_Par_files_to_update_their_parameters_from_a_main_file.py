@@ -36,7 +36,8 @@ EXCLUDE_NAME_LIST = [ \
 # (more exclude directories can be appended in this list)
 EXCLUDE_DIR_LIST = [ \
   "unused_routines", \
-  "small_SEM_solvers_in_Fortran_and_C_without_MPI_to_learn" \
+  "small_SEM_solvers_in_Fortran_and_C_without_MPI_to_learn", \
+  "tmp"
 ]
 
 # optional parameters in Par_file
@@ -56,7 +57,13 @@ OPTIONAL_PARAMETERS = [
   "SCATTERING_STRENGTH", \
   "SCATTERING_CORRELATION", \
   "SHIFT_SIMULTANEOUS_RUNS", \
-  "FILESYSTEM_IO_BANDWIDTH" \
+  "FILESYSTEM_IO_BANDWIDTH", \
+  "STF_IS_UCB_HEAVISIDE", \
+  "SOURCE_T1", \
+  "SOURCE_T2", \
+  "SOURCE_T3", \
+  "SOURCE_T4", \
+  "TAU" \
 ]
 
 #

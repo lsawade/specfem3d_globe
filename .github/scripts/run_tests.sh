@@ -116,6 +116,9 @@ fi
 if [ "${TESTDIR}" == "EXAMPLES/global_small" ]; then
   sed -i "s:^RECORD_LENGTH_IN_MINUTES .*:RECORD_LENGTH_IN_MINUTES = 0.1:" DATA/Par_file
 fi
+if [ "${TESTDIR}" == "EXAMPLES/regional_Berkeley" ]; then
+  sed -i "s:^RECORD_LENGTH_IN_MINUTES .*:RECORD_LENGTH_IN_MINUTES = 4.0:" DATA/Par_file  # needs increase due to source time function
+fi
 
 # debug
 if [ "${DEBUG}" == "true" ]; then

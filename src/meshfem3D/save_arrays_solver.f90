@@ -788,18 +788,10 @@
   write(IOUT) NGLOB_XY_CM
   write(IOUT) NGLOB_XY_IC
 
-  if (ATTENUATION_1D_WITH_3D_STORAGE) then
-    write(IOUT) .true.
-  else
-    write(IOUT) .false.
-  endif
+  write(IOUT) ATTENUATION_1D_WITH_3D_STORAGE
 
   ! for UNDO_ATTENUATION
-  if (UNDO_ATTENUATION) then
-    write(IOUT) .true.
-  else
-    write(IOUT) .false.
-  endif
+  write(IOUT) UNDO_ATTENUATION
   write(IOUT) NT_DUMP_ATTENUATION_optimal
 
   ! mesh geometry (with format specifier to avoid writing double values on a newline)

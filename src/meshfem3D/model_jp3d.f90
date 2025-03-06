@@ -437,7 +437,7 @@
 120   FORMAT(6(10F7.2/),3F7.2)
 130   FORMAT(6(10F7.1/),3F7.1)
 
-  END subroutine INPUT2
+  end subroutine INPUT2
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -455,7 +455,7 @@
   CALL LOCX(JP3DM_PNB,JP3DM_RNB,JP3DM_HNB,JP3DM_NPB,JP3DM_NRB,JP3DM_NHB,MKB, &
            JP3DM_PLB,JP3DM_RLB,JP3DM_HLB,JP3DM_IPLOCB,JP3DM_IRLOCB,JP3DM_IHLOCB)
 
-  END subroutine BLDMAP
+  end subroutine BLDMAP
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -501,7 +501,7 @@
       IHLOCX(I)= IH
 30    continue
 
-  END subroutine LOCX
+  end subroutine LOCX
 
 !
 !-------------------------------------------------------------------------------------------
@@ -568,7 +568,7 @@
       + JP3DM_WV(5)*V(JP3DM_IP,JP3DM_JP,JP3DM_KP1) + JP3DM_WV(6)*V(JP3DM_IP1,JP3DM_JP,JP3DM_KP1) &
       + JP3DM_WV(7)*V(JP3DM_IP,JP3DM_JP1,JP3DM_KP1)+ JP3DM_WV(8)*V(JP3DM_IP1,JP3DM_JP1,JP3DM_KP1)
 
-  END subroutine VABPS
+  end subroutine VABPS
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -584,7 +584,7 @@
   IS      = IDNINT(R+RL)
   IR      = IRLOC(IS)
 
-  END subroutine INTMAP
+  end subroutine INTMAP
 
 !
 !------------------------------------------------------------------------------------------------
@@ -621,7 +621,7 @@
   JP3DM_RF1   = 1.0-JP3DM_RF
   JP3DM_HF1   = 1.0-JP3DM_HF
 
-  END subroutine PRHF
+  end subroutine PRHF
 
 !
 !----------------------------------------------------------------------------------------------
@@ -722,7 +722,7 @@
   ELSE
   endif
 
-  END subroutine VEL1D
+  end subroutine VEL1D
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -757,7 +757,7 @@
     JP3DM_DEPJ(L) = 40.0+6325.59*(1.0-RA1(L))
   enddo
 
-  END subroutine INPUTJP
+  end subroutine INPUTJP
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -787,5 +787,5 @@
      V   = (JP3DM_VS(K1)-JP3DM_VS(K))*H12+JP3DM_VS(K)
   endif
 
-  END subroutine JPMODEL
+  end subroutine JPMODEL
 

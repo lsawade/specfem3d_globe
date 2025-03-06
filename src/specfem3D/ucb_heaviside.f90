@@ -342,7 +342,7 @@ contains
 60 continue
 
   return
-  END subroutine SETGPFA
+  end subroutine SETGPFA
 
   !---------------------------------------------------------------------------------
   ! subroutine 'GPFA'
@@ -441,7 +441,7 @@ contains
   endif
 
   return
-  END subroutine GPFA
+  end subroutine GPFA
 
   !---------------------------------------------------------------------------------
   !     Fortran version of *gpfa2* -

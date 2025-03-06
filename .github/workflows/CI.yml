@@ -663,3 +663,27 @@ jobs:
         GPU: true
       run: ./.github/scripts/run_tests.sh
       shell: bash
+
+  linuxTest_15:
+    name: Test 15 - regional_Berkeley
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        TESTFLAGS: --enable-vectorization
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/regional_Berkeley
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
