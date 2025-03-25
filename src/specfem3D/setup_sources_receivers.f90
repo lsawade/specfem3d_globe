@@ -562,7 +562,7 @@
     write(IMAIN,*) '  maximum neighbors found per element = ',num_neighbors_max,'(should be 37 for globe meshes)'
     write(IMAIN,*) '  total number of neighbors           = ',num_neighbors_all
     write(IMAIN,*)
-    write(IMAIN,*) '  Elapsed time for detection of neighbors in seconds = ',tCPU
+    write(IMAIN,*) '  Elapsed time for detection of neighbors in seconds = ',sngl(tCPU)
     write(IMAIN,*)
     call flush_IMAIN()
   endif
