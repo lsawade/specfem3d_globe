@@ -210,10 +210,22 @@
       ! elapsed time since beginning of layer generation
       tCPU = wtime() - time_start
 
+      ! estimated remaining time:
+      !   time / element = tCPU / ispec_count
+      !   remaining elements = nspec - ispec_count
+      !   -> remaining time = remaining elements * time / element
+      !                     = (nspec - ispec_count) * tCPU / ispec_count
+      !                     = (nspec / ispec_count - 1) * tCPU
+      ! estimated total time:
+      !   time / element = tCPU / ispec_count
+      !   -> total time  = nspec * time / element
+      !                  = nspec * tCPU / ispec_count
+
       ! elapsed time
-      write(IMAIN,'(a,f5.1,a,a,f7.1,a)') &
+      write(IMAIN,'(a,f5.1,a,a,f7.1,a,a,f7.1,a)') &
         "    ",(ilayer_loop-ifirst_region+1.0)/(ilast_region-ifirst_region+1.0) * 100.0,"%", &
-        "    elapsed time: ",sngl(tCPU)," s"
+        "    elapsed time: ",sngl(tCPU)," s", &
+        " - estimated total time: ",sngl(tCPU/ispec_count * nspec)," s"
 
       !write(IMAIN,'(a,f5.1,a,a,i5.2,a,i2.2,a)') &
       !  "    ",(ilayer_loop-ifirst_region+1.0)/(ilast_region-ifirst_region+1.0) * 100.0,"%", &

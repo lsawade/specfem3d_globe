@@ -107,7 +107,7 @@
   integer :: POISSON_SOLVER = 0   ! 0 == builtin / 1 == PETSc solver
 
   ! regional mesh cut-off
-  logical :: REGIONAL_MESH_CUTOFF
+  logical :: REGIONAL_MESH_CUTOFF = .false.
   ! regional mesh cut-off depth (in km)
   ! possible selections: 24.4d0, 80.d0, 220.d0, 400.d0, 600.d0, 670.d0, 771.d0
   double precision :: REGIONAL_MESH_CUTOFF_DEPTH = 400.d0
