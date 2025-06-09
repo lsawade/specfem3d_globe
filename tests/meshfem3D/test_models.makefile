@@ -27,8 +27,10 @@ OBJECTS = \
 	$O/read_parameter_file.shared.o \
 	$O/read_value_parameters.shared.o \
 	$O/shared_par.shared_module.o \
+	$O/reduce.shared.o \
+	$O/rthetaphi_xyz.shared.o \
 	$(EMPTY_MACRO)
 
 test_models:
-	${MPIFCCOMPILE_CHECK} ${FCFLAGS_f90} -o ./bin/test_models test_models.f90 -I./obj $(OBJECTS) $(LDFLAGS) $(MPILIBS) $(LIBS)
+	${MPIFCCOMPILE_CHECK} ${FCFLAGS_f90} -o ./bin/test_models test_models.f90 -I./obj $(OBJECTS) $(MPILIBS)
 

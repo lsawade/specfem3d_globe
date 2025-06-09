@@ -35,6 +35,8 @@
 
   module model_1066a_par
 
+  implicit none
+
   ! number of layers in DATA/1066a/1066a.dat
   integer, parameter :: NR_1066A = 160
 

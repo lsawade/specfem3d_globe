@@ -48,11 +48,13 @@
 ! How to reconcile body-wave and normal-mode reference Earth models?,
 ! Geophysical Journal International, volume 122, issue 1, pages 229-248 (1995)
 !
-!! DK DK values below entirely checked and fixed by Dimitri Komatitsch in December 2012.
+! values below entirely checked and fixed by Dimitri Komatitsch in December 2012.
 !
 !--------------------------------------------------------------------------------------------------
 
   module model_ak135_par
+
+  implicit none
 
   ! number of layers in DATA/ak135/ak135.dat
   integer, parameter :: NR_AK135F_NO_MUD = 136

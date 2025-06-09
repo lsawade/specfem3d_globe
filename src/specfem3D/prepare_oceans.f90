@@ -46,7 +46,7 @@
   ! flag to mask ocean-bottom degrees of freedom for ocean load
   logical, dimension(:), allocatable :: updated_dof_ocean_load
   real(kind=CUSTOM_REAL), dimension(:), allocatable :: valence, normx, normy, normz
-  real :: norm = 1.0
+  real(kind=CUSTOM_REAL) :: norm
 
   ! checks if anything to do
   if (.not. OCEANS_VAL) return
@@ -106,22 +106,30 @@
   npoin_oceans = ipoin
 
   ! Assemble normals
-  call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
-                           normx, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
-                           my_neighbors_crust_mantle)
-  call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
-                           normy, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
-                           my_neighbors_crust_mantle)
-  call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
-                           normz, &
-                           num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
-                           nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
-                           my_neighbors_crust_mantle)
-
+  ! note: having multiple MPI slices, the normal on a halo point that is shared between MPI slices might be slightly different
+  !       depending from which slice it is taken. to avoid such a jump, here we count its valence and average the normal
+  !       across different MPI slices.
+  if (USE_OLD_VERSION_FORMAT) then
+    ! no assembly between different slices done
+    continue
+  else
+    ! assembles normal values from halo points
+    call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
+                             normx, &
+                             num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                             nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
+                             my_neighbors_crust_mantle)
+    call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
+                             normy, &
+                             num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                             nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
+                             my_neighbors_crust_mantle)
+    call assemble_MPI_scalar(NPROCTOT_VAL,NGLOB_CRUST_MANTLE, &
+                             normz, &
+                             num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                             nibool_interfaces_crust_mantle,ibool_interfaces_crust_mantle, &
+                             my_neighbors_crust_mantle)
+  endif
 
   ! user info
   if (myrank == 0) then
@@ -150,21 +158,35 @@
       do i = 1,NGLLX
         ! get global point number
         iglob = ibool_crust_mantle(i,j,k,ispec)
+
         ! updates once
         if (.not. updated_dof_ocean_load(iglob)) then
           ipoin = ipoin + 1
+
           ! fills arrays
           ibool_ocean_load(ipoin) = iglob
           rmass_ocean_load_selected(ipoin) = rmass_ocean_load(iglob)
-          ! Make normal continuous
-          if (valence(iglob) > 1.) then
-             norm = sqrt(normx(iglob)**2 + normy(iglob)**2 + normz(iglob)**2)
-             normal_ocean_load(1,ipoin) = normx(iglob) / norm
-             normal_ocean_load(2,ipoin) = normy(iglob) / norm
-             normal_ocean_load(3,ipoin) = normz(iglob) / norm
+
+          ! normals
+          if (USE_OLD_VERSION_FORMAT) then
+            ! old version compatibility
+            ! uses single point normal
+            ! note: this might lead to small jumps across MPI slices, i.e.,
+            !       having different normals on shared halo points depending from which slice it is taken
+            normal_ocean_load(:,ipoin) = normal_top_crust_mantle(:,i,j,ispec2D)
           else
-             normal_ocean_load(:,ipoin) = normal_top_crust_mantle(:,i,j,ispec2D)
+            ! considers assembled normals on halo points
+            ! Make normal continuous
+            if (valence(iglob) > 1.) then
+               norm = sqrt(normx(iglob)**2 + normy(iglob)**2 + normz(iglob)**2)
+               normal_ocean_load(1,ipoin) = normx(iglob) / norm
+               normal_ocean_load(2,ipoin) = normy(iglob) / norm
+               normal_ocean_load(3,ipoin) = normz(iglob) / norm
+            else
+               normal_ocean_load(:,ipoin) = normal_top_crust_mantle(:,i,j,ispec2D)
+            endif
           endif
+
           ! masks this global point
           updated_dof_ocean_load(iglob) = .true.
         endif

@@ -58,8 +58,9 @@ program smooth_laplacian_sem
   integer :: nspec, nglob, nker, niter_cg_max
   integer :: iker, i, j, k, idof, iel, i1, i2, ier, sizeprocs
 
-  double precision    :: Lx, Ly, Lz, Lh, Lv, conv_crit, Lh2, Lv2
-  double precision    :: x, y, z, r, theta, phi, rel_to_prem
+  double precision    :: Lh, Lv, conv_crit, Lh2, Lv2
+  double precision    :: x, y, z, rel_to_prem
+  double precision    :: r, theta, phi
   double precision    :: rho,drhodr,vp,vs,Qkappa,Qmu
 
   real(kind=CUSTOM_REAL), dimension(:),       allocatable :: m, s
@@ -120,11 +121,11 @@ program smooth_laplacian_sem
 
   ! Hessian
   logical :: is_hess
+  logical :: is_kernel
 
   ! ADIOS
 #ifdef USE_ADIOS_INSTEAD_OF_MESH
   integer(kind=8) :: group_size_inc,local_dim
-  logical :: is_kernel
 #endif
 
   ! number of steps to reach 100 percent, i.e. 10 outputs info for every 10 percent
@@ -155,7 +156,7 @@ program smooth_laplacian_sem
         print *,'Usage: mpirun -np NPROC bin/xsmooth_laplacian_sem_adios SIGMA_H SIGMA_V KERNEL_NAME', &
                ' INPUT_FILE SOLVER_DIR OUTPUT_FILE'
         print *,'   with'
-        print *,'     SIGMA_XY, SIGMA_Z - XY and Z smoothing lenghts'
+        print *,'     SIGMA_H, SIGMA_V - Horizontal and vertical smoothing lenghts'
         print *,'     KERNEL_NAME       - comma-separated kernel names (e.g., alpha_kernel,beta_kernel)'
         print *,'     INPUT_FILE        - ADIOS file with kernel values (e.g., kernels.bp)'
         print *,'     SOLVER_DIR        - directory w/ ADIOS file with mesh arrays (e.g., DATABASES_MPI/) containing', &
@@ -166,7 +167,7 @@ program smooth_laplacian_sem
 #else
         print *,'Usage: mpirun -np NPROC bin/xsmooth_laplacian_sem SIGMA_H SIGMA_V KERNEL_NAME INPUT_DIR OUPUT_DIR'
         print *,'   with'
-        print *,'     SIGMA_XY, SIGMA_Z - XY and Z smoothing lenghts'
+        print *,'     SIGMA_H, SIGMA_V - Horizontal and vertical smoothing lenghts'
         print *,'     KERNEL_NAME       - comma-separated kernel names (e.g., alpha_kernel,beta_kernel)'
         print *,'     INPUT_DIR         - directory with kernel files (e.g., proc***_alpha_kernel.bin)'
         print *,'     OUTPUT_DIR        - directory for smoothed output files'
@@ -360,9 +361,9 @@ program smooth_laplacian_sem
   call zwgljd(xgll,wx,NGLLX,GAUSSALPHA,GAUSSBETA)
   call zwgljd(ygll,wy,NGLLY,GAUSSALPHA,GAUSSBETA)
   call zwgljd(zgll,wz,NGLLZ,GAUSSALPHA,GAUSSBETA)
-  do k=1,NGLLZ
-     do j=1,NGLLY
-        do i=1,NGLLX
+  do k = 1,NGLLZ
+     do j = 1,NGLLY
+        do i = 1,NGLLX
            wxyz(i,j,k) = real(wx(i)*wy(j)*wz(k),kind=CUSTOM_REAL)
         enddo
      enddo
@@ -551,7 +552,14 @@ program smooth_laplacian_sem
           x = xglob(idof)
           y = yglob(idof)
           z = zglob(idof)
+
+          ! converts x/y/z to geocentric coordinates r/theta/phi
           call xyz_2_rthetaphi_dble(x,y,z,r,theta,phi)
+
+          ! theta/phi not used any further...
+          ! note: converts the geocentric colatitude to a geographic colatitude by ellipticity correction
+          !if (ELLIPTICITY) call geocentric_2_geographic_dble(theta,theta)
+
           ! determine smoothing radius
           Lh2 = Lh
           Lv2 = Lv
@@ -577,21 +585,18 @@ program smooth_laplacian_sem
           !   Lz = Lh2 * (1 - e2 * cos(theta) ** 2)
           !   Lx = Lh2 * (1 - e2 * (sin(theta) * cos(phi)) ** 2 )
           !   Ly = Lh2 * (1 - e2 * (sin(theta) * sin(phi)) ** 2 )
-          Lx = Lh2
-          Ly = Lh2
-          Lz = Lv2
 
           ! Apply scaling
-          dxsi_dx(i,j,k,iel)  = dxsi_dxl * Lx
-          deta_dx(i,j,k,iel)  = deta_dxl * Lx
-          dgam_dx(i,j,k,iel)  = dgam_dxl * Lx
-          dxsi_dy(i,j,k,iel)  = dxsi_dyl * Ly
-          deta_dy(i,j,k,iel)  = deta_dyl * Ly
-          dgam_dy(i,j,k,iel)  = dgam_dyl * Ly
-          dxsi_dz(i,j,k,iel)  = dxsi_dzl * Lz
-          deta_dz(i,j,k,iel)  = deta_dzl * Lz
-          dgam_dz(i,j,k,iel)  = dgam_dzl * Lz
-          jacobian(i,j,k,iel) = jacobianl / (Lx*Ly*Lz)
+          dxsi_dx(i,j,k,iel)  = real(dxsi_dxl * Lh2,kind=CUSTOM_REAL)
+          deta_dx(i,j,k,iel)  = real(deta_dxl * Lh2,kind=CUSTOM_REAL)
+          dgam_dx(i,j,k,iel)  = real(dgam_dxl * Lv2,kind=CUSTOM_REAL)
+          dxsi_dy(i,j,k,iel)  = real(dxsi_dyl * Lh2,kind=CUSTOM_REAL)
+          deta_dy(i,j,k,iel)  = real(deta_dyl * Lh2,kind=CUSTOM_REAL)
+          dgam_dy(i,j,k,iel)  = real(dgam_dyl * Lv2,kind=CUSTOM_REAL)
+          dxsi_dz(i,j,k,iel)  = real(dxsi_dzl * Lh2,kind=CUSTOM_REAL)
+          deta_dz(i,j,k,iel)  = real(deta_dzl * Lh2,kind=CUSTOM_REAL)
+          dgam_dz(i,j,k,iel)  = real(dgam_dzl * Lv2,kind=CUSTOM_REAL)
+          jacobian(i,j,k,iel) = real(jacobianl / (Lh*Lh*Lv),kind=CUSTOM_REAL)
         enddo
       enddo
     enddo
@@ -636,18 +641,13 @@ program smooth_laplacian_sem
   !         must solve A A s = M m
   !         where A = (M + K)
   !    done with two conjugate gradients
+  is_hess = .false.
+  is_kernel = .false.
+
   do iker = 1, nker
     !! Read input kernels
     kernel_name = kernel_names(iker)
-#ifdef USE_ADIOS_INSTEAD_OF_MESH
-    ! ADIOS single file opening
-    ! user output
-    if (myrank == 0) then
-      print *, 'reading in ADIOS input file : ',trim(input_file)
-    endif
-    call init_adios_group(myadios_val_group, "ValReader")
-    call open_file_adios_read(myadios_val_file, myadios_val_group, trim(input_file))
-    ! ADIOS array name
+
     ! determines if parameter name is for a kernel
     is_kernel = .false.
     if (len_trim(kernel_name) > 3) then
@@ -661,6 +661,16 @@ program smooth_laplacian_sem
         is_hess = .true.
       endif
     endif
+
+#ifdef USE_ADIOS_INSTEAD_OF_MESH
+    ! ADIOS single file opening
+    ! user output
+    if (myrank == 0) then
+      print *, 'reading in ADIOS input file : ',trim(input_file)
+    endif
+    call init_adios_group(myadios_val_group, "ValReader")
+    call open_file_adios_read(myadios_val_file, myadios_val_group, trim(input_file))
+    ! ADIOS array name
     if (is_kernel) then
       ! NOTE: reg1 => crust_mantle, others are not implemented
       varname = trim(kernel_name) // "_crust_mantle"
@@ -850,12 +860,12 @@ contains
 
        ! Print infos
        if (myrank == 0) then
-           write(*,*)'Iterations ',iter_cg,', max residual ',res_norm_inf,' l2 norm ',res_norm_new
+           write(*,*) 'Iterations ',iter_cg,', max residual ',res_norm_inf,' l2 norm ',res_norm_new
        endif
 
     enddo
 
-    if (myrank == 0) write(*,*)'Iterations ',iter_cg,', max residual ',res_norm_inf
+    if (myrank == 0) write(*,*) 'Iterations ',iter_cg,', max residual ',res_norm_inf
 
 
   end subroutine solve_laplace_linear_system_cg
@@ -1107,7 +1117,7 @@ contains
     if (size(a) /= size(b)) then
        stop
     endif
-    do i=1,size(a)
+    do i = 1,size(a)
        valloc = valloc + a(i) * b(i)
     enddo
     call sum_all_cr(valloc, val)
@@ -1129,7 +1139,7 @@ contains
 
     valloc = 0
     val    = 0
-    do i=1,size(a)
+    do i = 1,size(a)
        valloc = max(valloc,abs(a(i)))
     enddo
     call max_all_cr(valloc, val)

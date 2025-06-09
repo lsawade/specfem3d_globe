@@ -60,7 +60,8 @@
     ATTENUATION_GLL, CASE_3D,CRUSTAL,HETEROGEN_3D_MANTLE, &
     HONOR_1D_SPHERICAL_MOHO, MODEL_3D_MANTLE_PERTUBATIONS, &
     ONE_CRUST, TRANSVERSE_ISOTROPY, OCEANS,TOPOGRAPHY, &
-    CEM_REQUEST,CEM_ACCEPT
+    CEM_REQUEST,CEM_ACCEPT, &
+    EMC_MODEL
 
   implicit none
 
@@ -68,7 +69,6 @@
   character(len=64) :: ending
   character(len=MAX_STRING_LEN) :: MODEL_ROOT,MODEL_L
   integer :: impose_crust
-  integer :: irange,i
 
   ! defaults:
   !
@@ -89,13 +89,7 @@
   !  to .false. for a 1D crustal model.
 
   ! converts all string characters to lowercase (to make user input case-insensitive)
-  MODEL_L = MODEL
-  irange = iachar('a') - iachar('A')
-  do i = 1,len_trim(MODEL_L)
-    if (lge(MODEL_L(i:i),'A') .and. lle(MODEL_L(i:i),'Z')) then
-      MODEL_L(i:i) = achar(iachar(MODEL_L(i:i)) + irange)
-    endif
-  enddo
+  call convert_to_lowercase(MODEL,MODEL_L)
   MODEL_ROOT = MODEL_L ! sets root name of model to original one
 
   ! note: in the following we check the model name and see if some specific ending has been appended
@@ -238,6 +232,13 @@
     ! in case it has an ending for the crust, remove it from the name
     MODEL_ROOT = MODEL_ROOT(1: len_trim(MODEL_ROOT)-12)
   endif
+  ! checks with '_crustBrk' option
+  if (len_trim(MODEL_ROOT) > 9 ) ending = MODEL_ROOT(len_trim(MODEL_ROOT)-8:len_trim(MODEL_ROOT))
+  if (trim(ending) == '_crustbrk') then
+    impose_crust = ICRUST_BERKELEY
+    ! in case it has an ending for the crust, remove it from the name
+    MODEL_ROOT = MODEL_ROOT(1: len_trim(MODEL_ROOT)-9)
+  endif
 
   ! save main model name (without appended options)
   MODEL_NAME = trim(MODEL_ROOT)
@@ -284,6 +285,9 @@
   ! no CEM by default
   CEM_REQUEST = .false.
   CEM_ACCEPT  = .false.
+
+  ! no EMC model by default
+  EMC_MODEL = .false.
 
   ! no 3D model by default
   THREE_D_MODEL = 0
@@ -345,6 +349,11 @@
   case ('1d_ccrem')
     HONOR_1D_SPHERICAL_MOHO = .true.
     REFERENCE_1D_MODEL = REFERENCE_MODEL_CCREM
+
+  case ('1d_berkeley')
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_SEMUCB
+    TRANSVERSE_ISOTROPY = .true.
+    HONOR_1D_SPHERICAL_MOHO = .true.
 
   ! Mars 1D models
   case ('1d_sohl')
@@ -730,8 +739,25 @@
     TRANSVERSE_ISOTROPY = .true.
 #else
   case ('cem_request','cem_accept','cem_gll')
-    print *,'Error model ',trim(MODEL),': package compiled without CEM model support. Please re-configure with --with-cem support.'
-    stop 'Invalid CEM model requested, compiled without CEM support'
+    print *,'Error model ',trim(MODEL),': package compiled without CEM model support.'
+    print *,'Please re-configure with --with-cem or --with-netcdf support.'
+    stop 'Invalid CEM model requested, compiled without CEM/NetCDF support'
+#endif
+
+#ifdef USE_EMC
+  case ('emc_model')
+    EMC_MODEL           = .true.
+    TRANSVERSE_ISOTROPY = .false. ! enforces isotropic model - for now, tiso models are not supported yet...
+  case ('emc_model_tiso')
+    EMC_MODEL           = .true.
+    TRANSVERSE_ISOTROPY = .true.
+    ! tiso models are not supported yet...
+    stop 'EMC models with transverse isotropy are not supported yet!'
+#else
+  case ('emc_model')
+    print *,'Error model ',trim(MODEL),': package compiled without EMC model support.'
+    print *,'Please re-configure with --with-emc or --with-netcdf support.'
+    stop 'Invalid EMC model requested, compiled without EMC/NetCDF support'
 #endif
 
   case ('ppm')
@@ -751,6 +777,17 @@
     REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM
     THREE_D_MODEL = THREE_D_MODEL_GAPP2
     TRANSVERSE_ISOTROPY = .true.
+
+  case('semucb_a3d')
+    ! SEMUCB Berkeley model
+    CASE_3D = .true.                              ! moho stretching
+    CRUSTAL = .true.                              ! berkeley crustal model will be used
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .true.                  ! uses tiso parameterization
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.         ! uses 3d mantle perturbations
+    THREE_D_MODEL = THREE_D_MODEL_BERKELEY
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_SEMUCB   ! uses berkeley 1D reference
+    REFERENCE_CRUSTAL_MODEL = ICRUST_BERKELEY     ! uses berkeley crust
 
   case ('ishii')
     ! Ishii et al. (2002) inner core model
@@ -1121,6 +1158,17 @@
     HONOR_DEEP_MOHO = EARTH_HONOR_DEEP_MOHO
   end select
 
+  ! special cases - additional overwrites
+  ! Berkeley model
+  if (REFERENCE_1D_MODEL == REFERENCE_MODEL_SEMUCB) then
+    ! SEMUCB uses a homogenized crustal model with its own smooth topo
+    ! uses default Berkeley topo
+    PATHNAME_TOPO_FILE = PATHNAME_TOPO_FILE_BERKELEY
+    RESOLUTION_TOPO_FILE = RESOLUTION_TOPO_FILE_BERKELEY
+    NX_BATHY = NX_BATHY_BERKELEY
+    NY_BATHY = NY_BATHY_BERKELEY
+  endif
+
   end subroutine get_model_planet_constants
 
 !
@@ -1142,7 +1190,8 @@
     RHO_TOP_OC,RHO_BOTTOM_OC,RHO_OCEANS
 
   use shared_parameters, only: &
-    HONOR_1D_SPHERICAL_MOHO,CASE_3D,CRUSTAL,REFERENCE_1D_MODEL
+    HONOR_1D_SPHERICAL_MOHO,CASE_3D,CRUSTAL,REFERENCE_1D_MODEL, &
+    NCHUNKS,NEX_XI,NEX_ETA
 
   ! reference models
   use model_prem_par
@@ -1197,7 +1246,11 @@
     R771 = PREM_R771
     RTOPDDOUBLEPRIME = PREM_RTOPDDOUBLEPRIME
     RCMB = PREM_RCMB
-    RICB = PREM_RICB
+    if (USE_OLD_VERSION_FORMAT) then
+      RICB = PREM_RICB_OLD
+    else
+      RICB = PREM_RICB
+    endif
 
     ! non-dimensionalizes densities
     ! density ocean
@@ -1288,7 +1341,7 @@
     RHO_BOTTOM_OC = 12168.6383 / RHOAV
 
   case (REFERENCE_MODEL_AK135F_NO_MUD)
-!! DK DK values below entirely checked and fixed by Dimitri Komatitsch in December 2012.
+    ! values below entirely checked and fixed by Dimitri Komatitsch in December 2012.
     ROCEAN = 6368000.d0
     RMIDDLE_CRUST = 6351000.d0
     RMOHO  = 6336000.d0         ! at 35km depth
@@ -1387,20 +1440,39 @@
     ! (same as values in model_ccrem.f90)
     CCREM_RSURFACE = R_PLANET
     ROCEAN = CCREM_RSURFACE   ! no ocean
-    RMIDDLE_CRUST = CCREM_RSURFACE - 20000.d0 ! depth = 20 km
-    RMOHO = CCREM_RSURFACE - 35000.d0         ! depth = 35 km
-    R80  = CCREM_RSURFACE - 80000.d00         ! depth = 80 km
-    R220 = CCREM_RSURFACE - 220000.d0          ! depth = 220 km
-    R400 = CCREM_RSURFACE - 410000.d0          ! depth = 410 km - CCREM depth 410km discontinuity
-    R600 = CCREM_RSURFACE - 600000.d0          ! depth = 600 km
-    R670 = CCREM_RSURFACE - 660000.d0          ! depth = 660 km - CCREM depth 660km discontinuity
-    R771 = CCREM_RSURFACE - 771000.d0          ! depth = 771 km (PREM)
+    RMIDDLE_CRUST = CCREM_RSURFACE - 20000.d0   ! depth = 20 km
+    RMOHO = CCREM_RSURFACE - 35000.d0           ! depth = 35 km
+    R80  = CCREM_RSURFACE - 80000.d00           ! depth = 80 km
+    R220 = CCREM_RSURFACE - 220000.d0           ! depth = 220 km
+    R400 = CCREM_RSURFACE - 410000.d0           ! depth = 410 km - CCREM depth 410km discontinuity
+    R600 = CCREM_RSURFACE - 600000.d0           ! depth = 600 km
+    R670 = CCREM_RSURFACE - 660000.d0           ! depth = 660 km - CCREM depth 660km discontinuity
+    R771 = CCREM_RSURFACE - 771000.d0           ! depth = 771 km (PREM)
     RTOPDDOUBLEPRIME = CCREM_RSURFACE - 2741000.d0 ! depth = 2741 km (PREM)
-    RCMB = CCREM_RSURFACE - 2891000.d0         ! depth = 2891 km (PREM)
-    RICB = CCREM_RSURFACE - 5153500.d0         ! depth = 5153.5 km
+    RCMB = CCREM_RSURFACE - 2891000.d0          ! depth = 2891 km (PREM)
+    RICB = CCREM_RSURFACE - 5153500.d0          ! depth = 5153.5 km
 
     RHO_TOP_OC = 9.9131d0 * 1000.d0 / RHOAV
     RHO_BOTTOM_OC = 12.1478d0 * 1000.d0 / RHOAV
+
+  case (REFERENCE_MODEL_SEMUCB)
+    ! Berkeley SEMUCB Model - discontinuities
+    ROCEAN = 6368000.d0
+    RMIDDLE_CRUST = 6356000.d0                  ! depth = 15 km
+    RMOHO = 6341000.d0                          ! moho depth = 30 km
+    R80  = 6291000.d0                           ! depth = 80 km
+    R120 = -1.d0                                ! no d120 discontinuity, set to fictitious value
+    R220 = 6151000.d0                           ! depth = 220 km
+    R400 = 5961000.d0                           ! depth = 410 km
+    R600 = 5771000.d0                           ! depth = 600 km
+    R670 = 5721000.d0                           ! depth = 650 km
+    R771 = 5600000.d0                           ! depth = 771 km
+    RTOPDDOUBLEPRIME = 3630000.d0
+    RCMB = 3480000.d0
+    RICB = 1221500.d0
+
+    RHO_TOP_OC = 9903.4384 / RHOAV
+    RHO_BOTTOM_OC = 12166.5885 / RHOAV
 
   ! Mars models
   case (REFERENCE_MODEL_SOHL_B)
@@ -1515,7 +1587,9 @@
     case default
       RMOHO_FICTITIOUS_IN_MESHER = RMOHO
     end select
+
     R80_FICTITIOUS_IN_MESHER = R80
+
     if (CRUSTAL .and. CASE_3D) then
       !> Hejun
       ! mesh will honor 3D crustal moho topography
@@ -1523,6 +1597,23 @@
       ! moves R80 down to 120km depth in order to have less squeezing for elements below moho
       RMOHO_FICTITIOUS_IN_MESHER = RMOHO_FICTITIOUS_IN_MESHER + RMOHO_STRETCH_ADJUSTMENT
       R80_FICTITIOUS_IN_MESHER = R80_FICTITIOUS_IN_MESHER + R80_STRETCH_ADJUSTMENT
+    endif
+
+    ! "special" model adjustments
+    if (REFERENCE_1D_MODEL == REFERENCE_MODEL_SEMUCB) then
+      ! SEMUCB Berkeley model
+      ! Berkeley uses a 1d moho depth of 30 km
+      ! moves fictitious moho closer to this 1d moho depth
+      RMOHO_FICTITIOUS_IN_MESHER = R_PLANET - 29000.000     ! down at  29 km depth
+      R80_FICTITIOUS_IN_MESHER = R_PLANET - 130000.000      ! down at 130 km depth
+
+      ! coarse global mesh modification (to allow for small testing examples)
+      ! to avoid Jacobian errors around lat/lon ~ 80 deg / 100 deg due to stretching
+      if (NCHUNKS == 6 .and. min(NEX_XI,NEX_ETA) <= 48) then
+        RMOHO_FICTITIOUS_IN_MESHER = R_PLANET - 35000.000   ! down at  35 km depth
+        R80_FICTITIOUS_IN_MESHER = R_PLANET - 140000.000    ! down at 100 km depth
+      endif
+
     endif
   endif
 

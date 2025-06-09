@@ -36,7 +36,7 @@
 
   use constants_solver
 
-  use shared_parameters, only: ATT_F_C_SOURCE
+  use shared_parameters, only: ATT_F_C_SOURCE, HDF5_ENABLED
 
   use specfem_par, only: ATTENUATION_VAL,ADIOS_FOR_ARRAYS_SOLVER,LOCAL_PATH, &
     scale_t_inv
@@ -80,6 +80,7 @@
   f_c_source = 0.d0
 
   ! gets nspec for this region
+  nspec_region = 0
   select case(iregion_code)
   case (IREGION_CRUST_MANTLE)
     nspec_region = NSPEC_CRUST_MANTLE
@@ -96,7 +97,9 @@
   ! use the filename to determine the actual contents of the read
   if (ADIOS_FOR_ARRAYS_SOLVER) then
     ! ADIOS format
-    call read_attenuation_adios(iregion_code,factor_common, factor_scale, tau_s, vnspec, f_c_source)
+    call read_attenuation_adios(iregion_code, factor_common, factor_scale, tau_s, vnspec, f_c_source)
+  else if (HDF5_ENABLED) then
+    call read_attenuation_hdf5(iregion_code, factor_common, factor_scale, tau_s, vnspec, f_c_source)
   else
     ! binary format
     ! opens corresponding databases file
@@ -200,7 +203,10 @@
 
   ! local parameters
   double precision, dimension(N_SLS) :: tauinv,beta
-  double precision :: omsb1,omsb2
+
+  ! debugging
+  !double precision :: omsb1,omsb2
+
   integer :: i
 
   tauinv(:) = 0.d0
@@ -222,20 +228,20 @@
   !          M_U = M_R / [ 1 - sum( (tau_eps - tau_sigma)/tau_eps ) ] = M_R / [ 1 - sum(1 - tau_sigma/tau_eps) ]
   !       with a scaling factor = 1 / [ 1 - sum(1 - tau_sigma/tau_eps) ]
   !
-  ! to compare these two factors:
-  if (.false.) then
-    ! factor to scale from relaxed to unrelaxed moduli: see Komatitsch
-    omsb1 = 1.0d0
-    do i = 1,N_SLS
-      omsb1  = omsb1 - (1.d0 - tau_e(i)/tau_s(i))
-    enddo
-    ! factor to scale from relaxed to unrelaxed moduli: see Liu
-    omsb2 = 1.0d0
-    do i = 1,N_SLS
-      omsb2 = omsb2 - (1.d0 - tau_s(i)/tau_e(i))
-    enddo
-    print *,'debug: one_minus_sum_beta1,2 = ',omsb1,1.d0/omsb2
-  endif
+  ! debugging - to compare these two factors:
+  !if (.false.) then
+  !  ! factor to scale from relaxed to unrelaxed moduli: see Komatitsch
+  !  omsb1 = 1.0d0
+  !  do i = 1,N_SLS
+  !    omsb1  = omsb1 - (1.d0 - tau_e(i)/tau_s(i))
+  !  enddo
+  !  ! factor to scale from relaxed to unrelaxed moduli: see Liu
+  !  omsb2 = 1.0d0
+  !  do i = 1,N_SLS
+  !    omsb2 = omsb2 - (1.d0 - tau_s(i)/tau_e(i))
+  !  enddo
+  !  print *,'debug: one_minus_sum_beta1,2 = ',omsb1,1.d0/omsb2
+  !endif
   ! results:
   ! Q ~    65: one_minus_sum_beta1,2 = 1.0648735275165400        1.0677815840121743   -> ratio = 0.997276
   ! Q ~   184: one_minus_sum_beta1,2 = 1.0233224020801992        1.0236877302481358   -> ratio = 0.999643
@@ -383,8 +389,18 @@
   !print *,'debug: factor scale mu0,mu = ',factor_scale_mu0,factor_scale_mu,'approximated Q = A/B',a_val/b_val
 
   !--- check that the correction factor is close to one
-  if (scale_factor < 0.8d0 .or. scale_factor > 1.2d0) then
-    print *,'Error: incorrect scale factor: ', scale_factor,'scale mu',factor_scale_mu,'scale mu0',factor_scale_mu0
+  ! note: for very coarse global simulations, the reference frequency (usually 1Hz for global models)
+  !       and center frequency of the simulation can be far apart.
+  !       the scale_factor limiting range here is somewhat set arbitrarily, and enlarged to [0.5,1.5]
+  !       to allow for very coarse global simulation tests with sponge attenuation.
+  if (scale_factor < 0.5d0 .or. scale_factor > 1.5d0) then
+    print *,'Error: incorrect scale factor: ', scale_factor
+    print *,'  scale factor: ', scale_factor,' should be between 0.5 to 1.5'
+    print *,'  factor scale_mu = ',factor_scale_mu,' factor scale_mu0 = ',factor_scale_mu0
+    print *,'  Q value = ',Q_mu
+    print *,'  central period = ',T_c_source * scale_t,' frequency = ',f_c_source / scale_t
+    print *,'  model frequency = ',f_0_model / scale_t
+    print *,'Please check your reference frequency ATTENUATION_f0_REFERENCE in file constants.h'
     call exit_MPI(myrank,'incorrect correction factor in attenuation model')
   endif
 

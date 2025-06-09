@@ -33,16 +33,19 @@
   use specfem_par_crustmantle
   use specfem_par_innercore
   use specfem_par_outercore
+  use specfem_par_full_gravity
 
   implicit none
 
   ! local parameters
   integer :: ier
   character(len=MAX_STRING_LEN) outputname
+  ! full gravity
+  integer :: neq_read,neq1_read
 
   ! checks if anything to do
   ! undoing attenuation doesn't support the following checkpointing
-  if (UNDO_ATTENUATION ) return
+  if (UNDO_ATTENUATION) return
 
   ! read files back from local disk or MT tape system if restart file
   if (NUMBER_OF_THIS_RUN > 1) then
@@ -54,6 +57,8 @@
 
     if (ADIOS_FOR_FORWARD_ARRAYS) then
       call read_intermediate_forward_arrays_adios()
+    else if (HDF5_ENABLED) then
+      call read_intermediate_forward_arrays_hdf5()
     else
       write(outputname,"('dump_all_arrays',i6.6)") myrank
       outputname = trim(LOCAL_TMP_PATH) // '/' // outputname(1:len_trim(outputname))
@@ -88,23 +93,49 @@
       read(IIN) epsilondev_yz_inner_core
 
       ! rotation
-      read(IIN) A_array_rotation
-      read(IIN) B_array_rotation
+      if (ROTATION_VAL) then
+        read(IIN) A_array_rotation
+        read(IIN) B_array_rotation
+      endif
 
       ! attenuation memory variables
-      read(IIN) R_xx_crust_mantle
-      read(IIN) R_yy_crust_mantle
-      read(IIN) R_xy_crust_mantle
-      read(IIN) R_xz_crust_mantle
-      read(IIN) R_yz_crust_mantle
+      if (ATTENUATION_VAL) then
+        read(IIN) R_xx_crust_mantle
+        read(IIN) R_yy_crust_mantle
+        read(IIN) R_xy_crust_mantle
+        read(IIN) R_xz_crust_mantle
+        read(IIN) R_yz_crust_mantle
 
-      read(IIN) R_xx_inner_core
-      read(IIN) R_yy_inner_core
-      read(IIN) R_xy_inner_core
-      read(IIN) R_xz_inner_core
-      read(IIN) R_yz_inner_core
+        read(IIN) R_xx_inner_core
+        read(IIN) R_yy_inner_core
+        read(IIN) R_xy_inner_core
+        read(IIN) R_xz_inner_core
+        read(IIN) R_yz_inner_core
+      endif
+
+      ! full gravity
+      if (FULL_GRAVITY_VAL) then
+        read(IIN) neq_read
+        read(IIN) neq1_read
+        ! check if array sizes match
+        if (neq_read /= neq) then
+          print *,'Error reading forward array for startrun: rank ',myrank,'has read neq =',neq_read,' - shoud be ',neq
+          call exit_MPI(myrank,'Invalid forward array neq for startrun')
+        endif
+        if (neq1_read /= neq1) then
+          print *,'Error reading forward array for startrun: rank ',myrank,'has read neq1 =',neq1_read,' - shoud be ',neq1
+          call exit_MPI(myrank,'Invalid forward array neq1 for startrun')
+        endif
+        read(IIN) pgrav1
+      endif
 
       close(IIN)
+
+      ! full gravity
+      if (FULL_GRAVITY) then
+        ! need to interpolate the gravity values
+        call SIEM_interpolate_gravity()
+      endif
     endif
   endif
 
@@ -122,11 +153,13 @@
   use specfem_par_crustmantle
   use specfem_par_innercore
   use specfem_par_outercore
+  use specfem_par_full_gravity
 
   implicit none
 
   ! local parameters
   integer :: ier
+  integer :: b_neq_read,b_neq1_read
   character(len=MAX_STRING_LEN) :: outputname
 
   ! checks if anything to do
@@ -135,6 +168,8 @@
   ! reads in file data
   if (ADIOS_FOR_FORWARD_ARRAYS) then
     call read_forward_arrays_adios()
+  else if (HDF5_ENABLED) then
+    call read_forward_arrays_hdf5()
   else
     write(outputname,'(a,i6.6,a)') 'proc',myrank,'_save_forward_arrays.bin'
     outputname = trim(LOCAL_TMP_PATH) // '/' // outputname(1:len_trim(outputname))
@@ -189,8 +224,32 @@
        read(IIN) b_R_xz_inner_core
        read(IIN) b_R_yz_inner_core
     endif
+
+    ! full gravity
+    if (FULL_GRAVITY_VAL) then
+      read(IIN) b_neq_read
+      read(IIN) b_neq1_read
+      ! check if array sizes match
+      if (b_neq_read /= neq) then
+        print *,'Error reading forward array: rank ',myrank,'has read neq =',b_neq_read,' - shoud be ',neq
+        call exit_MPI(myrank,'Invalid forward array neq')
+      endif
+      if (b_neq1_read /= neq1) then
+        print *,'Error reading forward array: rank ',myrank,'has read neq1 =',b_neq1_read,' - shoud be ',neq1
+        call exit_MPI(myrank,'Invalid forward array neq1')
+      endif
+      ! Level-1 solver array
+      read(IIN) b_pgrav1
+    endif
+
     close(IIN)
   endif ! ADIOS_FOR_FORWARD_ARRAYS
+
+  ! full gravity
+  if (FULL_GRAVITY) then
+    ! need to interpolate the gravity values
+    call SIEM_interpolate_backward_gravity()
+  endif
 
   ! transfers fields onto GPU
   if (GPU_MODE) then
@@ -246,12 +305,14 @@
   use specfem_par_crustmantle
   use specfem_par_innercore
   use specfem_par_outercore
+  use specfem_par_full_gravity
 
   implicit none
 
   ! local parameters
   integer :: iteration_on_subset_tmp
   integer :: ier
+  integer :: b_neq_read,b_neq1_read
   character(len=MAX_STRING_LEN) :: outputname
 
   ! current subset iteration
@@ -259,6 +320,8 @@
 
   if (ADIOS_FOR_UNDO_ATTENUATION) then
     call read_forward_arrays_undoatt_adios(iteration_on_subset_tmp)
+  else if (HDF5_ENABLED) then
+    call read_forward_arrays_undoatt_hdf5(iteration_on_subset_tmp)
   else
     ! reads in saved wavefield
     write(outputname,'(a,i6.6,a,i6.6,a)') 'proc',myrank,'_save_frame_at',iteration_on_subset_tmp,'.bin'
@@ -302,7 +365,30 @@
       read(IIN) b_R_yz_inner_core
     endif
 
+    ! full gravity
+    if (FULL_GRAVITY_VAL) then
+      read(IIN) b_neq_read
+      read(IIN) b_neq1_read
+      ! check if array sizes match
+      if (b_neq_read /= neq) then
+        print *,'Error reading forward array: rank ',myrank,'has read neq =',b_neq_read,' - shoud be ',neq
+        call exit_MPI(myrank,'Invalid forward array neq')
+      endif
+      if (b_neq1_read /= neq1) then
+        print *,'Error reading forward array: rank ',myrank,'has read neq1 =',b_neq1_read,' - shoud be ',neq1
+        call exit_MPI(myrank,'Invalid forward array neq1')
+      endif
+      ! Level-1 solver array
+      read(IIN) b_pgrav1
+    endif
+
     close(IIN)
+  endif
+
+  ! full gravity
+  if (FULL_GRAVITY) then
+    ! need to interpolate the gravity values
+    call SIEM_interpolate_backward_gravity()
   endif
 
   ! transfers fields onto GPU

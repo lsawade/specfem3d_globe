@@ -34,10 +34,10 @@
 
   ! local parameters
   ! broadcast parameter arrays
-  integer, parameter :: nparam_i = 51
+  integer, parameter :: nparam_i = 53
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 75
+  integer, parameter :: nparam_l = 80
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 42
@@ -77,6 +77,8 @@
             GPU_RUNTIME,NUMBER_OF_SIMULTANEOUS_RUNS, &
             MODEL_GLL_TYPE,USER_NSTEP, &
             NSTEP_STEADY_STATE,NTSTEP_BETWEEN_OUTPUT_SAMPLE, &
+            POISSON_SOLVER, &
+            HDF5_IO_NODES, &
             USE_SOURCE_DERIVATIVE_DIRECTION, &
             NUMBER_OF_BUFFER_ELEMENTS /)
 
@@ -111,6 +113,9 @@
             USE_MONOCHROMATIC_CMT_SOURCE, ABSORB_USING_GLOBAL_SPONGE, &
             OUTPUT_SEISMOS_3D_ARRAY, &
             REGIONAL_MESH_CUTOFF,REGIONAL_MESH_ADD_2ND_DOUBLING, &
+            EMC_MODEL, &
+            FULL_GRAVITY, &
+            HDF5_ENABLED, HDF5_FOR_MOVIES, OUTPUT_SEISMOS_HDF5, &
             USE_SOURCE_DERIVATIVE, &
             SAVE_GREEN_FUNCTIONS, &
             USE_BUFFER_ELEMENTS /)
@@ -207,6 +212,16 @@
   call bcast_all_singlei(NZ_DOUBLING_4)
   call bcast_all_singlei(NZ_DOUBLING_5)
 
+  ! (optional) Berkeley UCB stf
+  call bcast_all_singlel(STF_IS_UCB_HEAVISIDE)
+  if (STF_IS_UCB_HEAVISIDE) then
+    call bcast_all_singledp(UCB_SOURCE_T1)
+    call bcast_all_singledp(UCB_SOURCE_T2)
+    call bcast_all_singledp(UCB_SOURCE_T3)
+    call bcast_all_singledp(UCB_SOURCE_T4)
+    call bcast_all_singledp(UCB_TAU)
+  endif
+
   ! (optional) scattering perturbations
   call bcast_all_singlel(ADD_SCATTERING_PERTURBATIONS)
   call bcast_all_singledp(SCATTERING_STRENGTH)
@@ -275,8 +290,10 @@
     USER_NSTEP = bcast_integer(47)
     NSTEP_STEADY_STATE = bcast_integer(48)
     NTSTEP_BETWEEN_OUTPUT_SAMPLE = bcast_integer(49)
-    USE_SOURCE_DERIVATIVE_DIRECTION = bcast_integer(50)
-    NUMBER_OF_BUFFER_ELEMENTS = bcast_integer(51)
+    POISSON_SOLVER = bcast_integer(50)
+    HDF5_IO_NODES = bcast_integer(51)
+    USE_SOURCE_DERIVATIVE_DIRECTION = bcast_integer(52)
+    NUMBER_OF_BUFFER_ELEMENTS = bcast_integer(53)
 
     ! logicals
     TRANSVERSE_ISOTROPY = bcast_logical(1)
@@ -351,9 +368,14 @@
     OUTPUT_SEISMOS_3D_ARRAY = bcast_logical(70)
     REGIONAL_MESH_CUTOFF = bcast_logical(71)
     REGIONAL_MESH_ADD_2ND_DOUBLING = bcast_logical(72)
-    USE_SOURCE_DERIVATIVE = bcast_logical(73)
-    SAVE_GREEN_FUNCTIONS = bcast_logical(74)
-    USE_BUFFER_ELEMENTS = bcast_logical(75)
+    EMC_MODEL = bcast_logical(73)
+    FULL_GRAVITY = bcast_logical(74)
+    HDF5_ENABLED = bcast_logical(75)
+    HDF5_FOR_MOVIES = bcast_logical(76)
+    OUTPUT_SEISMOS_HDF5 = bcast_logical(77)
+    USE_SOURCE_DERIVATIVE = bcast_logical(78)
+    SAVE_GREEN_FUNCTIONS = bcast_logical(79)
+    USE_BUFFER_ELEMENTS = bcast_logical(80)
 
     ! double precisions
     DT = bcast_double_precision(1)

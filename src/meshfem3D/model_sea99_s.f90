@@ -42,6 +42,8 @@
 
   module model_sea99_s_par
 
+  implicit none
+
   double precision,dimension(:,:,:), allocatable :: sea99_vs
   double precision,dimension(:), allocatable :: sea99_depth
   double precision :: sea99_ddeg
@@ -173,7 +175,7 @@
   xd1 = 0
 
   !----------------------- depth in the model ------------------
-  dep=R_PLANET_KM*(R_UNIT_SPHERE - radius)
+  dep = R_PLANET_KM*(R_UNIT_SPHERE - radius)
   if (dep <= sea99_depth(1)) then
      id1 = 1
      xd1 = 0

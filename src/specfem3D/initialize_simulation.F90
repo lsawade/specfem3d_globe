@@ -88,7 +88,7 @@
     call flush_IMAIN()
   endif
 
-!! DK DK for gravity integrals
+  ! for gravity integrals
   if (GRAVITY_INTEGRALS) call exit_MPI(myrank,'no need to run the solver to compute gravity integrals, only the mesher')
 
   if (myrank == 0) then
@@ -168,6 +168,12 @@
       tiny(1._CUSTOM_REAL),huge(1._CUSTOM_REAL)
     write(IMAIN,*)
 
+    ! backward compatibility
+    if (USE_OLD_VERSION_FORMAT) then
+      write(IMAIN,*) 'using old version backward compatibility (versions 7.0 to 8.0)'
+      write(IMAIN,*)
+    endif
+
     ! model user parameters
     write(IMAIN,*) 'model: ',trim(MODEL)
     if (OCEANS) then
@@ -186,7 +192,15 @@
       write(IMAIN,*) '  no surface topography'
     endif
     if (GRAVITY) then
-      write(IMAIN,*) '  incorporating self-gravitation (Cowling approximation)'
+      if (FULL_GRAVITY) then
+        if (ADD_TRINF) then
+          write(IMAIN,*) '  incorporating full self-gravitation (with transition layer)'
+        else
+          write(IMAIN,*) '  incorporating full self-gravitation (without transition layer)'
+        endif
+      else
+        write(IMAIN,*) '  incorporating self-gravitation (Cowling approximation)'
+      endif
     else
       write(IMAIN,*) '  no self-gravitation'
     endif
@@ -197,7 +211,7 @@
     endif
     if (ATTENUATION) then
       write(IMAIN,*) '  incorporating attenuation using ',N_SLS,' standard linear solids'
-      if (ATTENUATION_3D) write(IMAIN,*)'  using 3D attenuation model'
+      if (ATTENUATION_3D) write(IMAIN,*) '  using 3D attenuation model'
     else
       write(IMAIN,*) '  no attenuation'
     endif
@@ -239,8 +253,10 @@
     else
       write(IMAIN,*) '  no general mantle anisotropy'
     endif
-
     write(IMAIN,*)
+    if (ASSUME_PERFECT_SPHERE) then
+      write(IMAIN,*) '  assuming perfect sphere'
+    endif
     write(IMAIN,*)
     if (REGIONAL_MESH_CUTOFF) then
       write(IMAIN,*) 'Regional mesh cutoff:'
@@ -257,6 +273,17 @@
     COMPUTE_AND_STORE_STRAIN = .true.
   else
     COMPUTE_AND_STORE_STRAIN = .false.
+  endif
+
+  ! no full gravity
+  if (.not. FULL_GRAVITY) then
+    ! zero-out region sizes
+    ! transition-to-infinite
+    NSPEC_TRINFINITE = 0
+    NGLOB_TRINFINITE = 0
+    ! infinite
+    NSPEC_INFINITE = 0
+    NGLOB_INFINITE = 0
   endif
 
   ! checks flags
@@ -400,6 +427,11 @@
       if (myrank == 0) write(IMAIN,*) 'GRAVITY:',GRAVITY,GRAVITY_VAL
       write(*,*) 'GRAVITY:', GRAVITY, GRAVITY_VAL
       call exit_MPI(myrank,'Error in compiled parameters GRAVITY, please recompile solver')
+  endif
+  if (FULL_GRAVITY .neqv. FULL_GRAVITY_VAL) then
+      if (myrank == 0) write(IMAIN,*) 'FULL_GRAVITY:',FULL_GRAVITY,FULL_GRAVITY_VAL
+      write(*,*) 'FULL_GRAVITY:', FULL_GRAVITY, FULL_GRAVITY_VAL
+      call exit_MPI(myrank,'Error in compiled parameters FULL_GRAVITY, please recompile solver')
   endif
   if (ROTATION .neqv. ROTATION_VAL) then
       if (myrank == 0) write(IMAIN,*) 'ROTATION:',ROTATION,ROTATION_VAL
@@ -576,6 +608,8 @@
       call exit_mpi(myrank,'SAVE_AZIMUTHAL_ANISO_KL_ONLY needs anisotropic kernel flag ANISOTROPIC_KL set to .true.')
     if (SAVE_REGULAR_KL .and. SAVE_AZIMUTHAL_ANISO_KL_ONLY) &
       call exit_mpi(myrank,'SAVE_AZIMUTHAL_ANISO_KL_ONLY not implemented yet for SAVE_REGULAR_KL kernels')
+    if (SAVE_REGULAR_KL .and. (HDF5_ENABLED .or. ADIOS_FOR_KERNELS)) &
+      call exit_mpi(myrank,'SAVE_REGULAR_KL not implemented yet for HDF5 or ADIOS output')
   endif
 
   ! check for GPU runs
@@ -601,6 +635,19 @@
 
   if (SAVE_SEISMOGRAMS_STRAIN .and. WRITE_SEISMOGRAMS_BY_MAIN) &
     call exit_MPI(myrank,'For SAVE_SEISMOGRAMS_STRAIN, please set WRITE_SEISMOGRAMS_BY_MAIN to .false.')
+
+  ! full gravity support
+  if (FULL_GRAVITY) then
+    ! checks adjoint arrays
+    if ((SIMULATION_TYPE == 1 .and. SAVE_FORWARD) .or. SIMULATION_TYPE == 3) then
+      ! checks adjoint array dimensions
+      if (NSPEC_TRINFINITE_ADJOINT /= NSPEC_TRINFINITE &
+        .or. NSPEC_INFINITE_ADJOINT /= NSPEC_INFINITE &
+        .or. NGLOB_TRINFINITE_ADJOINT /= NGLOB_TRINFINITE &
+        .or. NGLOB_INFINITE_ADJOINT /= NGLOB_INFINITE) &
+        call exit_MPI(myrank, 'improper dimensions of adjoint arrays for infinite regions, please recompile solver')
+    endif
+  endif
 
   end subroutine initialize_simulation_check
 

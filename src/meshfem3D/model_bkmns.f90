@@ -920,6 +920,17 @@
   if (ier /= 0) call exit_MPI(myrank,'Error allocating nFactors zone4 array')
   nFactors_zone4(:) = 0.d0
 
+  ! initializes
+  spline_degree_zone2 = 0
+  rmin_zone2 = 0.d0
+  rmax_zone2 = 0.d0
+  spline_degree_zone3 = 0
+  rmin_zone3 = 0.d0
+  rmax_zone3 = 0.d0
+  spline_degree_zone4 = 0
+  rmin_zone4 = 0.d0
+  rmax_zone4 = 0.d0
+
   ! zone range within [2,4]
   do izone = 2,4
     ! zone string
@@ -2242,6 +2253,9 @@
     case (4)
       rmin = T_zone4(0)
       rmax = T_zone4(num_spline_positions_zone4-1)
+    case default
+      rmin = 0.d0
+      rmax = 0.d0
     end select
 
     ! checks if in zone shell min/max radius

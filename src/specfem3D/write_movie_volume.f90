@@ -123,8 +123,9 @@
 !
 
 
-!! DK DK put the list of parameters back here to avoid a warning / error from the gfortran compiler
-!! DK DK about undefined behavior when aggressive loop vectorization is used by the compiler
+! put the list of parameters back here to avoid a warning / error from the gfortran compiler
+! about undefined behavior when aggressive loop vectorization is used by the compiler
+
   subroutine write_movie_volume_mesh(nu_3dmovie,num_ibool_3dmovie,mask_3dmovie,mask_ibool_3dmovie, &
                                      muvstore_crust_mantle_3dmovie,npoints_3dmovie)
 
@@ -876,7 +877,7 @@
           do i = 1, NGLLX
             iglob = ibool_crust_mantle(i,j,k,ispec)
             ! norm
-            tmp_data(i,j,k,ispec) = scale_displ * sqrt( displ_crust_mantle(1,iglob)**2 &
+            tmp_data(i,j,k,ispec) = real(scale_displ,kind=CUSTOM_REAL) * sqrt( displ_crust_mantle(1,iglob)**2 &
                                           + displ_crust_mantle(2,iglob)**2 &
                                           + displ_crust_mantle(3,iglob)**2 )
           enddo
@@ -928,7 +929,7 @@
           do i = 1, NGLLX
             iglob = ibool_inner_core(i,j,k,ispec)
             ! norm
-            tmp_data(i,j,k,ispec) = scale_displ * sqrt( displ_inner_core(1,iglob)**2 &
+            tmp_data(i,j,k,ispec) = real(scale_displ,kind=CUSTOM_REAL) * sqrt( displ_inner_core(1,iglob)**2 &
                                           + displ_inner_core(2,iglob)**2 &
                                           + displ_inner_core(3,iglob)**2 )
           enddo
@@ -993,7 +994,7 @@
           do i = 1, NGLLX
             iglob = ibool_crust_mantle(i,j,k,ispec)
             ! norm of velocity
-            tmp_data(i,j,k,ispec) = scale_veloc * sqrt( veloc_crust_mantle(1,iglob)**2 &
+            tmp_data(i,j,k,ispec) = real(scale_veloc,kind=CUSTOM_REAL) * sqrt( veloc_crust_mantle(1,iglob)**2 &
                                           + veloc_crust_mantle(2,iglob)**2 &
                                           + veloc_crust_mantle(3,iglob)**2 )
           enddo
@@ -1045,7 +1046,7 @@
           do i = 1, NGLLX
             iglob = ibool_inner_core(i,j,k,ispec)
             ! norm of velocity
-            tmp_data(i,j,k,ispec) = scale_veloc * sqrt( veloc_inner_core(1,iglob)**2 &
+            tmp_data(i,j,k,ispec) = real(scale_veloc,kind=CUSTOM_REAL) * sqrt( veloc_inner_core(1,iglob)**2 &
                                           + veloc_inner_core(2,iglob)**2 &
                                           + veloc_inner_core(3,iglob)**2 )
           enddo
@@ -1098,7 +1099,7 @@
   logical,parameter :: OUTPUT_INNER_CORE = .true.
 
   ! dimensionalized scaling
-  scale_accel = scale_veloc * scale_t_inv
+  scale_accel = real(scale_veloc * scale_t_inv,kind=CUSTOM_REAL)
 
   ! outputs norm of acceleration
   if (OUTPUT_CRUST_MANTLE) then

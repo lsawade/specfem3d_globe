@@ -35,18 +35,19 @@
 
   use shared_parameters, only: OUTPUT_FILES,R_PLANET,RHOAV
 
-  use specfem_par, only: &
-    NSOURCES,DT, &
-    rspl,ellipicity_spline,ellipicity_spline2,nspl,ibathy_topo, &
-    LOCAL_TMP_PATH,SIMULATION_TYPE,TOPOGRAPHY, &
+  use specfem_par, only: NSOURCES,DT, &
+    ibathy_topo,TOPOGRAPHY, &
+    LOCAL_TMP_PATH,SIMULATION_TYPE, &
     SAVE_SOURCE_MASK
+
+  use specfem_par, only: rspl_ellip,ellipicity_spline,ellipicity_spline2,nspl_ellip
 
   ! sources
   use specfem_par, only: &
     hdur,Mxx,Myy,Mzz,Mxy,Mxz,Myz,Mw,M0, &
     xi_source,eta_source,gamma_source,nu_source, &
     islice_selected_source,ispec_selected_source, &
-    tshift_src,theta_source,phi_source,depth_source,source_final_distance_max
+    tshift_src,source_theta_ref,source_phi_ref,depth_source,source_final_distance_max
 
   ! forces
   use specfem_par, only: &
@@ -58,48 +59,43 @@
 
   use specfem_par_movie, only: vtkdata_source_x,vtkdata_source_y,vtkdata_source_z
 
+  ! for Berkeley stf
+  use shared_parameters, only: STF_IS_UCB_HEAVISIDE,UCB_SOURCE_T1,UCB_SOURCE_T2,UCB_SOURCE_T3,UCB_SOURCE_T4,UCB_TAU
+
   implicit none
 
   ! local parameters
-  integer :: iprocloop
-  integer :: isource
-  integer :: ier
+  integer :: isource,ier
 
-  double precision, dimension(NSOURCES) :: srclat,srclon,srcdepth
-  double precision, dimension(6,NSOURCES) :: moment_tensor
+  double precision, allocatable, dimension(:) :: srclat,srclon,srcdepth
+  double precision, allocatable, dimension(:) :: rsurface_source
+  double precision, allocatable, dimension(:,:) :: moment_tensor
 
-  double precision, dimension(NSOURCES) :: final_distance
-  double precision, dimension(NSOURCES) :: r0_source
+  double precision, allocatable, dimension(:) :: final_distance
+  double precision, allocatable, dimension(:,:) :: xyz_found
 
   ! point locations
-  double precision, allocatable, dimension(:,:) :: xyz_target
+  double precision, allocatable, dimension(:,:) :: xyz_target_subset
   double precision, allocatable, dimension(:,:) :: xyz_found_subset
-  double precision, allocatable, dimension(:,:,:) :: xyz_found_all
 
   integer :: NSOURCES_SUBSET_current_size
   integer :: isource_in_this_subset,isources_already_done
 
   integer, dimension(:), allocatable :: ispec_selected_subset
-  integer, dimension(:,:), allocatable :: ispec_selected_all
 
   double precision, dimension(:), allocatable :: final_distance_subset
-  double precision, dimension(:,:), allocatable :: final_distance_all
-
   double precision, dimension(:), allocatable :: xi_subset,eta_subset,gamma_subset
-  double precision, dimension(:,:), allocatable :: xi_all,eta_all,gamma_all
 
-  double precision :: lat,lon,radius,depth,r_target
+  double precision :: lat,lon,depth,r_target
 
   double precision :: theta,phi
   double precision :: sint,cost,sinp,cosp
 
-  double precision :: ell
   double precision :: elevation
-  double precision :: r0,p20
+  double precision :: r0
 
   double precision :: r_found
   double precision :: Mrr,Mtt,Mpp,Mrt,Mrp,Mtp
-  double precision :: colat_source
 
   double precision :: distmin_not_squared
   double precision :: x_target,y_target,z_target
@@ -126,6 +122,9 @@
   double precision :: time_start,tCPU
   double precision, external :: wtime
 
+  ! compatibility to previous version
+  double precision :: radius_ell,dcost,p20,ell
+
   ! user output
   if (myrank == 0) then
     write(IMAIN,*)
@@ -139,6 +138,19 @@
   ! get MPI starting time for all sources
   time_start = wtime()
 
+  ! allocate memory for arrays using number of sources
+  allocate(srclat(NSOURCES),srclon(NSOURCES),srcdepth(NSOURCES), &
+           rsurface_source(NSOURCES), &
+           moment_tensor(6,NSOURCES), &
+           xyz_found(NDIM,NSOURCES), &
+           final_distance(NSOURCES),stat=ier)
+  if (ier /= 0) call exit_MPI(myrank,'Error allocating temporary receiver arrays')
+  srclat(:) = 0.d0; srclon(:) = 0.d0; srcdepth(:) = 0.d0
+  rsurface_source(:) = 0.d0
+  moment_tensor(:,:) = 0.d0
+  xyz_found(:,:) = 0.d0
+  final_distance(:) = HUGEVAL
+
   ! make sure we clean the future final array
   ispec_selected_source(:) = 0
   islice_selected_source(:) = -1
@@ -149,6 +161,9 @@
   total_M0 = 0.d0
   total_Mw = 0.d0
   total_force_N = 0.d0
+
+  source_phi_ref = 0.d0
+  source_theta_ref = 0.d0
 
   ! normalized source radius
   r0 = R_UNIT_SPHERE
@@ -187,39 +202,14 @@
              gamma_subset(NSOURCES_SUBSET_current_size), &
              xyz_found_subset(NDIM,NSOURCES_SUBSET_current_size), &
              final_distance_subset(NSOURCES_SUBSET_current_size), &
-             xyz_target(NDIM,NSOURCES_SUBSET_current_size),stat=ier)
+             xyz_target_subset(NDIM,NSOURCES_SUBSET_current_size),stat=ier)
     if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary source arrays')
 
     ! initializes
     ispec_selected_subset(:) = 0
     xi_subset(:) = 0.d0; eta_subset(:) = 0.d0; gamma_subset(:) = 0.d0
-    xyz_found_subset(:,:) = 0.d0; xyz_target(:,:) = 0.d0
+    xyz_found_subset(:,:) = 0.d0; xyz_target_subset(:,:) = 0.d0
     final_distance_subset(:) = HUGEVAL
-
-    ! arrays to collect data
-    if (myrank == 0) then
-      allocate(ispec_selected_all(NSOURCES_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               xi_all(NSOURCES_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               eta_all(NSOURCES_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               gamma_all(NSOURCES_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               xyz_found_all(NDIM,NSOURCES_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               final_distance_all(NSOURCES_SUBSET_current_size,0:NPROCTOT_VAL-1),stat=ier)
-      if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary source arrays for gather')
-    else
-      ! dummy arrays
-      allocate(ispec_selected_all(1,1), &
-               xi_all(1,1), &
-               eta_all(1,1), &
-               gamma_all(1,1), &
-               xyz_found_all(1,1,1), &
-               final_distance_all(1,1),stat=ier)
-      if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary source dummy arrays for gather')
-    endif
-
-    ! initializes
-    ispec_selected_all(:,:) = 0
-    xi_all(:,:) = 0.d0; eta_all(:,:) = 0.d0; gamma_all(:,:) = 0.d0
-    xyz_found_all(:,:,:) = 0.d0; final_distance_all(:,:) = HUGEVAL
 
     ! loop over sources within this subset
     do isource_in_this_subset = 1,NSOURCES_SUBSET_current_size
@@ -236,10 +226,20 @@
       if (lon > 360.d0 ) lon = lon - 360.d0
 
       ! convert geographic latitude lat (degrees) to geocentric colatitude theta (radians)
-      call lat_2_geocentric_colat_dble(lat,theta)
+      call lat_2_geocentric_colat_dble(lat,theta,ELLIPTICITY_VAL)
 
+      ! longitude
       phi = lon*DEGREES_TO_RADIANS
+
+      ! theta to [0,PI] and phi to [0,2PI]
       call reduce(theta,phi)
+
+      ! stores first source theta/phi position (geocentric) as reference
+      ! for epicentral distance calculations of receivers
+      if (isource == 1) then
+        source_phi_ref = phi
+        source_theta_ref = theta
+      endif
 
       sint = sin(theta)
       cost = cos(theta)
@@ -274,15 +274,18 @@
 
       ! record three components for each station
       do iorientation = 1,3
-        !   North
+        ! initializes azimuth/dip
+        stazi = 0.d0
+        stdip = 0.d0
+        ! North
         if (iorientation == 1) then
           stazi = 0.d0
           stdip = 0.d0
-        !   East
+        ! East
         else if (iorientation == 2) then
           stazi = 90.d0
           stdip = 0.d0
-        !   Vertical
+        ! Vertical
         else if (iorientation == 3) then
           stazi = 0.d0
           stdip = - 90.d0
@@ -290,20 +293,19 @@
           call exit_MPI(myrank,'incorrect orientation')
         endif
 
-        !   get the orientation of the seismometer
+        ! get the orientation of the position
         thetan = (90.0d0+stdip)*DEGREES_TO_RADIANS
         phin = stazi*DEGREES_TO_RADIANS
 
         ! we use the same convention as in Harvard normal modes for the orientation
-
-        !   vertical component
+        ! vertical component
         n(1) = cos(thetan)
-        !   N-S component
+        ! N-S component
         n(2) = - sin(thetan)*cos(phin)
-        !   E-W component
+        ! E-W component
         n(3) = sin(thetan)*sin(phin)
 
-        !   get the Cartesian components of n in the model: nu
+        ! get the Cartesian components of n in the model: nu
         nu_source(iorientation,1,isource) = n(1)*sint*cosp + n(2)*cost*cosp - n(3)*sinp
         nu_source(iorientation,2,isource) = n(1)*sint*sinp + n(2)*cost*sinp + n(3)*cosp
         nu_source(iorientation,3,isource) = n(1)*cost - n(2)*sint
@@ -323,45 +325,47 @@
 
       ! ellipticity
       if (ELLIPTICITY_VAL) then
-        ! this is the Legendre polynomial of degree two, P2(cos(theta)),
-        ! see the discussion above eq (14.4) in Dahlen and Tromp (1998)
-        p20 = 0.5d0*(3.0d0*cost*cost-1.0d0)
-
-        ! todo: check if we need radius or r0 for evaluation below...
-        !       (receiver location routine takes r0)
-        radius = r0 - depth/R_PLANET
-
-        ! get ellipticity using spline evaluation
-        call spline_evaluation(rspl,ellipicity_spline,ellipicity_spline2,nspl,radius,ell)
-
-        ! this is eq (14.4) in Dahlen and Tromp (1998)
-        r0 = r0*(1.0d0-(2.0d0/3.0d0)*ell*p20)
+       ! adds ellipticity factor to radius
+        if (USE_OLD_VERSION_FORMAT) then
+          ! removes depth from r0 as reference location to determine ellipticity factor (ell)
+          radius_ell = r0 - depth/R_PLANET
+          call spline_evaluation(rspl_ellip,ellipicity_spline,ellipicity_spline2,nspl_ellip,radius_ell,ell)
+          dcost = dcos(theta)
+          p20 = 0.5d0 * (3.0d0 * dcost*dcost - 1.0d0)
+          r0 = r0 * (1.0d0 - (2.0d0/3.0d0) * ell * p20)
+        else
+          ! takes r0 as reference location to determine ellipticity factor
+          call add_ellipticity_rtheta(r0,theta,nspl_ellip,rspl_ellip,ellipicity_spline,ellipicity_spline2)
+        endif
       endif
 
       ! stores surface radius for info output
-      r0_source(isource) = r0
+      rsurface_source(isource) = r0
 
       ! subtracts source depth (given in m)
-      r_target = r0 - depth/R_PLANET
+      r0 = r0 - depth/R_PLANET
 
+      
+      ! source position
+      r_target = r0
+      
       ! Populate the source depth in normalized coordinates
       depth_source(isource) = r_target
-
+      
       ! compute the Cartesian position of the source
       x_target = r_target*sint*cosp
       y_target = r_target*sint*sinp
       z_target = r_target*cost
 
       ! stores Cartesian positions
-      xyz_target(1,isource_in_this_subset) = x_target
-      xyz_target(2,isource_in_this_subset) = y_target
-      xyz_target(3,isource_in_this_subset) = z_target
+      xyz_target_subset(1,isource_in_this_subset) = x_target
+      xyz_target_subset(2,isource_in_this_subset) = y_target
+      xyz_target_subset(3,isource_in_this_subset) = z_target
     enddo
 
     ! make sure we clean the subset array before the gather
     ispec_selected_subset(:) = 0
     final_distance_subset(:) = HUGEVAL
-    final_distance_all(:,:) = HUGEVAL
 
     ! find point locations
     do isource_in_this_subset = 1,NSOURCES_SUBSET_current_size
@@ -374,9 +378,9 @@
       lon = srclon(isource)
 
       ! gets target position
-      x_target = xyz_target(1,isource_in_this_subset)
-      y_target = xyz_target(2,isource_in_this_subset)
-      z_target = xyz_target(3,isource_in_this_subset)
+      x_target = xyz_target_subset(1,isource_in_this_subset)
+      y_target = xyz_target_subset(2,isource_in_this_subset)
+      z_target = xyz_target_subset(3,isource_in_this_subset)
 
       ! locates best element and xi/eta/gamma interpolation values
       call locate_point(x_target,y_target,z_target,lat,lon,ispec_selected,xi,eta,gamma, &
@@ -386,6 +390,10 @@
       xi_subset(isource_in_this_subset) = xi
       eta_subset(isource_in_this_subset) = eta
       gamma_subset(isource_in_this_subset) = gamma
+
+      xyz_found(1,isource) = x
+      xyz_found(2,isource) = y
+      xyz_found(3,isource) = z
 
       xyz_found_subset(1,isource_in_this_subset) = x
       xyz_found_subset(2,isource_in_this_subset) = y
@@ -403,284 +411,234 @@
     enddo
 
     ! for MPI version, gather information from all the nodes
-    ! use -1 as a flag to detect if gather fails for some reason
-    ispec_selected_all(:,:) = -1
-
-    ! now gather information from all the nodes
-    call gather_all_i(ispec_selected_subset,NSOURCES_SUBSET_current_size, &
-                      ispec_selected_all,NSOURCES_SUBSET_current_size,NPROCTOT_VAL)
-
-    ! this is executed by main process only
-    if (myrank == 0) then
-      ! check that the gather operation went well
-      if (any(ispec_selected_all(:,:) == -1)) then
-        print *,'Error ispec all: procs = ',NPROCTOT_VAL,'sources subset size = ',NSOURCES_SUBSET_current_size
-        print *,ispec_selected_all(:,:)
-        call exit_MPI(myrank,'gather operation failed for source')
-      endif
-    endif
-
-    call gather_all_dp(xi_subset,NSOURCES_SUBSET_current_size, &
-                       xi_all,NSOURCES_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(eta_subset,NSOURCES_SUBSET_current_size, &
-                       eta_all,NSOURCES_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(gamma_subset,NSOURCES_SUBSET_current_size, &
-                       gamma_all,NSOURCES_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(final_distance_subset,NSOURCES_SUBSET_current_size, &
-                       final_distance_all,NSOURCES_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(xyz_found_subset,NDIM*NSOURCES_SUBSET_current_size, &
-                       xyz_found_all,NDIM*NSOURCES_SUBSET_current_size,NPROCTOT_VAL)
-
-    ! this is executed by main process only
-    if (myrank == 0) then
-
-      ! selects best location in all slices
-      ! loop on all the sources within subsets
-      do isource_in_this_subset = 1,NSOURCES_SUBSET_current_size
-
-        ! mapping from source number in current subset to real source number in all the subsets
-        isource = isources_already_done + isource_in_this_subset
-
-        ! loop on all the results to determine the best slice
-        distmin_not_squared = HUGEVAL
-        do iprocloop = 0,NPROCTOT_VAL-1
-          if (final_distance_all(isource_in_this_subset,iprocloop) < distmin_not_squared) then
-            ! stores this slice's info
-            distmin_not_squared = final_distance_all(isource_in_this_subset,iprocloop)
-            islice_selected_source(isource) = iprocloop
-            ispec_selected_source(isource) = ispec_selected_all(isource_in_this_subset,iprocloop)
-
-            xi_source(isource) = xi_all(isource_in_this_subset,iprocloop)
-            eta_source(isource) = eta_all(isource_in_this_subset,iprocloop)
-            gamma_source(isource) = gamma_all(isource_in_this_subset,iprocloop)
-
-            xyz_found_subset(:,isource_in_this_subset) = xyz_found_all(:,isource_in_this_subset,iprocloop)
-          endif
-        enddo
-        final_distance(isource) = distmin_not_squared
-      enddo
-    endif ! end of section executed by main process only
-
-    ! output source infos
-    if (myrank == 0) then
-
-      ! loop on all the sources within subsets
-      do isource_in_this_subset = 1,NSOURCES_SUBSET_current_size
-        ! mapping from source number in current subset to real source number in all the subsets
-        isource = isources_already_done + isource_in_this_subset
-
-        ! source info
-        write(IMAIN,*)
-        write(IMAIN,*) 'source # ',isource
-        write(IMAIN,*)
-        write(IMAIN,*) '  source located in slice ',islice_selected_source(isource_in_this_subset)
-        write(IMAIN,*) '                 in element ',ispec_selected_source(isource_in_this_subset)
-        write(IMAIN,*)
-        ! different output for force point sources
-        if (USE_FORCE_POINT_SOURCE) then
-          write(IMAIN,*) '  using force point source: '
-          write(IMAIN,*) '    xi coordinate of source in that element: ',xi_source(isource)
-          write(IMAIN,*) '    eta coordinate of source in that element: ',eta_source(isource)
-          write(IMAIN,*) '    gamma coordinate of source in that element: ',gamma_source(isource)
-
-          write(IMAIN,*)
-          write(IMAIN,*) '    component of direction vector in East direction: ',comp_dir_vect_source_E(isource)
-          write(IMAIN,*) '    component of direction vector in North direction: ',comp_dir_vect_source_N(isource)
-          write(IMAIN,*) '    component of direction vector in Vertical direction: ',comp_dir_vect_source_Z_UP(isource)
-
-          !write(IMAIN,*) '  i index of source in that element: ',nint(xi_source(isource))
-          !write(IMAIN,*) '  j index of source in that element: ',nint(eta_source(isource))
-          !write(IMAIN,*) '  k index of source in that element: ',nint(gamma_source(isource))
-          !write(IMAIN,*)
-          !write(IMAIN,*) '  component direction: ',COMPONENT_FORCE_SOURCE
-          write(IMAIN,*)
-          write(IMAIN,*) '    nu1 = ',nu_source(1,:,isource),'North'
-          write(IMAIN,*) '    nu2 = ',nu_source(2,:,isource),'East'
-          write(IMAIN,*) '    nu3 = ',nu_source(3,:,isource),'Vertical'
-          write(IMAIN,*)
-          write(IMAIN,*) '    at (x,y,z) coordinates = ',xyz_found_subset(1,isource_in_this_subset), &
-            xyz_found_subset(2,isource_in_this_subset),xyz_found_subset(3,isource_in_this_subset)
-        else
-          ! moment tensor
-          write(IMAIN,*) '  using moment tensor source: '
-          write(IMAIN,*) '    xi coordinate of source in that element: ',xi_source(isource)
-          write(IMAIN,*) '    eta coordinate of source in that element: ',eta_source(isource)
-          write(IMAIN,*) '    gamma coordinate of source in that element: ',gamma_source(isource)
-        endif
-        write(IMAIN,*)
-
-        ! source time function info
-        write(IMAIN,*) '  source time function:'
-        if (EXTERNAL_SOURCE_TIME_FUNCTION) then
-          ! external STF
-          write(IMAIN,*) '    using external source time function'
-          write(IMAIN,*)
-        else
-          ! frequency/half-duration
-          if (USE_FORCE_POINT_SOURCE) then
-            ! single point force
-            ! prints frequency content for point forces
-            select case(force_stf(isource))
-            case (0)
-              ! Gaussian
-              write(IMAIN,*) '    using Gaussian source time function'
-              write(IMAIN,*) '             half duration: ',hdur(isource),' seconds'
-              write(IMAIN,*) '    Gaussian half duration: ',hdur(isource)/SOURCE_DECAY_MIMIC_TRIANGLE,' seconds'
-            case (1)
-              ! Ricker
-              write(IMAIN,*) '    using Ricker source time function'
-              ! prints frequency content for point forces
-              f0 = hdur(isource)
-              t0_ricker = 1.2d0/f0
-              write(IMAIN,*)
-              write(IMAIN,*) '    using a source of dominant frequency ',f0
-              write(IMAIN,*) '    t0_ricker = ',t0_ricker,'tshift_src = ',tshift_src(isource)
-              write(IMAIN,*)
-              write(IMAIN,*) '    lambda_S at dominant frequency = ',3000./sqrt(3.)/f0
-              write(IMAIN,*) '    lambda_S at highest significant frequency = ',3000./sqrt(3.)/(2.5*f0)
-              write(IMAIN,*)
-              write(IMAIN,*) '    half duration in frequency: ',hdur(isource),' seconds**(-1)'
-            case (2)
-              ! Heaviside
-              write(IMAIN,*) '    using (quasi) Heaviside source time function'
-              write(IMAIN,*) '             half duration: ',hdur(isource),' seconds'
-            case (3)
-              ! Monochromatic
-              write(IMAIN,*) '    using monochromatic source time function'
-              ! prints frequency content for point forces
-              f0 = hdur(isource)
-              write(IMAIN,*)
-              write(IMAIN,*) '    using a source of period ',f0
-              write(IMAIN,*)
-              write(IMAIN,*) '    half duration in period: ',hdur(isource),' seconds'
-            case (4)
-              ! Gaussian by Meschede et al. (2011)
-              write(IMAIN,*) '    using Gaussian source time function by Meschede et al. (2011), eq.(2)'
-              write(IMAIN,*) '             tau: ',hdur(isource),' seconds'
-            case default
-              stop 'unsupported force_stf value!'
-            end select
-          else if (USE_MONOCHROMATIC_CMT_SOURCE) then
-            ! moment tensor
-            write(IMAIN,*) '    using monochromatic source time function'
-            ! add message if source is monochromatic
-            write(IMAIN,*)
-            write(IMAIN,*) '    period: ',hdur(isource),' seconds'
-          else
-            ! moment tensor
-            write(IMAIN,*) '    using (quasi) Heaviside source time function'
-            ! add message if source is a Heaviside
-            if (hdur(isource) <= 5.0*DT) then
-              write(IMAIN,*)
-              write(IMAIN,*) '    Source time function is a Heaviside, convolve later'
-              write(IMAIN,*)
-            endif
-            write(IMAIN,*)
-            write(IMAIN,*) '    half duration: ',hdur(isource),' seconds'
-          endif
-        endif
-        write(IMAIN,*) '    time shift: ',tshift_src(isource),' seconds'
-        write(IMAIN,*)
-
-        ! magnitude
-        write(IMAIN,*) '  magnitude of the source:'
-        if (USE_FORCE_POINT_SOURCE) then
-          ! single point force
-          ! scale and non-dimensionalize the factor_force_source
-          ! factor_force_source in FORCESOLUTION file is in Newton
-          ! 1 Newton is 1 kg * 1 m / (1 second)^2
-          scaleF = RHOAV * (R_PLANET**4) * PI*GRAV*RHOAV
-          ! force in Newton
-          force_N = factor_force_source(isource) * scaleF
-          ! adds to total force applied (sum over all force point sources)
-          total_force_N = total_force_N + force_N
-
-          write(IMAIN,*) '    force = ', sngl(force_N),'(Newton)' ! dimensionalized
-        else
-          ! moment-tensor
-          M0 = get_cmt_scalar_moment(Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource),Mxz(isource),Myz(isource))
-          Mw =  get_cmt_moment_magnitude(Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource),Mxz(isource),Myz(isource))
-          ! adds to total moment
-          total_M0 = total_M0 + M0
-          total_Mw = get_cmt_moment_magnitude_from_M0(total_M0)
-
-          write(IMAIN,*) '       scalar moment M0 = ', M0,' dyne-cm'
-          write(IMAIN,*) '    moment magnitude Mw = ', Mw
-        endif
-        write(IMAIN,*)
-
-        ! writes out actual source position to VTK file
-        write(IOUT_VTK,'(3e18.6)') sngl(xyz_found_subset(1,isource_in_this_subset)), &
-                                   sngl(xyz_found_subset(2,isource_in_this_subset)), &
-                                   sngl(xyz_found_subset(3,isource_in_this_subset))
-
-        ! get latitude, longitude and depth of the source that will be used
-        call xyz_2_rthetaphi_dble(xyz_found_subset(1,isource_in_this_subset), &
-                                  xyz_found_subset(2,isource_in_this_subset), &
-                                  xyz_found_subset(3,isource_in_this_subset), &
-                                  r_found,theta_source(isource),phi_source(isource))
-        call reduce(theta_source(isource),phi_source(isource))
-
-        ! converts geocentric to geographic colatitude
-        call geocentric_2_geographic_dble(theta_source(isource),colat_source)
-
-        ! brings longitude between -PI and PI
-        if (phi_source(isource) > PI) phi_source(isource) = phi_source(isource) - TWO_PI
-
-        write(IMAIN,*)
-        write(IMAIN,*) '  original (requested) position of the source:'
-        write(IMAIN,*)
-        write(IMAIN,*) '        latitude: ',srclat(isource)
-        write(IMAIN,*) '       longitude: ',srclon(isource)
-        write(IMAIN,*) '           depth: ',srcdepth(isource),' km'
-        write(IMAIN,*)
-
-        ! compute real position of the source
-        write(IMAIN,*) '  position of the source that will be used:'
-        write(IMAIN,*)
-        write(IMAIN,*) '        latitude: ',(PI_OVER_TWO-colat_source)*RADIANS_TO_DEGREES
-        write(IMAIN,*) '       longitude: ',phi_source(isource)*RADIANS_TO_DEGREES
-        write(IMAIN,*) '           depth: ',(r0_source(isource)-r_found)*R_PLANET/1000.0d0,' km'
-        write(IMAIN,*)
-
-        ! display error in location estimate
-        write(IMAIN,*) '  Error in location of the source: ',sngl(final_distance(isource)),' km'
-
-        ! add warning if estimate is poor
-        ! (usually means source outside the mesh given by the user)
-        if (final_distance(isource) > 5.d0) then
-          write(IMAIN,*)
-          write(IMAIN,*) '*****************************************************'
-          write(IMAIN,*) '*****************************************************'
-          write(IMAIN,*) '***** WARNING: source location estimate is poor *****'
-          write(IMAIN,*) '*****************************************************'
-          write(IMAIN,*) '*****************************************************'
-        endif
-        call flush_IMAIN()
-
-        ! stores location for VTK visualization
-        if (isource == 1) then
-          vtkdata_source_x = sngl(xyz_found_subset(1,isource_in_this_subset))
-          vtkdata_source_y = sngl(xyz_found_subset(2,isource_in_this_subset))
-          vtkdata_source_z = sngl(xyz_found_subset(3,isource_in_this_subset))
-        endif
-
-      enddo ! end of loop on all the sources within current source subset
-
-    endif ! end of section executed by main process only
+    call locate_MPI_slice(NSOURCES_SUBSET_current_size,isources_already_done, &
+                          ispec_selected_subset, &
+                          xyz_found_subset, &
+                          xi_subset,eta_subset,gamma_subset, &
+                          final_distance_subset, &
+                          NSOURCES,ispec_selected_source,islice_selected_source, &
+                          xyz_found, &
+                          xi_source,eta_source,gamma_source, &
+                          final_distance)
 
     ! deallocate arrays specific to each subset
     deallocate(ispec_selected_subset)
-    deallocate(ispec_selected_all)
     deallocate(xi_subset,eta_subset,gamma_subset)
-    deallocate(xi_all,eta_all,gamma_all)
-    deallocate(final_distance_all)
     deallocate(final_distance_subset)
-    deallocate(xyz_target)
+    deallocate(xyz_target_subset)
     deallocate(xyz_found_subset)
-    deallocate(xyz_found_all)
 
   enddo ! end of loop over all source subsets
+
+  ! output source infos
+  if (myrank == 0) then
+
+    ! loop on all the sources
+    do isource = 1,NSOURCES
+
+      ! source info
+      write(IMAIN,*)
+      write(IMAIN,*) 'source # ',isource
+      write(IMAIN,*)
+      write(IMAIN,*) '  source located in slice ',islice_selected_source(isource)
+      write(IMAIN,*) '                 in element ',ispec_selected_source(isource)
+      write(IMAIN,*)
+      write(IMAIN,*) '  at xi,eta,gamma coordinates = ', &
+                     sngl(xi_source(isource)),sngl(eta_source(isource)),sngl(gamma_source(isource))
+      write(IMAIN,*) '  at (x,y,z)                  = ', sngl(xyz_found(1,isource)), &
+                     sngl(xyz_found(2,isource)),sngl(xyz_found(3,isource))
+      write(IMAIN,*)
+      ! different output for force point sources
+      if (USE_FORCE_POINT_SOURCE) then
+        write(IMAIN,*) '  using force point source:'
+        write(IMAIN,*) '    component of direction vector in East direction: ',sngl(comp_dir_vect_source_E(isource))
+        write(IMAIN,*) '    component of direction vector in North direction: ',sngl(comp_dir_vect_source_N(isource))
+        write(IMAIN,*) '    component of direction vector in Vertical direction: ',sngl(comp_dir_vect_source_Z_UP(isource))
+        !write(IMAIN,*) '  i index of source in that element: ',nint(xi_source(isource))
+        !write(IMAIN,*) '  j index of source in that element: ',nint(eta_source(isource))
+        !write(IMAIN,*) '  k index of source in that element: ',nint(gamma_source(isource))
+        !write(IMAIN,*)
+        !write(IMAIN,*) '  component direction: ',COMPONENT_FORCE_SOURCE
+        write(IMAIN,*)
+        write(IMAIN,*) '    nu1 = ',sngl(nu_source(1,:,isource)),'North'
+        write(IMAIN,*) '    nu2 = ',sngl(nu_source(2,:,isource)),'East'
+        write(IMAIN,*) '    nu3 = ',sngl(nu_source(3,:,isource)),'Vertical'
+      else
+        ! moment tensor
+        write(IMAIN,*) '  using moment tensor source'
+      endif
+      write(IMAIN,*)
+
+      ! source time function info
+      write(IMAIN,*) '  source time function:'
+      if (EXTERNAL_SOURCE_TIME_FUNCTION) then
+        ! external STF
+        write(IMAIN,*) '    using external source time function'
+        write(IMAIN,*)
+      else
+        ! frequency/half-duration
+        if (USE_FORCE_POINT_SOURCE) then
+          ! single point force
+          ! prints frequency content for point forces
+          select case(force_stf(isource))
+          case (0)
+            ! Gaussian
+            write(IMAIN,*) '    using Gaussian source time function'
+            write(IMAIN,*) '             half duration: ',hdur(isource),' seconds'
+            write(IMAIN,*) '    Gaussian half duration: ',hdur(isource)/SOURCE_DECAY_MIMIC_TRIANGLE,' seconds'
+          case (1)
+            ! Ricker
+            write(IMAIN,*) '    using Ricker source time function'
+            ! prints frequency content for point forces
+            f0 = hdur(isource)
+            t0_ricker = 1.2d0/f0
+            write(IMAIN,*)
+            write(IMAIN,*) '    using a source of dominant frequency ',f0
+            write(IMAIN,*) '    t0_ricker = ',t0_ricker,'tshift_src = ',tshift_src(isource)
+            write(IMAIN,*)
+            write(IMAIN,*) '    lambda_S at dominant frequency = ',3000./sqrt(3.)/f0
+            write(IMAIN,*) '    lambda_S at highest significant frequency = ',3000./sqrt(3.)/(2.5*f0)
+            write(IMAIN,*)
+            write(IMAIN,*) '    half duration in frequency: ',hdur(isource),' seconds**(-1)'
+          case (2)
+            ! Heaviside
+            if (STF_IS_UCB_HEAVISIDE) then
+              ! Berkeley UCB stf
+              write(IMAIN,*) '    using Berkeley UCB (quasi) Heaviside source time function'
+              write(IMAIN,*) '             source T1/T2/T3/T4: ',sngl(UCB_SOURCE_T1),'/',sngl(UCB_SOURCE_T2),'/', &
+                                                                 sngl(UCB_SOURCE_T3),'/',sngl(UCB_SOURCE_T4)
+              write(IMAIN,*) '             source time-shift : ',sngl(UCB_TAU)
+            else
+              ! default Heaviside
+              write(IMAIN,*) '    using (quasi) Heaviside source time function'
+              write(IMAIN,*) '             half duration: ',hdur(isource),' seconds'
+            endif
+          case (3)
+            ! Monochromatic
+            write(IMAIN,*) '    using monochromatic source time function'
+            ! prints frequency content for point forces
+            f0 = hdur(isource)
+            write(IMAIN,*)
+            write(IMAIN,*) '    using a source of period ',f0
+            write(IMAIN,*)
+            write(IMAIN,*) '    half duration in period: ',hdur(isource),' seconds'
+          case (4)
+            ! Gaussian by Meschede et al. (2011)
+            write(IMAIN,*) '    using Gaussian source time function by Meschede et al. (2011), eq.(2)'
+            write(IMAIN,*) '             tau: ',hdur(isource),' seconds'
+          case default
+            stop 'unsupported force_stf value!'
+          end select
+        else if (STF_IS_UCB_HEAVISIDE) then
+          ! moment tensor
+          ! Berkeley UCB stf
+          write(IMAIN,*) '    using Berkeley UCB (quasi) Heaviside source time function'
+          write(IMAIN,*) '             source T1/T2/T3/T4: ',sngl(UCB_SOURCE_T1),'/',sngl(UCB_SOURCE_T2),'/', &
+                                                             sngl(UCB_SOURCE_T3),'/',sngl(UCB_SOURCE_T4)
+          write(IMAIN,*) '             source time-shift : ',sngl(UCB_TAU)
+        else if (USE_MONOCHROMATIC_CMT_SOURCE) then
+          ! moment tensor
+          write(IMAIN,*) '    using monochromatic source time function'
+          ! add message if source is monochromatic
+          write(IMAIN,*)
+          write(IMAIN,*) '    period: ',hdur(isource),' seconds'
+        else
+          ! default quasi Heaviside
+          write(IMAIN,*) '    using (quasi) Heaviside source time function'
+          ! add message if source is a Heaviside
+          if (hdur(isource) <= 5.0*DT) then
+            write(IMAIN,*) '    ***'
+            write(IMAIN,*) '    *** Source time function is a Heaviside, convolve later'
+            write(IMAIN,*) '    ***'
+          endif
+          write(IMAIN,*)
+          write(IMAIN,*) '    half duration: ',hdur(isource),' seconds'
+        endif
+      endif
+      write(IMAIN,*) '    time shift: ',tshift_src(isource),' seconds'
+      write(IMAIN,*)
+
+      ! magnitude
+      write(IMAIN,*) '  magnitude of the source:'
+      if (USE_FORCE_POINT_SOURCE) then
+        ! single point force
+        ! scale and non-dimensionalize the factor_force_source
+        ! factor_force_source in FORCESOLUTION file is in Newton
+        ! 1 Newton is 1 kg * 1 m / (1 second)^2
+        scaleF = RHOAV * (R_PLANET**4) * PI*GRAV*RHOAV
+        ! force in Newton
+        force_N = factor_force_source(isource) * scaleF
+        ! adds to total force applied (sum over all force point sources)
+        total_force_N = total_force_N + force_N
+
+        write(IMAIN,*) '    force = ', sngl(force_N),'(Newton)' ! dimensionalized
+      else
+        ! moment-tensor
+        M0 = get_cmt_scalar_moment(Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource),Mxz(isource),Myz(isource))
+        Mw =  get_cmt_moment_magnitude(Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource),Mxz(isource),Myz(isource))
+        ! adds to total moment
+        total_M0 = total_M0 + M0
+        total_Mw = get_cmt_moment_magnitude_from_M0(total_M0)
+
+        write(IMAIN,*) '       scalar moment M0 = ', M0,' dyne-cm'
+        write(IMAIN,*) '    moment magnitude Mw = ', Mw
+      endif
+      write(IMAIN,*)
+
+      ! writes out actual source position to VTK file
+      write(IOUT_VTK,'(3e18.6)') sngl(xyz_found(1,isource)), &
+                                 sngl(xyz_found(2,isource)), &
+                                 sngl(xyz_found(3,isource))
+
+      ! get latitude, longitude and depth of the source that will be used
+      call xyz_2_rlatlon_dble(xyz_found(1,isource), &
+                              xyz_found(2,isource), &
+                              xyz_found(3,isource), &
+                              r_found,lat,lon,ELLIPTICITY_VAL)
+
+      ! brings longitude range ([0,360] by default) to source longitude range for display
+      if (srclon(isource) < 0.d0) lon = lon - 360.d0
+
+      write(IMAIN,*)
+      write(IMAIN,*) '  original (requested) position of the source:'
+      write(IMAIN,*)
+      write(IMAIN,*) '        latitude: ',srclat(isource)
+      write(IMAIN,*) '       longitude: ',srclon(isource)
+      write(IMAIN,*) '           depth: ',srcdepth(isource),' km'
+      write(IMAIN,*)
+
+      ! compute real position of the source
+      write(IMAIN,*) '  position of the source that will be used:'
+      write(IMAIN,*)
+      write(IMAIN,*) '        latitude: ',lat
+      write(IMAIN,*) '       longitude: ',lon
+      write(IMAIN,*) '           depth: ',(rsurface_source(isource)-r_found)*R_PLANET/1000.0d0,' km'
+      write(IMAIN,*)
+
+      ! display error in location estimate
+      write(IMAIN,*) '  Error in location of the source: ',sngl(final_distance(isource)),' km'
+
+      ! add warning if estimate is poor
+      ! (usually means source outside the mesh given by the user)
+      if (final_distance(isource) > 5.d0) then
+        write(IMAIN,*)
+        write(IMAIN,*) '*****************************************************'
+        write(IMAIN,*) '*****************************************************'
+        write(IMAIN,*) '***** WARNING: source location estimate is poor *****'
+        write(IMAIN,*) '*****************************************************'
+        write(IMAIN,*) '*****************************************************'
+      endif
+      call flush_IMAIN()
+
+      ! stores location for VTK visualization
+      if (isource == 1) then
+        vtkdata_source_x = sngl(xyz_found(1,isource))
+        vtkdata_source_y = sngl(xyz_found(2,isource))
+        vtkdata_source_z = sngl(xyz_found(3,isource))
+      endif
+
+    enddo ! end of loop on all the sources
+  endif ! end of section executed by main process only
 
   ! display maximum error in location estimate
   if (myrank == 0) then
@@ -737,6 +695,11 @@
     call save_mask_source(mask_source,nspec,LOCAL_TMP_PATH)
     deallocate(mask_source)
   endif
+
+  ! free temporary arrays
+  deallocate(srclat,srclon,srcdepth,rsurface_source)
+  deallocate(moment_tensor)
+  deallocate(xyz_found,final_distance)
 
   ! synchronizes to get right timing
   call synchronize_all()
@@ -884,7 +847,7 @@
           ! adds Gaussian function value to mask
           ! (mask value becomes 0 closer to source location, 1 everywhere else )
           mask_source(i,j,k,ispec) = mask_source(i,j,k,ispec) &
-                    * ( 1.0_CUSTOM_REAL - exp( - dist_squared / sigma_squared ) )
+                    * ( 1.0_CUSTOM_REAL - real(exp( - dist_squared / sigma_squared ),kind=CUSTOM_REAL) )
         enddo
       enddo
     enddo

@@ -79,11 +79,16 @@
   logical :: do_output
   real(kind=CUSTOM_REAL),dimension(:),allocatable :: val_ispec_pmax,val_ispec_dt
   character(len=MAX_STRING_LEN) :: filename
-  character(len=32),parameter :: region(4) = (/character(len=32) :: 'crust/mantle', 'outer core', 'inner core', 'central cube'/)
+  character(len=32),parameter :: region(MAX_NUM_REGIONS) = &
+    (/character(len=32) :: 'crust/mantle', 'outer core', 'inner core', &
+                           'transition-to-infinite', 'infinite' /)
 
   !debug timing
   !double precision, external :: wtime
   !double precision :: tstart,tCPU
+
+  ! to avoid conversion warnings
+  real(kind=CUSTOM_REAL), parameter :: HUGEVAL_REAL = real(HUGEVAL,kind=CUSTOM_REAL)
 
   ! note: the mesh and time step check is only approximative
 
@@ -93,31 +98,52 @@
   ! safety check
   if (NGLLX < 1 .or. NGLLX > 15) stop 'Invalid NGLLX value in routine check_mesh_resolution'
 
+  ! check if we want to output files
+  if (SAVE_MESH_FILES) then
+    ! by default, lets the SAVE_MESH_FILES flag determine about the file output
+    do_output = .true.
+    ! ADIOS case
+    if (ADIOS_ENABLED) then
+      if (DEBUG_OUTPUT_FOR_ADIOS) then
+        ! we will output vtk/vtu files nevertheless
+        do_output = .true.
+      else
+        ! omit the file output
+        do_output = .false.
+      endif
+    endif
+  else
+    ! no output requested
+    do_output = .false.
+  endif
+
   ! temporary arrays for file output
-  allocate(val_ispec_pmax(nspec),val_ispec_dt(nspec),stat=ier)
-  if (ier /= 0) stop 'Error allocating val_ispec_pmax arrays'
-  val_ispec_pmax(:) = 0._CUSTOM_REAL
-  val_ispec_dt(:) = 0._CUSTOM_REAL
+  if (do_output) then
+    allocate(val_ispec_pmax(nspec),val_ispec_dt(nspec),stat=ier)
+    if (ier /= 0) stop 'Error allocating val_ispec_pmax arrays'
+    val_ispec_pmax(:) = 0._CUSTOM_REAL
+    val_ispec_dt(:) = 0._CUSTOM_REAL
+  endif
 
   ! initializes global min/max values only when first called
   if (iregion_code == 1) then
-    dt_max_glob = HUGEVAL
-    pmax_glob = - HUGEVAL
+    dt_max_glob = HUGEVAL_REAL
+    pmax_glob = - HUGEVAL_REAL
   endif
 
   ! statistics for this region
-  elemsize_min_reg = HUGEVAL
-  elemsize_max_reg = -HUGEVAL
+  elemsize_min_reg = HUGEVAL_REAL
+  elemsize_max_reg = - HUGEVAL_REAL
 
-  eig_ratio_min_reg = HUGEVAL
-  eig_ratio_max_reg = -HUGEVAL
+  eig_ratio_min_reg = HUGEVAL_REAL
+  eig_ratio_max_reg = - HUGEVAL_REAL
 
-  pmax_reg = - HUGEVAL
-  dt_max_reg = HUGEVAL
-  cmax_reg = - HUGEVAL
+  pmax_reg = - HUGEVAL_REAL
+  dt_max_reg = HUGEVAL_REAL
+  cmax_reg = - HUGEVAL_REAL
 
-  vsmin_reg = HUGEVAL
-  vpmax_reg = - HUGEVAL
+  vsmin_reg = HUGEVAL_REAL
+  vpmax_reg = - HUGEVAL_REAL
 
 ! openmp mesher
 !$OMP PARALLEL DEFAULT(SHARED) &
@@ -184,7 +210,7 @@
     pmax_reg = max(pmax_reg,pmax)
 
     ! computes minimum and maximum distance of neighbor GLL points in this grid cell
-    distance_min = elemsize_min * percent_GLL(NGLLX)
+    distance_min = elemsize_min * real(percent_GLL(NGLLX),kind=CUSTOM_REAL)
 
     ! distance at skewed corner across
     ! if the angle at corner less than 60 degrees, then the distance between the second GLL points (B-C) becomes
@@ -207,7 +233,7 @@
     call get_timestep_limit_significant_digit(deltat_suggested)
 
     ! maximum time step size
-    dt_max = deltat_suggested
+    dt_max = real(deltat_suggested,kind=CUSTOM_REAL)
 
     ! debug
     !if (dt_max_reg > dt_max) then
@@ -223,14 +249,16 @@
     ! Courant number
     ! based on minimum GLL point distance and maximum velocity
     ! i.e. on the maximum ratio of ( velocity / gridsize )
-    cmax = vpmax * DT / distance_min
+    cmax = vpmax * real(DT,kind=CUSTOM_REAL) / distance_min
 
     ! sets region stability number
     cmax_reg = max(cmax_reg,cmax)
 
     ! stores for file output
-    val_ispec_pmax(ispec) = pmax
-    val_ispec_dt(ispec) = dt_max
+    if (do_output) then
+      val_ispec_pmax(ispec) = pmax
+      val_ispec_dt(ispec) = dt_max
+    endif
 
   enddo ! ispec
 !$OMP ENDDO
@@ -270,7 +298,7 @@
   call max_all_cr(eig_ratio_max,eig_ratio_max_reg)
 
   ! empirical minimum period resolved by mesh
-  pmax_empirical = T_min_period
+  pmax_empirical = real(T_min_period,kind=CUSTOM_REAL)
 
   !debug timing
   !tCPU = wtime() - tstart
@@ -284,13 +312,15 @@
     write(IMAIN,*) '----------------------------------'
     write(IMAIN,*) '  Region is ',trim(region(iregion_code))
     write(IMAIN,*)
-    if (iregion_code == IREGION_OUTER_CORE) then
-      write(IMAIN,*) '  Min Vp = ',vsmin_reg,' (km/s)'
-    else
-      write(IMAIN,*) '  Min Vs = ',vsmin_reg,' (km/s)'
+    if (iregion_code /= IREGION_TRINFINITE .and. iregion_code /= IREGION_INFINITE) then
+      if (iregion_code == IREGION_OUTER_CORE) then
+        write(IMAIN,*) '  Min Vp = ',vsmin_reg,' (km/s)'
+      else
+        write(IMAIN,*) '  Min Vs = ',vsmin_reg,' (km/s)'
+      endif
+      write(IMAIN,*) '  Max Vp = ',vpmax_reg,' (km/s)'
+      write(IMAIN,*)
     endif
-    write(IMAIN,*) '  Max Vp = ',vpmax_reg,' (km/s)'
-    write(IMAIN,*)
     write(IMAIN,*) '  Max element edge size = ',elemsize_max_reg,' (km)'
     write(IMAIN,*) '  Min element edge size = ',elemsize_min_reg,' (km)'
     write(IMAIN,*) '  Max/min ratio = ',elemsize_max_reg/elemsize_min_reg
@@ -298,12 +328,14 @@
     write(IMAIN,*) '  Max Jacobian eigenvalue ratio = ',eig_ratio_max_reg
     write(IMAIN,*) '  Min Jacobian eigenvalue ratio = ',eig_ratio_min_reg
     write(IMAIN,*)
-    write(IMAIN,*) '  Minimum period resolved = ',pmax_reg,' (s)'
-    write(IMAIN,*) '  Minimum period resolved (empirical) = ',pmax_empirical,' (s)'
-    write(IMAIN,*) '  Maximum suggested time step = ',dt_max_reg,' (s)'
-    write(IMAIN,*)
-    write(IMAIN,*) '  for DT : ',sngl(DT),' (s)'
-    write(IMAIN,*) '  Max stability for wave velocities = ',cmax_reg
+    if (iregion_code /= IREGION_TRINFINITE .and. iregion_code /= IREGION_INFINITE) then
+      write(IMAIN,*) '  Minimum period resolved = ',pmax_reg,' (s)'
+      write(IMAIN,*) '  Minimum period resolved (empirical) = ',pmax_empirical,' (s)'
+      write(IMAIN,*) '  Maximum suggested time step = ',dt_max_reg,' (s)'
+      write(IMAIN,*)
+      write(IMAIN,*) '  for DT : ',sngl(DT),' (s)'
+      write(IMAIN,*) '  Max stability for wave velocities = ',cmax_reg
+    endif
     write(IMAIN,*) '----------------------------------'
     write(IMAIN,*)
     call flush_IMAIN()
@@ -314,25 +346,6 @@
   !  ! debug
   !  print *,'*** Maximum suggested time step = ',dt_max_glob
   !endif
-
-  ! check if we want to output these files
-  if (SAVE_MESH_FILES) then
-    ! by default, lets the SAVE_MESH_FILES flag determine about the file output
-    do_output = .true.
-    ! ADIOS case
-    if (ADIOS_ENABLED) then
-      if (DEBUG_OUTPUT_FOR_ADIOS) then
-        ! we will output vtk/vtu files nevertheless
-        do_output = .true.
-      else
-        ! omit the file output
-        do_output = .false.
-      endif
-    endif
-  else
-    ! no output requested
-    do_output = .false.
-  endif
 
   ! debug: saves element flags
   if (do_output) then
@@ -369,10 +382,10 @@
                                   xstore_glob,ystore_glob,zstore_glob, &
                                   ibool,val_ispec_dt,filename)
     endif
-  endif
 
-  ! free memory
-  deallocate(val_ispec_pmax,val_ispec_dt)
+    ! free memory
+    deallocate(val_ispec_pmax,val_ispec_dt)
+  endif
 
   end subroutine check_mesh_resolution
 
@@ -387,7 +400,8 @@
   subroutine get_vpvs_minmax(vpmax,vsmin,ispec,nspec,iregion_code,kappavstore,kappahstore,muvstore,muhstore,rhostore)
 
   use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ, &
-                       PI,GRAV,HUGEVAL,TINYVAL,FOUR_THIRDS
+                       PI,GRAV,HUGEVAL,TINYVAL,FOUR_THIRDS, &
+                       IREGION_TRINFINITE,IREGION_INFINITE
   use shared_parameters, only: RHOAV,R_PLANET
 
   !for fully anisotropic models
@@ -407,12 +421,25 @@
 
   ! local parameters
   real(kind=CUSTOM_REAL) :: vpv,vph,vsv,vsh
-  integer :: i,j,k,idummy
+  integer :: i,j,k
   ! scaling factors to re-dimensionalize units
   real(kind=CUSTOM_REAL) :: scaleval
 
-  vpmax = - HUGEVAL
-  vsmin = HUGEVAL
+  ! to avoid conversion warnings
+  real(kind=CUSTOM_REAL), parameter :: HUGEVAL_REAL = real(HUGEVAL,kind=CUSTOM_REAL)
+
+  ! checks if anything to do for this region
+  if (iregion_code == IREGION_TRINFINITE .or. &
+      iregion_code == IREGION_INFINITE) then
+    ! no material parameters set, return artificial values
+    vpmax = 1.0_CUSTOM_REAL
+    vsmin = 1.0_CUSTOM_REAL
+    ! all done
+    return
+  endif
+
+  vpmax = - HUGEVAL_REAL
+  vsmin = HUGEVAL_REAL
 
   do k = 1, NGLLZ, NGLLZ-1
     do j = 1, NGLLY, NGLLY-1
@@ -518,13 +545,11 @@
       enddo
     enddo
   enddo
+
   ! maximum Vp (in km/s)
   scaleval = real(sqrt(PI*GRAV*RHOAV)*(R_PLANET/1000.0d0),kind=CUSTOM_REAL)
   vpmax = sqrt(vpmax) * scaleval
   vsmin = sqrt(vsmin) * scaleval
-
-  ! to avoid compiler warning
-  idummy = iregion_code
 
   end subroutine get_vpvs_minmax
 
@@ -548,20 +573,23 @@
   integer :: i1,i2,j1,j2,k1,k2
   integer :: i,j,k
 
-  elemsize_min = HUGEVAL
-  elemsize_max = -HUGEVAL
+  ! to avoid conversion warnings
+  real(kind=CUSTOM_REAL), parameter :: HUGEVAL_REAL = real(HUGEVAL,kind=CUSTOM_REAL)
+
+  elemsize_min = HUGEVAL_REAL
+  elemsize_max = -HUGEVAL_REAL
   ! loops over the four edges that are along X
   i1 = 1
   i2 = NGLLX
   do k = 1, NGLLZ, NGLLZ-1
     do j = 1, NGLLY, NGLLY-1
-      x1 = xstore(i1,j,k,ispec)
-      y1 = ystore(i1,j,k,ispec)
-      z1 = zstore(i1,j,k,ispec)
+      x1 = real(xstore(i1,j,k,ispec),kind=CUSTOM_REAL)
+      y1 = real(ystore(i1,j,k,ispec),kind=CUSTOM_REAL)
+      z1 = real(zstore(i1,j,k,ispec),kind=CUSTOM_REAL)
 
-      x2 = xstore(i2,j,k,ispec)
-      y2 = ystore(i2,j,k,ispec)
-      z2 = zstore(i2,j,k,ispec)
+      x2 = real(xstore(i2,j,k,ispec),kind=CUSTOM_REAL)
+      y2 = real(ystore(i2,j,k,ispec),kind=CUSTOM_REAL)
+      z2 = real(zstore(i2,j,k,ispec),kind=CUSTOM_REAL)
 
       dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
       if (elemsize_min > dist) elemsize_min = dist
@@ -574,13 +602,13 @@
   j2 = NGLLY
   do k = 1, NGLLZ, NGLLZ-1
     do i = 1, NGLLX, NGLLX-1
-      x1 = xstore(i,j1,k,ispec)
-      y1 = ystore(i,j1,k,ispec)
-      z1 = zstore(i,j1,k,ispec)
+      x1 = real(xstore(i,j1,k,ispec),kind=CUSTOM_REAL)
+      y1 = real(ystore(i,j1,k,ispec),kind=CUSTOM_REAL)
+      z1 = real(zstore(i,j1,k,ispec),kind=CUSTOM_REAL)
 
-      x2 = xstore(i,j2,k,ispec)
-      y2 = ystore(i,j2,k,ispec)
-      z2 = zstore(i,j2,k,ispec)
+      x2 = real(xstore(i,j2,k,ispec),kind=CUSTOM_REAL)
+      y2 = real(ystore(i,j2,k,ispec),kind=CUSTOM_REAL)
+      z2 = real(zstore(i,j2,k,ispec),kind=CUSTOM_REAL)
 
       dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
       if (elemsize_min > dist) elemsize_min = dist
@@ -593,13 +621,13 @@
   k2 = NGLLZ
   do j = 1, NGLLY, NGLLY-1
     do i = 1, NGLLX, NGLLX-1
-      x1 = xstore(i,j,k1,ispec)
-      y1 = ystore(i,j,k1,ispec)
-      z1 = zstore(i,j,k1,ispec)
+      x1 = real(xstore(i,j,k1,ispec),kind=CUSTOM_REAL)
+      y1 = real(ystore(i,j,k1,ispec),kind=CUSTOM_REAL)
+      z1 = real(zstore(i,j,k1,ispec),kind=CUSTOM_REAL)
 
-      x2 = xstore(i,j,k2,ispec)
-      y2 = ystore(i,j,k2,ispec)
-      z2 = zstore(i,j,k2,ispec)
+      x2 = real(xstore(i,j,k2,ispec),kind=CUSTOM_REAL)
+      y2 = real(ystore(i,j,k2,ispec),kind=CUSTOM_REAL)
+      z2 = real(zstore(i,j,k2,ispec),kind=CUSTOM_REAL)
 
       dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
       if (elemsize_min > dist ) elemsize_min = dist
@@ -607,8 +635,8 @@
     enddo
   enddo
   ! size (in km)
-  elemsize_min = sqrt(elemsize_min) * R_PLANET_KM
-  elemsize_max = sqrt(elemsize_max) * R_PLANET_KM
+  elemsize_min = sqrt(elemsize_min) * real(R_PLANET_KM,kind=CUSTOM_REAL)
+  elemsize_max = sqrt(elemsize_max) * real(R_PLANET_KM,kind=CUSTOM_REAL)
 
   end subroutine get_elem_minmaxsize
 
@@ -632,53 +660,56 @@
   real(kind=CUSTOM_REAL) :: x1,y1,z1,x2,y2,z2,dist
   integer :: i,j,k
 
-  dx = HUGEVAL
+  ! to avoid conversion warnings
+  real(kind=CUSTOM_REAL), parameter :: HUGEVAL_REAL = real(HUGEVAL,kind=CUSTOM_REAL)
+
+  dx = HUGEVAL_REAL
   ! loops over the four edges that are along Z
   do k = 1, NGLLZ, NGLLZ-1
     ! front-left
-    x1 = xstore(1,2,k,ispec)
-    y1 = ystore(1,2,k,ispec)
-    z1 = zstore(1,2,k,ispec)
+    x1 = real(xstore(1,2,k,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(1,2,k,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(1,2,k,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(2,1,k,ispec)
-    y2 = ystore(2,1,k,ispec)
-    z2 = zstore(2,1,k,ispec)
+    x2 = real(xstore(2,1,k,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(2,1,k,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(2,1,k,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! rear-left
-    x1 = xstore(1,NGLLY-1,k,ispec)
-    y1 = ystore(1,NGLLY-1,k,ispec)
-    z1 = zstore(1,NGLLY-1,k,ispec)
+    x1 = real(xstore(1,NGLLY-1,k,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(1,NGLLY-1,k,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(1,NGLLY-1,k,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(2,NGLLY,k,ispec)
-    y2 = ystore(2,NGLLY,k,ispec)
-    z2 = zstore(2,NGLLY,k,ispec)
+    x2 = real(xstore(2,NGLLY,k,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(2,NGLLY,k,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(2,NGLLY,k,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! front-right
-    x1 = xstore(NGLLX,2,k,ispec)
-    y1 = ystore(NGLLX,2,k,ispec)
-    z1 = zstore(NGLLX,2,k,ispec)
+    x1 = real(xstore(NGLLX,2,k,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(NGLLX,2,k,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(NGLLX,2,k,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(NGLLX-1,1,k,ispec)
-    y2 = ystore(NGLLX-1,1,k,ispec)
-    z2 = zstore(NGLLX-1,1,k,ispec)
+    x2 = real(xstore(NGLLX-1,1,k,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(NGLLX-1,1,k,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(NGLLX-1,1,k,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! rear-right
-    x1 = xstore(NGLLX,NGLLY-1,k,ispec)
-    y1 = ystore(NGLLX,NGLLY-1,k,ispec)
-    z1 = zstore(NGLLX,NGLLY-1,k,ispec)
+    x1 = real(xstore(NGLLX,NGLLY-1,k,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(NGLLX,NGLLY-1,k,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(NGLLX,NGLLY-1,k,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(NGLLX-1,NGLLY,k,ispec)
-    y2 = ystore(NGLLX-1,NGLLY,k,ispec)
-    z2 = zstore(NGLLX-1,NGLLY,k,ispec)
+    x2 = real(xstore(NGLLX-1,NGLLY,k,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(NGLLX-1,NGLLY,k,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(NGLLX-1,NGLLY,k,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
@@ -687,49 +718,49 @@
   ! loops over the four edges that are along Y
   do j = 1, NGLLY, NGLLY-1
     ! front-left
-    x1 = xstore(1,j,2,ispec)
-    y1 = ystore(1,j,2,ispec)
-    z1 = zstore(1,j,2,ispec)
+    x1 = real(xstore(1,j,2,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(1,j,2,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(1,j,2,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(2,j,1,ispec)
-    y2 = ystore(2,j,1,ispec)
-    z2 = zstore(2,j,1,ispec)
+    x2 = real(xstore(2,j,1,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(2,j,1,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(2,j,1,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! rear-left
-    x1 = xstore(1,j,NGLLZ-1,ispec)
-    y1 = ystore(1,j,NGLLZ-1,ispec)
-    z1 = zstore(1,j,NGLLZ-1,ispec)
+    x1 = real(xstore(1,j,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(1,j,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(1,j,NGLLZ-1,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(2,j,NGLLZ,ispec)
-    y2 = ystore(2,j,NGLLZ,ispec)
-    z2 = zstore(2,j,NGLLZ,ispec)
+    x2 = real(xstore(2,j,NGLLZ,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(2,j,NGLLZ,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(2,j,NGLLZ,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! front-right
-    x1 = xstore(NGLLX,j,2,ispec)
-    y1 = ystore(NGLLX,j,2,ispec)
-    z1 = zstore(NGLLX,j,2,ispec)
+    x1 = real(xstore(NGLLX,j,2,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(NGLLX,j,2,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(NGLLX,j,2,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(NGLLX-1,j,1,ispec)
-    y2 = ystore(NGLLX-1,j,1,ispec)
-    z2 = zstore(NGLLX-1,j,1,ispec)
+    x2 = real(xstore(NGLLX-1,j,1,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(NGLLX-1,j,1,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(NGLLX-1,j,1,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! rear-right
-    x1 = xstore(NGLLX,j,NGLLZ-1,ispec)
-    y1 = ystore(NGLLX,j,NGLLZ-1,ispec)
-    z1 = zstore(NGLLX,j,NGLLZ-1,ispec)
+    x1 = real(xstore(NGLLX,j,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(NGLLX,j,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(NGLLX,j,NGLLZ-1,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(NGLLX-1,j,NGLLZ,ispec)
-    y2 = ystore(NGLLX-1,j,NGLLZ,ispec)
-    z2 = zstore(NGLLX-1,j,NGLLZ,ispec)
+    x2 = real(xstore(NGLLX-1,j,NGLLZ,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(NGLLX-1,j,NGLLZ,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(NGLLX-1,j,NGLLZ,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
@@ -738,55 +769,55 @@
   ! loops over the four edges that are along X
   do i = 1, NGLLX, NGLLX-1
     ! front-left
-    x1 = xstore(i,1,2,ispec)
-    y1 = ystore(i,1,2,ispec)
-    z1 = zstore(i,1,2,ispec)
+    x1 = real(xstore(i,1,2,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(i,1,2,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(i,1,2,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(i,2,1,ispec)
-    y2 = ystore(i,2,1,ispec)
-    z2 = zstore(i,2,1,ispec)
+    x2 = real(xstore(i,2,1,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(i,2,1,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(i,2,1,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! rear-left
-    x1 = xstore(i,1,NGLLZ-1,ispec)
-    y1 = ystore(i,1,NGLLZ-1,ispec)
-    z1 = zstore(i,1,NGLLZ-1,ispec)
+    x1 = real(xstore(i,1,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(i,1,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(i,1,NGLLZ-1,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(i,2,NGLLZ,ispec)
-    y2 = ystore(i,2,NGLLZ,ispec)
-    z2 = zstore(i,2,NGLLZ,ispec)
+    x2 = real(xstore(i,2,NGLLZ,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(i,2,NGLLZ,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(i,2,NGLLZ,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! front-right
-    x1 = xstore(i,NGLLY,2,ispec)
-    y1 = ystore(i,NGLLY,2,ispec)
-    z1 = zstore(i,NGLLY,2,ispec)
+    x1 = real(xstore(i,NGLLY,2,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(i,NGLLY,2,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(i,NGLLY,2,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(i,NGLLY-1,1,ispec)
-    y2 = ystore(i,NGLLY-1,1,ispec)
-    z2 = zstore(i,NGLLY-1,1,ispec)
+    x2 = real(xstore(i,NGLLY-1,1,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(i,NGLLY-1,1,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(i,NGLLY-1,1,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
 
     ! rear-right
-    x1 = xstore(i,NGLLY,NGLLZ-1,ispec)
-    y1 = ystore(i,NGLLY,NGLLZ-1,ispec)
-    z1 = zstore(i,NGLLY,NGLLZ-1,ispec)
+    x1 = real(xstore(i,NGLLY,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    y1 = real(ystore(i,NGLLY,NGLLZ-1,ispec),kind=CUSTOM_REAL)
+    z1 = real(zstore(i,NGLLY,NGLLZ-1,ispec),kind=CUSTOM_REAL)
 
-    x2 = xstore(i,NGLLY-1,NGLLZ,ispec)
-    y2 = ystore(i,NGLLY-1,NGLLZ,ispec)
-    z2 = zstore(i,NGLLY-1,NGLLZ,ispec)
+    x2 = real(xstore(i,NGLLY-1,NGLLZ,ispec),kind=CUSTOM_REAL)
+    y2 = real(ystore(i,NGLLY-1,NGLLZ,ispec),kind=CUSTOM_REAL)
+    z2 = real(zstore(i,NGLLY-1,NGLLZ,ispec),kind=CUSTOM_REAL)
 
     dist = (x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2)
     if (dx > dist ) dx = dist
   enddo
   ! size (in km)
-  dx = sqrt(dx) * R_PLANET_KM
+  dx = sqrt(dx) * real(R_PLANET_KM,kind=CUSTOM_REAL)
 
   end subroutine get_min_distance_from_second_GLL_points
 
@@ -815,8 +846,11 @@
   double precision :: e1,e2,e3
   double precision :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl,jacobianl
 
-  eig_ratio_min = HUGEVAL
-  eig_ratio_max = - HUGEVAL
+  ! to avoid conversion warnings
+  real(kind=CUSTOM_REAL), parameter :: HUGEVAL_REAL = real(HUGEVAL,kind=CUSTOM_REAL)
+
+  eig_ratio_min = HUGEVAL_REAL
+  eig_ratio_max = - HUGEVAL_REAL
 
   do k = 1,NGLLZ
     do j = 1,NGLLY
@@ -879,8 +913,8 @@
         e3 = sqrt(e3)
 
         ! ratio of smallest vs. largest eigenvalue ( == 1 for no distortion)
-        if (eig_ratio_min > e3/e1) eig_ratio_min = e3/e1
-        if (eig_ratio_max < e3/e1) eig_ratio_max = e3/e1
+        if (eig_ratio_min > e3/e1) eig_ratio_min = real(e3/e1,kind=CUSTOM_REAL)
+        if (eig_ratio_max < e3/e1) eig_ratio_max = real(e3/e1,kind=CUSTOM_REAL)
 
       enddo
     enddo

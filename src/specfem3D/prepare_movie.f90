@@ -65,14 +65,18 @@
   ! note: for noise tomography, must NOT be coarse (have to be saved on all GLL points)
   if (MOVIE_COARSE) then
     ! checks setup
-    if (NGLLX /= NGLLY) &
+    if (NGLLX /= NGLLY .and. .not. HDF5_ENABLED) &
       call exit_MPI(myrank,'MOVIE_COARSE together with MOVIE_SURFACE requires NGLLX=NGLLY')
     ! number of points
     nmovie_points = 2 * 2 * NSPEC2D_TOP(IREGION_CRUST_MANTLE)
     NIT = NGLLX - 1
   else
     ! number of points
-    nmovie_points = NGLLX * NGLLY * NSPEC2D_TOP(IREGION_CRUST_MANTLE)
+    if (.not. HDF5_ENABLED) then
+      nmovie_points = NGLLX * NGLLY * NSPEC2D_TOP(IREGION_CRUST_MANTLE)
+    else ! HDF5
+      nmovie_points = 4 * (NGLLX-1) * (NGLLY-1) * NSPEC2D_TOP(IREGION_CRUST_MANTLE)
+    endif
     NIT = 1
   endif
 
@@ -81,7 +85,11 @@
 
   ! those arrays are not necessary for noise tomography, so only allocate them in MOVIE_SURFACE case
   ! writes out movie point locations to file
-  call write_movie_surface_mesh()
+  if (HDF5_ENABLED) then
+    call write_movie_surface_mesh_hdf5()
+  else
+    call write_movie_surface_mesh()
+  endif
 
   ! allocates movie surface arrays for wavefield values
   allocate(store_val_ux(nmovie_points), &
@@ -90,6 +98,7 @@
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating movie surface arrays')
 
   ! allocates arrays for gathering wavefield values
+  ! TODO ADD HDF5 (store_val_*_all is not used)
   if (myrank == 0) then
     ! only main needs full arrays
     allocate(store_val_ux_all(nmovie_points,0:NPROCTOT_VAL-1), &
@@ -184,8 +193,13 @@
   allocate(nu_3dmovie(3,3,npoints_3dmovie),stat=ier)
   if (ier /= 0 ) call exit_MPI(myrank,'Error allocating nu for 3D movie')
 
-  call write_movie_volume_mesh(nu_3dmovie,num_ibool_3dmovie,mask_3dmovie,mask_ibool_3dmovie, &
-                                          muvstore_crust_mantle_3dmovie,npoints_3dmovie)
+  if (HDF5_ENABLED) then
+    call write_movie_volume_mesh_hdf5(nu_3dmovie,num_ibool_3dmovie,mask_3dmovie,mask_ibool_3dmovie, &
+                                      muvstore_crust_mantle_3dmovie,npoints_3dmovie,nspecel_3dmovie)
+  else
+    call write_movie_volume_mesh(nu_3dmovie,num_ibool_3dmovie,mask_3dmovie,mask_ibool_3dmovie, &
+                                            muvstore_crust_mantle_3dmovie,npoints_3dmovie)
+  endif
 
   if (myrank == 0) then
     write(IMAIN,*) '  Writing to movie3D*** files on local disk databases directory'

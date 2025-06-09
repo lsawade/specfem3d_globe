@@ -76,7 +76,7 @@ void FC_FUNC_ (compute_stacey_acoustic_gpu,
     size_t local_work_size[2];
     cl_uint idx = 0;
 
-    //daniel debug
+    // debug
     //clCheck (clFinish (mocl.command_queue));
     //printf ("rank %d: stacey a %i, %i save %i num blocks x/y= %i %i nglob %i nspec2D %i nspec %i\n",
     //          mp->myrank,interface_type,num_abs_boundary_faces,mp->save_forward,num_blocks_x,num_blocks_y,
@@ -104,7 +104,7 @@ void FC_FUNC_ (compute_stacey_acoustic_gpu,
     clCheck (clEnqueueNDRangeKernel (mocl.command_queue, mocl.kernels.compute_stacey_acoustic_kernel, 2, NULL,
                                      global_work_size, local_work_size, 0, NULL, NULL));
 
-    //daniel debug
+    // debug
     //clCheck (clFinish (mocl.command_queue));
     //printf ("rank %d: stacey b %i, %i \n", mp->myrank,interface_type,num_abs_boundary_faces);
     //fflush (stdout);
@@ -293,6 +293,10 @@ void FC_FUNC_ (compute_stacey_acoustic_undoatt_gpu,
   d_abs_boundary_ijk = mp->d_abs_boundary_ijk_outer_core;
   d_abs_boundary_jacobian2Dw = mp->d_abs_boundary_jacobian2Dw_outer_core;
 
+  // dummy - d_absorb_potential is not needed, instead a dummy is defined here explicitly as realw pointer
+  // (to avoid compilation issues with function call, as NULL could have default as long int* instead of realw*)
+  realw* d_dummy = (realw*) NULL;
+
   // way 1: Elapsed time: 4.385948e-03
   // > NGLLSQUARE==NGLL2==25, but we handle this inside kernel
   //  int blocksize = 32;
@@ -320,7 +324,7 @@ void FC_FUNC_ (compute_stacey_acoustic_undoatt_gpu,
     clCheck (clSetKernelArg (mocl.kernels.compute_stacey_acoustic_kernel, idx++, sizeof (cl_mem), (void *) &mp->d_ibool_outer_core.ocl));
     clCheck (clSetKernelArg (mocl.kernels.compute_stacey_acoustic_kernel, idx++, sizeof (cl_mem), (void *) &mp->d_vp_outer_core.ocl));
     clCheck (clSetKernelArg (mocl.kernels.compute_stacey_acoustic_kernel, idx++, sizeof (int), (void *) &mp->save_stacey));
-    clCheck (clSetKernelArg (mocl.kernels.compute_stacey_acoustic_kernel, idx++, sizeof (cl_mem), (void *) NULL));
+    clCheck (clSetKernelArg (mocl.kernels.compute_stacey_acoustic_kernel, idx++, sizeof (cl_mem), (void *) &d_dummy));
 
     local_work_size[0] = blocksize;
     local_work_size[1] = 1;
@@ -346,7 +350,7 @@ void FC_FUNC_ (compute_stacey_acoustic_undoatt_gpu,
                                                                           mp->d_ibool_outer_core.cuda,
                                                                           mp->d_vp_outer_core.cuda,
                                                                           mp->save_stacey,
-                                                                          NULL);
+                                                                          d_dummy);
   }
 #endif
 #ifdef USE_HIP
@@ -365,7 +369,7 @@ void FC_FUNC_ (compute_stacey_acoustic_undoatt_gpu,
                                                                         mp->d_ibool_outer_core.hip,
                                                                         mp->d_vp_outer_core.hip,
                                                                         mp->save_stacey,
-                                                                        NULL);
+                                                                        d_dummy);
   }
 #endif
 

@@ -34,6 +34,8 @@
 
   module model_epcrust_par
 
+  implicit none
+
   ! parameters for EPCRUST , from Molinari & Morelli model(2011)
   !       latitude :  9.0N - 89.5N
   !       longitude:  56.0W - 70.0E

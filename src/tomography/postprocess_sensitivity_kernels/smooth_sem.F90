@@ -396,8 +396,8 @@ program smooth_sem_globe
   if (NCHUNKS_VAL == 6) then
     element_size = real(TWO_PI / dble(4) * R_PLANET_KM / dble(NEX_XI_VAL),kind=CUSTOM_REAL)
   else
-    ANGULAR_WIDTH_XI_RAD = ANGULAR_WIDTH_XI_IN_DEGREES_VAL * DEGREES_TO_RADIANS
-    ANGULAR_WIDTH_ETA_RAD = ANGULAR_WIDTH_ETA_IN_DEGREES_VAL * DEGREES_TO_RADIANS
+    ANGULAR_WIDTH_XI_RAD = real(ANGULAR_WIDTH_XI_IN_DEGREES_VAL * DEGREES_TO_RADIANS,kind=CUSTOM_REAL)
+    ANGULAR_WIDTH_ETA_RAD = real(ANGULAR_WIDTH_ETA_IN_DEGREES_VAL * DEGREES_TO_RADIANS,kind=CUSTOM_REAL)
     element_size = max( ANGULAR_WIDTH_XI_RAD/NEX_XI_VAL,ANGULAR_WIDTH_ETA_RAD/NEX_ETA_VAL ) * real(R_PLANET_KM,kind=CUSTOM_REAL)
   endif
 
@@ -500,9 +500,9 @@ program smooth_sem_globe
 !          and vertical distance as radial distance?
 
 ! not squared since epicentral distance is taken? values from bk seem to be closer to squared ones...
-  norm_h = sqrt(2.0*PI) * sigma_h
+  norm_h = real(sqrt(2.d0*PI) * sigma_h,kind=CUSTOM_REAL)
   norm_h = norm_h * norm_h ! squared since 2 horizontal directions
-  norm_v = sqrt(2.0*PI) * sigma_v
+  norm_v = real(sqrt(2.d0*PI) * sigma_v,kind=CUSTOM_REAL)
   norm   = norm_h * norm_v
   !norm = (sqrt(2.0*PI) * sigma) ** 3 ! for sigma_h = sigma_v = sigma
 
@@ -511,9 +511,9 @@ program smooth_sem_globe
     call zwgljd(xigll,wxgll,NGLLX,GAUSSALPHA,GAUSSBETA)
     call zwgljd(yigll,wygll,NGLLY,GAUSSALPHA,GAUSSBETA)
     call zwgljd(zigll,wzgll,NGLLZ,GAUSSALPHA,GAUSSBETA)
-    do k=1,NGLLZ
-      do j=1,NGLLY
-        do i=1,NGLLX
+    do k = 1,NGLLZ
+      do j = 1,NGLLY
+        do i = 1,NGLLX
           wgll_cube(i,j,k) = real(wxgll(i)*wygll(j)*wzgll(k),kind=CUSTOM_REAL)
         enddo
       enddo
@@ -1498,13 +1498,13 @@ end program smooth_sem_globe
   integer :: ijk
   integer :: ijk2
 #  define INDEX_IJK2  ijk2,1,1
-#  define DO_LOOP_IJK2  do ijk2=1,NGLLCUBE
+#  define DO_LOOP_IJK2  do ijk2 = 1,NGLLCUBE
 #  define ENDDO_LOOP_IJK2  enddo                  ! NGLLCUBE
 #else
   integer :: i,j,k
   integer :: ii,jj,kk
 #  define INDEX_IJK2  ii,jj,kk
-#  define DO_LOOP_IJK2  do kk=1,NGLLZ; do jj=1,NGLLY; do ii=1,NGLLX
+#  define DO_LOOP_IJK2  do kk = 1,NGLLZ; do jj = 1,NGLLY; do ii = 1,NGLLX
 #  define ENDDO_LOOP_IJK2  enddo; enddo; enddo    ! NGLLZ,NGLLY,NGLLX
 #endif
 
@@ -1514,7 +1514,7 @@ end program smooth_sem_globe
   ! kd-tree search uses either a spherical or ellipsoid search
   logical,parameter :: DO_SEARCH_ELLIP = .true.
 
-  real(kind=CUSTOM_REAL),parameter :: PI2 = PI * PI ! squared
+  real(kind=CUSTOM_REAL),parameter :: PI2 = real(PI * PI,kind=CUSTOM_REAL) ! squared
 
   ! debugging
   !logical, parameter :: DEBUG = .false.
@@ -1873,7 +1873,7 @@ end program smooth_sem_globe
   real(kind=CUSTOM_REAL) :: theta,ratio,alpha
   real(kind=CUSTOM_REAL) :: vx,vy,vz,r0,r1
 
-  real(kind=CUSTOM_REAL),parameter :: PI2 = PI * PI ! squared
+  real(kind=CUSTOM_REAL),parameter :: PI2 = real(PI * PI,kind=CUSTOM_REAL) ! squared
 
   ! note: instead of distance we use distance squared to avoid too many sqrt() operations
 

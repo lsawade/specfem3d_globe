@@ -8,8 +8,8 @@ dnl You must have recent versions of Autoconf and Automake installed.
 
 ############################################################
 
-AC_PREREQ(2.61)
-AC_INIT([Specfem3D_Globe], [8.0.0], [see the wiki], [Specfem3DGlobe])
+AC_PREREQ([2.72])
+AC_INIT([Specfem3D_Globe],[m4_normalize(m4_include(VERSION))],[see the wiki],[Specfem3DGlobe])
 AC_CONFIG_SRCDIR([src/specfem3D/specfem3D.F90])
 
 AC_CONFIG_HEADERS([setup/config.h])
@@ -112,6 +112,7 @@ AM_CONDITIONAL([COND_CUDA8], [test x"$want_cuda" = xcuda8])
 AM_CONDITIONAL([COND_CUDA9], [test x"$want_cuda" = xcuda9])
 AM_CONDITIONAL([COND_CUDA10], [test x"$want_cuda" = xcuda10])
 AM_CONDITIONAL([COND_CUDA11], [test x"$want_cuda" = xcuda11])
+AM_CONDITIONAL([COND_CUDA12], [test x"$want_cuda" = xcuda12])
 
 # cuda linking for cuda 5x and 6x and 7x and 8x and ..
 AM_CONDITIONAL([COND_CUDA_PLUS],
@@ -122,7 +123,8 @@ AM_CONDITIONAL([COND_CUDA_PLUS],
     -o "$want_cuda" = cuda8 \
     -o "$want_cuda" = cuda9 \
     -o "$want_cuda" = cuda10 \
-    -o "$want_cuda" = cuda11 \]
+    -o "$want_cuda" = cuda11 \
+    -o "$want_cuda" = cuda12 \]
 )
 
 # CUDA-aware MPI setting
@@ -166,6 +168,7 @@ AM_CONDITIONAL([COND_HIP_CUDA8], [test x"$want_hip" = xcuda8])
 AM_CONDITIONAL([COND_HIP_CUDA9], [test x"$want_hip" = xcuda9])
 AM_CONDITIONAL([COND_HIP_CUDA10], [test x"$want_hip" = xcuda10])
 AM_CONDITIONAL([COND_HIP_CUDA11], [test x"$want_hip" = xcuda11])
+AM_CONDITIONAL([COND_HIP_CUDA12], [test x"$want_hip" = xcuda12])
 
 ###
 ### MIC (Xeon PHI)
@@ -184,7 +187,7 @@ AM_CONDITIONAL([COND_MIC], [test x"$want_mic" != xno])
 ###
 AC_ARG_WITH([xsmm],
     [AS_HELP_STRING([--with-xsmm],
-        [build LIBXSMM (see:https://github.com/hfp/libxsmm) enabled version @<:@default=no@:>@])],
+        [build LIBXSMM (see:https://github.com/libxsmm/libxsmm) enabled version @<:@default=no@:>@])],
     [want_xsmm="$withval"],
     [want_xsmm=no])
 AM_CONDITIONAL([COND_XSMM], [test x"$want_xsmm" != xno])
@@ -270,7 +273,69 @@ AC_ARG_WITH([cem],
         [build CEM enabled version @<:@default=no@:>@])],
     [want_cem="$withval"],
     [want_cem=no])
+
+###
+### IRIS EMC models
+###
+
+AC_ARG_WITH([emc],
+    [AS_HELP_STRING([--with-emc],
+        [build IRIS EMC models enabled version @<:@default=no@:>@])],
+    [want_emc="$withval"],
+    [want_emc=no])
+
+###
+### NetCDF support
+###
+
+AC_ARG_WITH([netcdf],
+    [AS_HELP_STRING([--with-netcdf],
+        [build NetCDF enabled version (IRIS EMC & CEM models) @<:@default=no@:>@])],
+    [with_netcdf="$withval"],
+    [with_netcdf=no])
+AC_ARG_ENABLE([netcdf],
+    [AS_HELP_STRING([--enable-netcdf],
+        [build NetCDF enabled version (IRIS EMC & CEM models) @<:@default=no@:>@])],
+    [enable_netcdf="$enableval"],
+    [enable_netcdf=no])
+AS_IF([test x"$enable_netcdf" != xno || test x"$with_netcdf" != xno],
+    [want_netcdf=yes],[want_netcdf=no])
+
+## turns on NetCDF support for CEM & EMC version
+AS_IF([test x"$want_cem" != xno || test x"$want_emc" != xno],
+    [want_netcdf=yes],[])
+
+## turns on CEM & EMC models for NetCDF version
+AS_IF([test x"$want_netcdf" != xno],
+    [want_cem=yes])
+AS_IF([test x"$want_netcdf" != xno],
+    [want_emc=yes])
+
 AM_CONDITIONAL([COND_CEM], [test x"$want_cem" != xno])
+AM_CONDITIONAL([COND_EMC], [test x"$want_emc" != xno])
+AM_CONDITIONAL([COND_NETCDF], [test x"$want_netcdf" != xno])
+
+###
+### PETSc support
+###
+
+AC_ARG_WITH([petsc],
+    [AS_HELP_STRING([--with-petsc],
+        [build PETSc enabled version @<:@default=no@:>@])],
+    [want_petsc="$withval"],
+    [want_petsc=no])
+AM_CONDITIONAL([COND_PETSC], [test x$"$want_petsc" != xno])
+
+###
+### HDF5
+###
+
+AC_ARG_WITH([hdf5],
+    [AS_HELP_STRING([--with-hdf5],
+        [build HDF5 enabled version @<:@default=no@:>@])],
+    [want_hdf5="$withval"],
+    [want_hdf5=no])
+AM_CONDITIONAL([COND_HDF5], [test x$"$want_hdf5" != xno])
 
 ############################################################
 
@@ -311,7 +376,7 @@ AC_FC_FREEFORM()
 
 AC_FC_PP_DEFINE()
 AC_SUBST([FC_DEFINE])
-AC_FC_PP_SRCEXT(F90)dnl Because AC_FC_PP_DEFINE messes with things.
+AC_FC_PP_SRCEXT(F90) dnl Because AC_FC_PP_DEFINE messes with things.
 
 AC_PROG_CC
 
@@ -446,10 +511,12 @@ AS_IF([test x"$want_hip" != xno], [
     AC_ARG_VAR(HIPCC, [AMD HIP compiler command])
     AC_ARG_VAR(HIP_FLAGS, [HIP compiler flags])
     AC_ARG_VAR(HIP_INC, [Location of HIP include files])
-    AC_ARG_VAR(HIP_LIB, [Location of HIP library libhip_hcc])
+    AC_ARG_VAR(HIP_LIBS, [HIP linking flags])
+    AC_ARG_VAR(HIP_PLATFORM, [target HIP platform (amd/nvidia/cpu; default amd)])
 
     # tests HIPCC variable
     AS_IF([test x"$HIPCC" = x],[
+        AC_MSG_NOTICE([using default hip compiler: `hipcc`])
         HIPCC=hipcc
     ])
 
@@ -457,7 +524,7 @@ AS_IF([test x"$want_hip" != xno], [
     # checks if program in path
     AC_PATH_PROG(HIPCC_PROG, $HIPCC)
     if test -z "$HIPCC_PROG" ; then
-        AC_MSG_ERROR([cannot find '$HIPCC' program, please check your PATH.])
+        AC_MSG_ERROR([cannot find '$HIPCC' program; try setting HIPCC, and please check your PATH.])
     fi
 
     # sets default HIP path
@@ -476,36 +543,32 @@ AS_IF([test x"$want_hip" != xno], [
     #])
 
     # adds default HIP library
-    AS_IF([test x"$HIP_LIB" = x -a x"${HIP_PATH}" != x],[
-        HIP_LIB="${HIP_PATH}/lib"
-        AC_MSG_NOTICE([adding default HIP library path: ${HIP_LIB}])
+    AS_IF([test x"$HIP_LIBS" = x -a x"${HIP_PATH}" != x],[
+        HIP_LIBS="-L${HIP_PATH}/lib"
+        AC_MSG_NOTICE([adding default HIP library path: ${HIP_LIBS}])
     ])
 
     # checks platform
-    if test x"$HIPCONFIG_PROG" != x ; then
-      GPU_PLATFORM=`$HIPCONFIG_PROG --platform`
-      AS_IF([test x"$GPU_PLATFORM" = xnvidia], [
+    AS_IF([test x"$HIPCONFIG_PROG" != x -a x"$HIP_PLATFORM" = x],[
+      HIP_PLATFORM=`$HIPCONFIG_PROG --platform`
+      AS_IF([test x"$HIP_PLATFORM" = xnvidia], [
           AC_MSG_NOTICE([HIP PLATFORM NVIDIA detected.])
-          HIP_PLATFORM=nvcc
-          FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_NVCC__"
+          HIP_PLATFORM=nvidia
+          FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_NVIDIA__"
       ])
 
-      AS_IF([test x"$GPU_PLATFORM" = xamd], [
+      AS_IF([test x"$HIP_PLATFORM" = xamd], [
           AC_MSG_NOTICE([HIP PLATFORM AMD detected.])
-          HIP_PLATFORM=hcc
-          FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_HCC__"
+          HIP_PLATFORM=amd
+          FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_AMD__"
       ])
       # compiler might require a platform selection flag
       case "${HIP_FLAGS}" in
         *HIP_PLATFORM*) AC_MSG_NOTICE([hip flags contain platform specifier: ${HIP_FLAGS}]) ;;
-        *) AC_MSG_NOTICE([adding flag for platform specifier ${FLAG_PLATFORM}]);
+        *) AC_MSG_NOTICE([adding flag for platform specifier: ${FLAG_PLATFORM}]);
            HIP_FLAGS="${HIP_FLAGS} ${FLAG_PLATFORM}"
            AC_MSG_NOTICE([HIP_FLAGS: ${HIP_FLAGS}]) ;;
       esac
-    fi
-    # sets default platform to AMD if not set
-    AS_IF([test x"$GPU_PLATFORM" = x],[
-      GPU_PLATFORM=amd
     ])
 
     # for compilation errors like:
@@ -521,14 +584,10 @@ AS_IF([test x"$want_hip" != xno], [
       *) AC_MSG_NOTICE([consider adding compilation flag for position independent code: HIP_FLAGS="-fPIC"]);;
     esac
 
-    # test lib & include
-    AS_IF([test x"$HIP_LIB" != x],[
-        HIP_LDFLAGS="-L$HIP_LIB"
-    ])
+    # test include
     AS_IF([test x"$HIP_INC" != x],[
         HIP_CPPFLAGS="-I$HIP_INC"
     ])
-    HIP_LIBS="-lamdhip64"
 
     # checks header file
     AC_LANG_PUSH(C)
@@ -543,6 +602,7 @@ AS_IF([test x"$want_hip" != xno], [
       HIP_CPPFLAGS="-I$HIP_INC"
       CFLAGS="$CFLAGS $HIP_CPPFLAGS"
     fi
+    AC_MSG_NOTICE([using hip compilation flags: $CFLAGS])
 
     AC_MSG_CHECKING([for hip/hip_runtime.h])
     ac_compile='$HIPCC -c $CFLAGS conftest.$ac_ext >&5'
@@ -555,16 +615,8 @@ AS_IF([test x"$want_hip" != xno], [
         AC_MSG_ERROR([HIP runtime header not found; try setting HIP_INC.])
     ])
 
-    # checks for HIP library
-    if test "x$HIP_LIB" != "x"; then
-      HIP_LDFLAGS="-L$HIP_LIB"
-      LDFLAGS="$HIP_LDFLAGS $LDFLAGS"
-    fi
-    HIP_LIBS="-lamdhip64"
-    LIBS="$HIP_LIBS $LIBS"
-
     # runs compilation test with hipcc
-    AC_MSG_CHECKING([hipcc compilation with hipMalloc in -lamdhip64])
+    AC_MSG_CHECKING([for hip compilation with hipMalloc])
     ac_compile='$HIPCC -c $CFLAGS conftest.$ac_ext >&5'
     AC_COMPILE_IFELSE([
       AC_LANG_PROGRAM([[#include <hip/hip_runtime.h>]],[[void* ptr = 0;hipMalloc(&ptr, 1);]])
@@ -572,12 +624,28 @@ AS_IF([test x"$want_hip" != xno], [
       AC_MSG_RESULT(yes)
     ], [
       AC_MSG_RESULT(no)
-      AC_MSG_ERROR([HIP library function with hipcc compilation failed; try setting HIP_INC.])
+      AC_MSG_ERROR([HIP library function with hipcc compilation failed; try setting HIP_FLAGS and HIP_INC.])
     ])
 
+    # sets default platform to AMD if not set
+    AS_IF([test x"$HIP_PLATFORM" = x],[
+        HIP_PLATFORM=amd
+    ])
+    AC_MSG_NOTICE([HIP_PLATFORM: $HIP_PLATFORM])
+
+    # linking library
+    AS_IF([test x"$HIP_PLATFORM" = xamd],[
+      AC_MSG_NOTICE([adding default '-lamdhip64' linking for HIP platform AMD])
+      HIP_LIBS="-lamdhip64"
+    ])
+
+    # test lib
+    LIBS="$HIP_LIBS $LIBS $LDFLAGS"
+    AC_MSG_NOTICE([using hip linking flags: $LIBS])
+
     # runs linking test with hipcc
-    AC_MSG_CHECKING([hipcc linking with hipMalloc in -lamdhip64])
-    ac_link='$HIPCC -o conftest$ac_exeext $CFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+    AC_MSG_CHECKING([for hip linking with hipMalloc])
+    ac_link='$HIPCC -o conftest$ac_exeext $CFLAGS conftest.$ac_ext $LIBS >&5'
     AC_LINK_IFELSE([
       AC_LANG_PROGRAM([[
 #include <stdio.h>
@@ -586,7 +654,7 @@ AS_IF([test x"$want_hip" != xno], [
       AC_MSG_RESULT(yes)
     ],[
       AC_MSG_RESULT(no)
-      AC_MSG_ERROR([HIP library linking with HIP failed; try setting HIP_LIB.])
+      AC_MSG_ERROR([HIP library linking with HIP failed; try setting HIP_LIBS and HIP_PLATFORM.])
     ])
 
     #HIP_HEADER_H="hip/hip_runtime.h"
@@ -601,11 +669,11 @@ AS_IF([test x"$want_hip" != xno], [
 
     # export flags
     AC_SUBST([HIP_CPPFLAGS])
-    AC_SUBST([HIP_LDFLAGS])
     AC_SUBST([HIP_LIBS])
 ])
-AM_CONDITIONAL([COND_HIP_PLATFORM_AMD], [test x"$GPU_PLATFORM" = xamd])
-AM_CONDITIONAL([COND_HIP_PLATFORM_NVIDIA], [test x"$GPU_PLATFORM" = xnvidia])
+AM_CONDITIONAL([COND_HIP_PLATFORM_AMD], [test x"$HIP_PLATFORM" = xamd])
+AM_CONDITIONAL([COND_HIP_PLATFORM_NVIDIA], [test x"$HIP_PLATFORM" = xnvidia])
+AM_CONDITIONAL([COND_HIP_PLATFORM_CPU], [test x"$HIP_PLATFORM" = xcpu])
 
 # CUDA-aware MPI setting
 AS_IF([test x"$want_cuda_aware_mpi" != xno], [
@@ -676,6 +744,50 @@ AS_IF([test x"$want_cuda" != xno -o x"$want_opencl" != xno -o x"$want_hip" != xn
 ])
 
 ###
+### NetCDF support
+###
+
+AS_IF([test x"$want_netcdf" != xno], [
+    AS_BOX([NetCDF])
+    AC_MSG_NOTICE([NetCDF is enabled])
+
+    AC_ARG_VAR(NETCDF_INC, [NetCDF include directory])
+    AC_ARG_VAR(NETCDF_FCFLAGS, [Fortran compiler flags])
+    AC_ARG_VAR(NETCDF_LIBS, [extra libraries for linking programs])
+
+    # NetCDF checking for Fortran
+    AC_LANG_PUSH(Fortran)
+    AC_MSG_CHECKING([for NetCDF modules])
+    FCFLAGS="$NETCDF_FCFLAGS $FCFLAGS"
+    # adds include directory
+    if test "x$NETCDF_INC" != "x"; then
+      NETCDF_INCLUDES="-I$NETCDF_INC"
+      FCFLAGS+=" $NETCDF_INCLUDES"
+    fi
+    # adds CEM flags if given
+    if test "x$CEM_FCFLAGS" != "x"; then
+      FCFLAGS+=" $CEM_FCFLAGS"
+    fi
+    # adds CEM flags if given
+    if test "x$EMC_FCFLAGS" != "x"; then
+      FCFLAGS+=" $EMC_FCFLAGS"
+    fi
+    # compilation test
+    AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM([], [[
+      use netcdf
+      ]])
+    ], [
+      AC_MSG_RESULT(yes)
+    ], [
+      AC_MSG_RESULT(no)
+      AC_MSG_ERROR([NetCDF module not found; is NetCDF built with Fortran support for this compiler? try setting NETCDF_INC.])
+    ])
+    AC_LANG_POP([Fortran])
+    AC_SUBST([NETCDF_INCLUDES])
+])
+
+###
 ### CEM
 ###
 
@@ -700,6 +812,34 @@ AS_IF([test x"$want_cem" != xno], [
     #], [
     #  AC_MSG_RESULT(no)
     #  AC_MSG_ERROR([NetCDF modules not found; is NetCDF built with Fortran support for this compiler?])
+    #])
+    #AC_LANG_POP([Fortran])
+])
+
+###
+### IRIS EMC models
+###
+
+AS_IF([test x"$want_emc" != xno], [
+    AS_BOX([IRIS EMC models])
+    AC_MSG_NOTICE([IRIS EMC is enabled])
+
+    AC_ARG_VAR(EMC_FCFLAGS, [IRIS EMC Fortran compiler flags])
+    AC_ARG_VAR(EMC_LIBS, [IRIS EMC extra libraries for linking programs])
+
+    # NetCDF checking for Fortran
+    #AC_LANG_PUSH(Fortran)
+    #AC_MSG_CHECKING([for NetCDF modules])
+    #FCFLAGS="$EMC_FCFLAGS $FCFLAGS"
+    #AC_COMPILE_IFELSE([
+    #  AC_LANG_PROGRAM([], [[
+    #  use netcdf
+    #  ]])
+    #], [
+    #  AC_MSG_RESULT(yes)
+    #], [
+    #  AC_MSG_RESULT(no)
+    #  AC_MSG_ERROR([NetCDF module not found; is NetCDF built with Fortran support for this compiler?])
     #])
     #AC_LANG_POP([Fortran])
 ])
@@ -737,24 +877,146 @@ AS_IF([test x"$want_vtk" != xno], [
     VTK_LIBS="-lvtkRendering -lvtkGraphics $VTK_LIBS"
 ])
 
+###
+### PETSC
+###
+AS_IF([test x"$want_petsc" != xno], [
+    AS_BOX([PETSc])
+    AC_MSG_NOTICE([PETSc is enabled])
+
+    AC_ARG_VAR(PETSC_INC, [PETSC include directory])
+    AC_ARG_VAR(PETSC_FCFLAGS, [Fortran compiler flags (PETSC specific flags)])
+    AC_ARG_VAR(PETSC_LIB, [extra library directory for linking programs with PETSC])
+
+    # test include & lib
+    AS_IF([test x"$PETSC_INC" != x],[
+        PETSC_FCFLAGS+=" -I$PETSC_INC"
+    ])
+    AS_IF([test x"$PETSC_LIB" != x],[
+        PETSC_LDFLAGS="-L$PETSC_LIB"
+    ])
+    PETSC_LIBS="-lpetsc"
+
+    # PETSC checking for Fortran compilation
+    AC_LANG_PUSH(Fortran)
+    FCFLAGS_save="$FCFLAGS"
+    LDFLAGS_save="$LDFLAGS"
+    LIBS_save="$LIBS"
+
+    # compilation test
+    AC_MSG_CHECKING([for PETSC modules])
+    if test "x$PETSC_FCFLAGS" != "x"; then
+      FCFLAGS="$PETSC_FCFLAGS $FCFLAGS"
+    fi
+    # we'll need PETSc's Krylov subspace method solver
+    AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM([], [[
+! PETSc's Krylov subspace method (KSP) solver
+#include "petsc/finclude/petscksp.h"
+  use petscksp
+      ]])
+    ], [
+      AC_MSG_RESULT(yes)
+    ], [
+      AC_MSG_RESULT(no)
+      AC_MSG_ERROR([PETSC module not found; is PETSC built with Fortran support for this compiler? try setting PETSC_INC.])
+    ])
+
+    # runs linking test
+    AC_MSG_CHECKING([PETSc linking with PetscInitialize in -lpetsc])
+    if test "x$PETSC_LDFLAGS" != "x"; then
+      LDFLAGS="$PETSC_LDFLAGS $LDFLAGS"
+    fi
+    LIBS="$PETSC_LIBS $LIBS"
+    AC_LINK_IFELSE([
+      AC_LANG_PROGRAM([], [[
+! PETSc's Krylov subspace method (KSP) solver
+#include "petsc/finclude/petscksp.h"
+  use petscksp
+  implicit none
+  PetscErrorCode :: ierr
+  call PetscInitialize(PETSC_NULL_CHARACTER,ierr)
+  call PetscFinalize(ierr)
+      ]])
+    ], [
+      AC_MSG_RESULT(yes)
+    ],[
+      AC_MSG_RESULT(no)
+      AC_MSG_ERROR([PETSc library linking failed; try setting PETSC_LIB.])
+    ])
+
+    # restore original flags
+    FCFLAGS="$FCFLAGS_save"
+    LDFLAGS="$LDFLAGS_save"
+    LIBS="$LIBS_save"
+    AC_LANG_POP([Fortran])
+
+    # export PETSC flags
+    AC_SUBST([PETSC_FCFLAGS])
+    AC_SUBST([PETSC_LDFLAGS])
+    AC_SUBST([PETSC_LIBS])
+])
+
+##
+## HDF5
+##
+
+AS_IF([test x"$want_hdf5" != xno], [
+    AS_BOX([HDF5])
+    AC_MSG_NOTICE([HDF5 is enabled])
+
+    AC_ARG_VAR(HDF5_INC, [HDF5 include directory])
+    AC_ARG_VAR(HDF5_FCFLAGS, [Fortran compiler flags])
+    AC_ARG_VAR(HDF5_LIBS, [extra libraries for linking programs])
+
+    # HDF5 checking for Fortran
+    AC_LANG_PUSH(Fortran)
+    AC_MSG_CHECKING([for HDF5 modules])
+    FCFLAGS="$HDF5_FCFLAGS $FCFLAGS"
+    # adds include directory
+    if test "x$HDF5_INC" != "x"; then
+      HDF5_INCLUDES="-I$HDF5_INC"
+      FCFLAGS+=" $HDF5_INCLUDES"
+    fi
+    # compilation test
+    AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM([], [[
+      use hdf5
+      ]])
+    ], [
+      AC_MSG_RESULT(yes)
+    ], [
+      AC_MSG_RESULT(no)
+      AC_MSG_ERROR([HDF5 module not found; is HDF5 built with Fortran support for this compiler?])
+    ])
+    AC_LANG_POP([Fortran])
+    AC_SUBST([HDF5_INCLUDES])
+])
+
 ##
 ## Git version info
 ##
 
 AS_BOX([git version info])
 CIG_PKG_GIT(SPECFEM3D_GLOBE)
+
 AC_DEFINE_UNQUOTED([SPECFEM3D_GLOBE_VERSION], ["$PACKAGE_VERSION"], [Define SPECFEM3D_GLOBE version])
 #AC_DEFINE_UNQUOTED([SPECFEM3D_GLOBE_DOI], ["10.5281/zenodo.xxxxx"], [Define SPECFEM3D_GLOBE doi])
 
-AS_IF([test -d $srcdir/.git], [
-    GIT_VERSION_DEPS="$srcdir/.git/logs/HEAD"
-    AC_MSG_NOTICE([building from git repository])
-    AC_SUBST(GIT_VERSION_DEPS)
-], [
-    dnl Only substitute if not in a git repository.
-    AC_MSG_NOTICE([not a git repository])
-    AC_CONFIG_FILES([setup/version.fh])
+AS_IF([test x"$SPECFEM3D_GLOBE_RELEASE_VERSION" = x0],[
+  AC_MSG_NOTICE([building from git repository])
+  GIT_PACKAGE_VERSION=$SPECFEM3D_GLOBE_GIT_REVISION
+  GIT_COMMIT_VERSION=$SPECFEM3D_GLOBE_GIT_HASH
+  GIT_DATE_VERSION=$SPECFEM3D_GLOBE_GIT_DATE
+],[
+  AC_MSG_NOTICE([not a git repository])
+  GIT_PACKAGE_VERSION=$PACKAGE_VERSION
+  GIT_COMMIT_VERSION="unknown"
+  GIT_DATE_VERSION="unknown"
 ])
+AC_SUBST([GIT_PACKAGE_VERSION])
+AC_SUBST([GIT_COMMIT_VERSION])
+AC_SUBST([GIT_DATE_VERSION])
 
 ############################################################
 
@@ -767,6 +1029,7 @@ AC_CONFIG_FILES([
     setup/constants_tomography.h
     setup/precision.h
     setup/config.fh
+    setup/version.fh
 ])
 
 AC_CONFIG_FILES([
@@ -786,6 +1049,7 @@ AC_CONFIG_LINKS([
     DATA/full_sphericalharmonic_model:DATA/full_sphericalharmonic_model
     DATA/gladm25:DATA/gladm25
     DATA/heterogen:DATA/heterogen
+    DATA/IRIS_EMC:DATA/IRIS_EMC
     DATA/Lebedev_sea99:DATA/Lebedev_sea99
     DATA/Montagner_model:DATA/Montagner_model
     DATA/mars:DATA/mars
@@ -798,6 +1062,7 @@ AC_CONFIG_LINKS([
     DATA/s40rts:DATA/s40rts
     DATA/sglobe:DATA/sglobe
     DATA/spiral1.4:DATA/spiral1.4
+    DATA/SEMUCB_A3d:DATA/SEMUCB_A3d
     DATA/Simons_model:DATA/Simons_model
     DATA/topo_bathy:DATA/topo_bathy
     DATA/Zhao_JP_model:DATA/Zhao_JP_model
@@ -825,9 +1090,9 @@ AS_BOX([$PACKAGE_NAME $PACKAGE_VERSION])
 AC_MSG_RESULT([])
 AC_MSG_RESULT([$0 has completed and set up a default configuration to build.])
 AC_MSG_RESULT([])
-AC_MSG_RESULT([You may wish to modify the following files before building:])
+AC_MSG_RESULT([You may wish to modify the following files before running a simulation:])
 AC_MSG_RESULT([AS_HELP_STRING([DATA/Par_file],
-                              [Set parameters affecting the build and simulation before running make and compiling.])])
+                              [Set parameters affecting the simulation (before running make and compiling when enabling static compilation).])])
 AC_MSG_RESULT([AS_HELP_STRING([DATA/CMTSOLUTION],
                               [Set the source parameters before running the solver.])])
 AC_MSG_RESULT([AS_HELP_STRING([DATA/STATIONS],

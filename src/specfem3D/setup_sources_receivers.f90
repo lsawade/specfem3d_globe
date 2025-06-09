@@ -106,7 +106,7 @@
 
   use specfem_par, only: &
     NCHUNKS_VAL,NEX_XI_VAL,NEX_ETA_VAL,ANGULAR_WIDTH_XI_IN_DEGREES_VAL,ANGULAR_WIDTH_ETA_IN_DEGREES_VAL, &
-    LAT_LON_MARGIN,myrank
+    ELLIPTICITY_VAL,LAT_LON_MARGIN,myrank
 
   use specfem_par, only: &
     nspec => NSPEC_CRUST_MANTLE,nglob => NGLOB_CRUST_MANTLE
@@ -151,7 +151,7 @@
   ! limits receiver search
   if (USE_DISTANCE_CRITERION) then
     ! retrieves latitude/longitude range of this slice
-    call xyz_2_latlon_minmax(nspec,nglob,ibool,xstore,ystore,zstore,lat_min,lat_max,lon_min,lon_max)
+    call xyz_2_latlon_minmax(nspec,nglob,ibool,xstore,ystore,zstore,lat_min,lat_max,lon_min,lon_max,ELLIPTICITY_VAL)
 
     ! adds search margin
     lat_min = lat_min - LAT_LON_MARGIN
@@ -285,33 +285,25 @@
     NDIM,NGLLX,NGLLY,NGLLZ,MIDX,MIDY,MIDZ,IMAIN, &
     USE_DISTANCE_CRITERION
 
-  use shared_parameters, only: R_PLANET_KM
-
   use specfem_par, only: &
     myrank, &
-    nspec => NSPEC_CRUST_MANTLE
+    nspec => NSPEC_CRUST_MANTLE, &
+    nglob => NGLOB_CRUST_MANTLE
 
   use specfem_par_crustmantle, only: &
     ibool => ibool_crust_mantle, &
     xstore => xstore_crust_mantle,ystore => ystore_crust_mantle,zstore => zstore_crust_mantle
 
   ! for point search
-  use specfem_par, only: element_size,typical_size_squared,xyz_midpoints, &
-    xadj,adjncy,num_neighbors_all
-
-  use kdtree_search, only: kdtree_setup,kdtree_delete, &
-    kdtree_nodes_location,kdtree_nodes_index,kdtree_num_nodes, &
-    kdtree_count_nearest_n_neighbors,kdtree_get_nearest_n_neighbors, &
-    kdtree_search_index,kdtree_search_num_nodes
+  use specfem_par, only: xadj,adjncy,num_neighbors_all
 
   implicit none
-  integer :: num_neighbors,num_neighbors_max
 
-  integer,dimension(8) :: iglob_corner,iglob_corner2
-  integer :: ispec_ref,ispec,iglob,icorner,ier !,jj
+  ! local parameters
+  ! maximum number of neighbors
+  integer,parameter :: MAX_NEIGHBORS = 50   ! maximum number of neighbors (around 37 should be sufficient for crust/mantle)
 
   ! temporary
-  integer,parameter :: MAX_NEIGHBORS = 50   ! maximum number of neighbors (around 37 should be sufficient for crust/mantle)
   integer,dimension(:),allocatable :: tmp_adjncy ! temporary adjacency
   integer :: inum_neighbor
 
@@ -319,20 +311,22 @@
   double precision :: time1,tCPU
   double precision, external :: wtime
 
-  ! kd-tree search
-  integer :: ielem,inodes
-  integer :: nsearch_points
-  integer :: num_elements,num_elements_max
-  integer :: ielem_counter,num_elements_actual_max
-  !integer, parameter :: max_search_points = 2000
-
-  double precision :: r_search
-  double precision :: xyz_target(NDIM)
-  double precision :: dist_squared,dist_squared_max
-
+  integer :: num_neighbors,num_neighbors_max
+  integer :: num_elements_max
+  integer :: ispec_ref,ispec,iglob,ier,icorner
+  integer :: ielem,ii,jj
   logical :: is_neighbor
-  logical,parameter :: DO_BRUTE_FORCE_SEARCH = .false.
 
+  ! for all the elements in contact with the reference element
+  integer, dimension(:,:), allocatable :: ibool_corner
+
+  ! Node-to-element reverse lookup
+  integer, dimension(:,:), allocatable :: node_to_elem
+  integer, dimension(:), allocatable :: node_to_elem_count
+  integer :: icount
+  integer, dimension(MAX_NEIGHBORS) :: elem_neighbors            ! direct neighbors
+
+  ! user output
   if (myrank == 0) then
     write(IMAIN,*) 'adjacency:'
     write(IMAIN,*) '  total number of elements in this slice = ',nspec
@@ -354,243 +348,180 @@
   !  enddo
   allocate(xadj(nspec + 1),stat=ier)
   if (ier /= 0) stop 'Error allocating xadj'
+  xadj(:) = 0
+
+  ! temporary helper array
   allocate(tmp_adjncy(MAX_NEIGHBORS*nspec),stat=ier)
   if (ier /= 0) stop 'Error allocating tmp_adjncy'
-  xadj(:) = 0
   tmp_adjncy(:) = 0
 
-  ! kd-tree search
-  if (.not. DO_BRUTE_FORCE_SEARCH) then
-    ! kd-tree search
+  ! since we only need to check corner points for the adjacency,
+  ! we build an extra ibool array with corner points only for faster accessing
+  allocate(ibool_corner(8,nspec),stat=ier)
+  if (ier /= 0) stop 'Error allocating ibool_corner array'
+  ibool_corner(:,:) = 0
+  do ispec = 1,nspec
+    ibool_corner(1,ispec) = ibool(1,1,1,ispec)
+    ibool_corner(2,ispec) = ibool(NGLLX,1,1,ispec)
+    ibool_corner(3,ispec) = ibool(NGLLX,NGLLY,1,ispec)
+    ibool_corner(4,ispec) = ibool(1,NGLLY,1,ispec)
 
-    ! search radius around element midpoints
-    !
-    ! note: typical search size is using 10 times the size of a surface element;
-    !       we take here 6 times the surface element size
-    !       - since at low resolutions NEX < 64 and large element sizes, this search radius needs to be large enough, and,
-    !       - due to doubling layers (elements at depth will become bigger, however radius shrinks)
-    !
-    !       the search radius r_search given as routine argument must be non-squared
-    r_search = 6.0 * element_size
+    ibool_corner(5,ispec) = ibool(1,1,NGLLZ,ispec)
+    ibool_corner(6,ispec) = ibool(NGLLX,1,NGLLZ,ispec)
+    ibool_corner(7,ispec) = ibool(NGLLX,NGLLY,NGLLZ,ispec)
+    ibool_corner(8,ispec) = ibool(1,NGLLY,NGLLZ,ispec)
+  enddo
 
-    ! user output
-    if (myrank == 0) then
-      write(IMAIN,*) '  using kd-tree search radius = ',r_search * R_PLANET_KM,'(km)'
-      write(IMAIN,*)
-      call flush_IMAIN()
-    endif
+  ! setups node-to-element mapping counter
+  allocate(node_to_elem_count(nglob),stat=ier)
+  if (ier /= 0) stop 'Error allocating node_to_elem_count arrays'
+  node_to_elem_count(:) = 0
+  num_elements_max = 0
+  ! determines maximum count per node
+  do ispec = 1,nspec
+    ! only corner nodes used to check for shared nodes (conforming mesh)
+    do icorner = 1,8
+      iglob = ibool_corner(icorner,ispec)
 
-    ! kd-tree setup for adjacency search
-    !
-    ! uses only element midpoint location
-    kdtree_num_nodes = nspec
+      ! add to mapping
+      icount = node_to_elem_count(iglob) + 1
 
-    ! allocates tree arrays
-    allocate(kdtree_nodes_location(NDIM,kdtree_num_nodes),stat=ier)
-    if (ier /= 0) stop 'Error allocating kdtree_nodes_location arrays'
-    allocate(kdtree_nodes_index(kdtree_num_nodes),stat=ier)
-    if (ier /= 0) stop 'Error allocating kdtree_nodes_index arrays'
+      ! gets maximum of elements sharing node
+      if (icount > num_elements_max) num_elements_max = icount
 
-    ! prepares search arrays, each element takes its internal GLL points for tree search
-    kdtree_nodes_index(:) = 0
-    kdtree_nodes_location(:,:) = 0.0
-    ! adds tree nodes
-    inodes = 0
-    do ispec = 1,nspec
-      ! sets up tree nodes
-      iglob = ibool(MIDX,MIDY,MIDZ,ispec)
-
-      ! counts nodes
-      inodes = inodes + 1
-      if (inodes > kdtree_num_nodes ) stop 'Error index inodes bigger than kdtree_num_nodes'
-
-      ! adds node index (index points to same ispec for all internal GLL points)
-      kdtree_nodes_index(inodes) = ispec
-
-      ! adds node location
-      kdtree_nodes_location(1,inodes) = xstore(iglob)
-      kdtree_nodes_location(2,inodes) = ystore(iglob)
-      kdtree_nodes_location(3,inodes) = zstore(iglob)
+      ! updates count
+      node_to_elem_count(iglob) = icount
     enddo
-    if (inodes /= kdtree_num_nodes ) stop 'Error index inodes does not match nnodes_local'
+  enddo
 
-    ! alternative: to avoid allocating/deallocating search index arrays, though there is hardly a speedup
-    !allocate(kdtree_search_index(max_search_points),stat=ier)
-    !if (ier /= 0) stop 'Error allocating array kdtree_search_index'
-
-    ! creates kd-tree for searching
-    call kdtree_setup()
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) '  maximum number of elements per shared node      = ',num_elements_max
+    write(IMAIN,*) '  node-to-element array memory required per slice = ', &
+                                (num_elements_max * nglob * 4)/1024./1024.,"(MB)"
+    write(IMAIN,*)
+    call flush_IMAIN()
   endif
 
-  ! gets maximum number of neighbors
-  inum_neighbor = 0
-  num_neighbors_max = 0
-  num_neighbors_all = 0
+  ! Node-to-element reverse lookup
+  allocate(node_to_elem(num_elements_max,nglob),stat=ier)
+  if (ier /= 0) stop 'Error allocating node_to_elem arrays'
+  node_to_elem(:,:) = -1
+  node_to_elem_count(:) = 0
 
-  num_elements_max = 0
-  num_elements_actual_max = 0
-  dist_squared_max = 0.d0
+  do ispec = 1,nspec
+    ! only corner nodes used to check for shared nodes (conforming mesh)
+    do icorner = 1,8
+      iglob = ibool_corner(icorner,ispec)
+
+      ! add to mapping
+      icount = node_to_elem_count(iglob) + 1
+
+      ! adds entry to mapping array
+      node_to_elem_count(iglob) = icount
+      node_to_elem(icount,iglob) = ispec
+    enddo
+  enddo
+
+  ! gets maximum number of neighbors
+  inum_neighbor = 0       ! counts total number of neighbors added
+
+  ! stats
+  num_neighbors_max = 0
 
   do ispec_ref = 1,nspec
-    ! the eight corners of the current element
-    iglob_corner(1) = ibool(1,1,1,ispec_ref)
-    iglob_corner(2) = ibool(NGLLX,1,1,ispec_ref)
-    iglob_corner(3) = ibool(NGLLX,NGLLY,1,ispec_ref)
-    iglob_corner(4) = ibool(1,NGLLY,1,ispec_ref)
-    iglob_corner(5) = ibool(1,1,NGLLZ,ispec_ref)
-    iglob_corner(6) = ibool(NGLLX,1,NGLLZ,ispec_ref)
-    iglob_corner(7) = ibool(NGLLX,NGLLY,NGLLZ,ispec_ref)
-    iglob_corner(8) = ibool(1,NGLLY,NGLLZ,ispec_ref)
-
-    ! midpoint for search radius
-    iglob = ibool(MIDX,MIDY,MIDZ,ispec_ref)
-    xyz_target(1) = xstore(iglob)
-    xyz_target(2) = ystore(iglob)
-    xyz_target(3) = zstore(iglob)
-
-    if (DO_BRUTE_FORCE_SEARCH) then
-      ! loops over all other elements to find closest neighbors
-      num_elements = nspec
-    else
-      ! looks only at elements in kd-tree search radius
-
-      ! gets number of tree points within search radius
-      ! (within search sphere)
-      call kdtree_count_nearest_n_neighbors(xyz_target,r_search,nsearch_points)
-
-      ! debug
-      !print *,'  total number of search elements: ',nsearch_points,'ispec',ispec_ref
-
-      ! alternative: limits search results
-      !if (nsearch_points > max_search_points) nsearch_points = max_search_points
-
-      ! sets number of search nodes to get
-      kdtree_search_num_nodes = nsearch_points
-
-      ! allocates search index
-      allocate(kdtree_search_index(kdtree_search_num_nodes),stat=ier)
-      if (ier /= 0) stop 'Error allocating array kdtree_search_index'
-
-      ! gets closest n points around target (within search sphere)
-      call kdtree_get_nearest_n_neighbors(xyz_target,r_search,nsearch_points)
-
-      ! loops over search radius
-      num_elements = nsearch_points
-    endif
-
-    ! statistics
-    if (num_elements > num_elements_max) num_elements_max = num_elements
-    ielem_counter = 0
-
-    ! counts number of neighbors
+    ! counts number of neighbors (for this element)
     num_neighbors = 0
+    elem_neighbors(:) = 0
 
-    do ielem = 1,num_elements
+    ! only corner nodes used to check for shared nodes (conforming mesh)
+    do icorner = 1,8
+      iglob = ibool_corner(icorner,ispec_ref)
 
-      ! gets element index
-      if (DO_BRUTE_FORCE_SEARCH) then
-        ispec = ielem
-      else
-        ! kd-tree search radius
-        ! gets search point/element index
-        ispec = kdtree_search_index(ielem)
-        ! checks index
-        if (ispec < 1 .or. ispec > nspec) stop 'Error element index is invalid'
-      endif
+      ! loops over all other elements to add neighbors
+      do ielem = 1,node_to_elem_count(iglob)
+        ispec = node_to_elem(ielem,iglob)
 
-      ! skip reference element
-      if (ispec == ispec_ref) cycle
+        ! skip reference element
+        if (ispec == ispec_ref) cycle
 
-      ! distance to reference element
-      dist_squared = (xyz_target(1) - xyz_midpoints(1,ispec))*(xyz_target(1) - xyz_midpoints(1,ispec)) &
-                   + (xyz_target(2) - xyz_midpoints(2,ispec))*(xyz_target(2) - xyz_midpoints(2,ispec)) &
-                   + (xyz_target(3) - xyz_midpoints(3,ispec))*(xyz_target(3) - xyz_midpoints(3,ispec))
+        ! checks if it is a new neighbor element
+        is_neighbor = .false.
 
-      ! exclude elements that are too far from target
-      if (USE_DISTANCE_CRITERION) then
-        !  we compare squared distances instead of distances themselves to significantly speed up calculations
-        if (dist_squared > typical_size_squared) cycle
-      endif
-
-      ielem_counter = ielem_counter + 1
-
-      ! checks if element has a corner iglob from reference element
-      is_neighbor = .false.
-
-      iglob_corner2(1) = ibool(1,1,1,ispec)
-      iglob_corner2(2) = ibool(NGLLX,1,1,ispec)
-      iglob_corner2(3) = ibool(NGLLX,NGLLY,1,ispec)
-      iglob_corner2(4) = ibool(1,NGLLY,1,ispec)
-      iglob_corner2(5) = ibool(1,1,NGLLZ,ispec)
-      iglob_corner2(6) = ibool(NGLLX,1,NGLLZ,ispec)
-      iglob_corner2(7) = ibool(NGLLX,NGLLY,NGLLZ,ispec)
-      iglob_corner2(8) = ibool(1,NGLLY,NGLLZ,ispec)
-
-      do icorner = 1,8
-        ! checks if corner also has reference element
-        if (any(iglob_corner(:) == iglob_corner2(icorner))) then
+        ! checks if first element
+        if (num_neighbors == 0) then
           is_neighbor = .true.
-          exit
+        else
+          ! check if not added to list yet
+          if (.not. any(elem_neighbors(1:num_neighbors) == ispec)) then
+            is_neighbor = .true.
+          endif
         endif
-        ! alternative: (slightly slower with 12.4s compared to 11.4s with any() intrinsic function)
-        !do jj = 1,8
-        !  if (iglob == iglob_corner(jj)) then
-        !    is_neighbor = .true.
-        !    exit
-        !  endif
-        !enddo
-        !if (is_neighbor) exit
+
+        ! adds as neighbor
+        if (is_neighbor) then
+          ! store neighbor elements
+          num_neighbors = num_neighbors + 1
+
+          ! check
+          if (num_neighbors > MAX_NEIGHBORS) stop 'Error maximum of neighbors (direct) exceeded'
+
+          ! store element
+          elem_neighbors(num_neighbors) = ispec
+        endif
       enddo
-
-      ! counts neighbors to reference element
-      if (is_neighbor) then
-        ! adds to adjacency
-        inum_neighbor = inum_neighbor + 1
-        ! checks
-        if (inum_neighbor > MAX_NEIGHBORS*nspec) stop 'Error maximum neighbors exceeded'
-        ! adds element
-        tmp_adjncy(inum_neighbor) = ispec
-
-        ! for statistics
-        num_neighbors = num_neighbors + 1
-
-        ! maximum distance to reference element
-        if (dist_squared > dist_squared_max) dist_squared_max = dist_squared
-      endif
-    enddo ! ielem
-
-    ! checks if neighbors were found
-    if (num_neighbors == 0) then
-      print *,'Error: rank ',myrank,' - element ',ispec_ref,'has no neighbors!'
-      print *,'  element midpoint location: ',xyz_target(:)*R_PLANET_KM
-      print *,'  typical element size     : ',element_size*R_PLANET_KM,'(km)'
-      print *,'  brute force search       : ',DO_BRUTE_FORCE_SEARCH
-      print *,'  distance criteria        : ',USE_DISTANCE_CRITERION
-      print *,'  typical search distance  : ',typical_size_squared*R_PLANET_KM,'(km)'
-      print *,'  kd-tree r_search         : ',r_search*R_PLANET_KM,'(km)'
-      print *,'  search elements          : ',num_elements
-      call exit_MPI(myrank,'Error adjacency invalid')
-    endif
+    enddo ! corners
 
     ! statistics
     if (num_neighbors > num_neighbors_max) num_neighbors_max = num_neighbors
-    if (ielem_counter > num_elements_actual_max) num_elements_actual_max = ielem_counter
+
+    ! store to temporary adjacency array
+    if (num_neighbors > 0) then
+      ! updates total count
+      inum_neighbor = inum_neighbor + num_neighbors
+
+      ! checks
+      if (inum_neighbor > MAX_NEIGHBORS * nspec) stop 'Error maximum of total neighbors exceeded'
+
+      ! adds to adjacency
+      tmp_adjncy(inum_neighbor-num_neighbors+1:inum_neighbor) = elem_neighbors(1:num_neighbors)
+    else
+      ! no neighbors
+      ! warning
+      print *,'*** Warning: found mesh element with no neighbors : slice ',myrank,' - element ',ispec_ref,' ***'
+    endif
 
     ! adjacency indexing
     xadj(ispec_ref + 1) = inum_neighbor
     ! how to use:
-    !num_neighbors = xadj(ispec+1)-xadj(ispec)
+    !num_neighbors = xadj(ispec+1) - xadj(ispec)
     !do i = 1,num_neighbors
     !  ! get neighbor
     !  ispec_neighbor = adjncy(xadj(ispec) + i)
     !enddo
 
-    ! frees kdtree search array
-    if (.not. DO_BRUTE_FORCE_SEARCH) then
-      deallocate(kdtree_search_index)
-    endif
-
   enddo ! ispec_ref
+
+  ! frees temporary array
+  deallocate(ibool_corner)
+  deallocate(node_to_elem,node_to_elem_count)
+
+  ! checks if neighbors were found
+  do ispec_ref = 1,nspec
+    ! gets number of neighbors
+    num_neighbors = xadj(ispec_ref+1) - xadj(ispec_ref)
+
+    ! element should have neighbors, otherwise mesh is probably invalid
+    if (num_neighbors == 0 .and. nspec > 1) then
+      ! midpoint
+      iglob = ibool(MIDX,MIDY,MIDZ,ispec_ref)
+      ! error info
+      print *,'Error: rank ',myrank,' - element ',ispec_ref,'has no neighbors!'
+      print *,'  element midpoint location: ',xstore(iglob),ystore(iglob),zstore(iglob)
+      print *,'  maximum search elements  : ',num_elements_max
+      call exit_MPI(myrank,'Error adjacency invalid')
+    endif
+  enddo
 
   ! total number of neighbors
   num_neighbors_all = inum_neighbor
@@ -602,36 +533,47 @@
   adjncy(1:num_neighbors_all) = tmp_adjncy(1:num_neighbors_all)
 
   ! checks
-  if (minval(adjncy(:)) < 1 .or. maxval(adjncy(:)) > nspec) stop 'Invalid adjncy array'
+  if (minval(adjncy(:)) < 1 .or. maxval(adjncy(:)) > nspec) then
+    print *,'Error: adjncy array invalid: slice ',myrank
+    print *,'       number of all neighbors = ',num_neighbors_all
+    print *,'       array min/max           = ',minval(adjncy(:)),'/',maxval(adjncy(:))
+    stop 'Invalid adjncy array'
+  endif
 
   ! frees temporary array
   deallocate(tmp_adjncy)
 
-  if (.not. DO_BRUTE_FORCE_SEARCH) then
-    ! frees current tree memory
-    ! deletes tree arrays
-    deallocate(kdtree_nodes_location)
-    deallocate(kdtree_nodes_index)
-    ! deletes search tree nodes
-    call kdtree_delete()
-  endif
+  ! checks neighbors for out-of-bounds indexing and duplicates
+  do ispec_ref = 1,nspec
+    ! loops over neighbors
+    num_neighbors = xadj(ispec_ref+1) - xadj(ispec_ref)
+    do ii = 1,num_neighbors
+      ! get neighbor entry
+      ielem = xadj(ispec_ref) + ii
+
+      ! checks entry index
+      if (ielem < 1 .or. ielem > num_neighbors_all) &
+        stop 'Invalid element index in neighbors xadj array'
+
+      ! get neighbor element
+      ispec = adjncy(ielem)
+
+      ! checks element index
+      if (ispec < 1 .or. ispec > nspec) &
+        stop 'Invalid ispec index in neighbors adjncy array'
+
+      ! loops over all other neighbors
+      do jj = ii+1,num_neighbors
+        ! checks for duplicate
+        if (adjncy(xadj(ispec_ref) + jj) == ispec) &
+          stop 'Invalid ispec duplicate found in neighbors adjncy array'
+      enddo
+    enddo
+  enddo
 
   if (myrank == 0) then
     ! elapsed time since beginning of neighbor detection
     tCPU = wtime() - time1
-    write(IMAIN,*) '  maximum search elements                                      = ',num_elements_max
-    write(IMAIN,*) '  maximum of actual search elements (after distance criterion) = ',num_elements_actual_max
-    write(IMAIN,*)
-    write(IMAIN,*) '  estimated typical element size at surface = ',element_size*R_PLANET_KM,'(km)'
-    write(IMAIN,*) '  maximum distance between neighbor centers = ',sqrt(dist_squared_max)*R_PLANET_KM,'(km)'
-    if (.not. DO_BRUTE_FORCE_SEARCH) then
-      if (sqrt(dist_squared_max) > r_search - 0.5*element_size) then
-          write(IMAIN,*) '***'
-          write(IMAIN,*) '*** Warning: consider increasing the kd-tree search radius to improve this neighbor setup ***'
-          write(IMAIN,*) '***'
-      endif
-    endif
-    write(IMAIN,*)
     write(IMAIN,*) '  maximum neighbors found per element = ',num_neighbors_max,'(should be 37 for globe meshes)'
     write(IMAIN,*) '  total number of neighbors           = ',num_neighbors_all
     write(IMAIN,*)
@@ -1051,6 +993,11 @@
   use specfem_par
   use specfem_par_crustmantle
   use specfem_par_movie
+
+  ! for berkeley ucb stf
+  !use shared_parameters, only: STF_IS_UCB_HEAVISIDE
+  use ucb_heaviside, only: init_ucb_heaviside
+
   implicit none
 
   ! local parameters
@@ -1103,7 +1050,8 @@
   nu_source(:,:,:) = 0.d0
 
   if (USE_FORCE_POINT_SOURCE) then
-    allocate(force_stf(NSOURCES),factor_force_source(NSOURCES), &
+    allocate(force_stf(NSOURCES), &
+             factor_force_source(NSOURCES), &
              comp_dir_vect_source_E(NSOURCES), &
              comp_dir_vect_source_N(NSOURCES), &
              comp_dir_vect_source_Z_UP(NSOURCES),stat=ier)
@@ -1115,11 +1063,16 @@
     comp_dir_vect_source_Z_UP(:) = 0.d0
   endif
 
+  ! initialize Berkeley stf if needed (for ucb heaviside)
+  if (STF_IS_UCB_HEAVISIDE) then
+    call init_ucb_heaviside(NSTEP,DT)
+  endif
+
   ! sources
-  ! BS BS moved open statement and writing of first lines into sr.vtk before the
+  ! moved open statement and writing of first lines into sr.vtk before the
   ! call to locate_sources, where further write statements to that file follow
   if (myrank == 0) then
-  ! write source and receiver VTK files for Paraview
+    ! write source and receiver VTK files for Paraview
     filename = trim(OUTPUT_FILES)//'/sr_tmp.vtk'
     open(IOUT_VTK,file=trim(filename),status='unknown',iostat=ier)
     if (ier /= 0 ) call exit_MPI(myrank,'Error opening temporary file sr_temp.vtk')
@@ -1256,10 +1209,10 @@
   else
     ! moment tensors
     if (USE_MONOCHROMATIC_CMT_SOURCE) then
-    ! (based on monochromatic functions)
+      ! (based on monochromatic functions)
       t0 = 0.d0
     else
-    ! (based on Heaviside functions)
+      ! (based on Heaviside functions)
       t0 = - 1.5d0 * minval( tshift_src(:) - hdur(:) )
     endif
   endif
@@ -1268,6 +1221,17 @@
   if (EXTERNAL_SOURCE_TIME_FUNCTION) then
     hdur(:) = 0.d0
     t0      = 0.d0
+  endif
+
+  ! Berkeley stf
+  if (STF_IS_UCB_HEAVISIDE) then
+    if (USE_OLD_VERSION_FORMAT) then
+      ! sets t0 to zero for force sources only
+      if (USE_FORCE_POINT_SOURCE) t0 = 0.d0
+    else
+      ! sets t0 to zero for any source type
+      t0 = 0.d0
+    endif
   endif
 
   ! checks if user set USER_T0 to fix simulation start time
@@ -1377,6 +1341,39 @@
     endif
   endif
 
+  ! make sure NSTEP is a multiple of NTSTEP_BETWEEN_OUTPUT_SAMPLE
+  ! if not, increase it a little bit, to the next multiple
+  if (mod(NSTEP,NTSTEP_BETWEEN_OUTPUT_SAMPLE) /= 0) then
+    if (NOISE_TOMOGRAPHY /= 0) then
+      if (myrank == 0) then
+        print *,'Noise simulation: Invalid number of NSTEP          = ',NSTEP
+        print *,'Must be a multiple of NTSTEP_BETWEEN_OUTPUT_SAMPLE = ',NTSTEP_BETWEEN_OUTPUT_SAMPLE
+      endif
+      stop 'Error: NSTEP must be a multiple of NTSTEP_BETWEEN_OUTPUT_SAMPLE'
+    else
+      NSTEP = (NSTEP/NTSTEP_BETWEEN_OUTPUT_SAMPLE + 1)*NTSTEP_BETWEEN_OUTPUT_SAMPLE
+      ! user output
+      if (myrank == 0) then
+        print *
+        print *,'NSTEP is not a multiple of NTSTEP_BETWEEN_OUTPUT_SAMPLE'
+        print *,'thus increasing it automatically to the next multiple, which is ',NSTEP
+        print *
+      endif
+    endif
+  endif
+
+  ! output seismograms at least once at the end of the simulation
+  NTSTEP_BETWEEN_OUTPUT_SEISMOS = min(NSTEP,NTSTEP_BETWEEN_OUTPUT_SEISMOS)
+
+  ! make sure NSTEP_BETWEEN_OUTPUT_SEISMOS is a multiple of NTSTEP_BETWEEN_OUTPUT_SAMPLE
+  if (mod(NTSTEP_BETWEEN_OUTPUT_SEISMOS,NTSTEP_BETWEEN_OUTPUT_SAMPLE) /= 0) then
+    if (myrank == 0) then
+      print *,'Invalid number of NTSTEP_BETWEEN_OUTPUT_SEISMOS    = ',NTSTEP_BETWEEN_OUTPUT_SEISMOS
+      print *,'Must be a multiple of NTSTEP_BETWEEN_OUTPUT_SAMPLE = ',NTSTEP_BETWEEN_OUTPUT_SAMPLE
+    endif
+    stop 'Error: NTSTEP_BETWEEN_OUTPUT_SEISMOS must be a multiple of NTSTEP_BETWEEN_OUTPUT_SAMPLE'
+  endif
+
   ! time loop increments end
   it_end = NSTEP
 
@@ -1481,8 +1478,7 @@
   endif
 
   ! locate receivers in the crust in the mesh
-  call locate_receivers(yr_SAC,jda_SAC,ho_SAC,mi_SAC,sec_SAC, &
-                        theta_source(1),phi_source(1) )
+  call locate_receivers(yr_SAC,jda_SAC,ho_SAC,mi_SAC,sec_SAC)
 
   ! count number of receivers located in this slice
   nrec_local = 0
@@ -1617,12 +1613,23 @@
   endif
 
   ! seismograms
+  ! check if we need to save seismos
+  if (SIMULATION_TYPE == 3 .and. (.not. SAVE_SEISMOGRAMS_IN_ADJOINT_RUN)) then
+    do_save_seismograms = .false.
+  else
+    do_save_seismograms = .true.
+  endif
+
+  ! seismogram array length (to write out time portions of the full seismograms)
+  nlength_seismogram = NTSTEP_BETWEEN_OUTPUT_SEISMOS / NTSTEP_BETWEEN_OUTPUT_SAMPLE
+
   ! gather from secondary processes on main
   tmp_rec_local_all(:) = 0
   tmp_rec_local_all(0) = nrec_local
   if (NPROCTOT_VAL > 1) then
     call gather_all_singlei(nrec_local,tmp_rec_local_all,NPROCTOT_VAL)
   endif
+
   ! user output
   if (myrank == 0) then
     ! determines maximum number of local receivers and corresponding rank
@@ -1631,20 +1638,29 @@
     maxproc = maxloc(tmp_rec_local_all(:)) - 1
     ! seismograms array size in MB
     if (SIMULATION_TYPE == 1 .or. SIMULATION_TYPE == 3) then
-      ! seismograms need seismograms(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS)
-      sizeval = dble(maxrec) * dble(NDIM * NTSTEP_BETWEEN_OUTPUT_SEISMOS * CUSTOM_REAL / 1024. / 1024. )
+      ! seismograms need seismograms(NDIM,nrec_local,nlength_seismogram)
+      sizeval = dble(maxrec) * dble(NDIM * nlength_seismogram * CUSTOM_REAL / 1024. / 1024. )
     else
-      ! adjoint seismograms need seismograms(NDIM*NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS)
-      sizeval = dble(maxrec) * dble(NDIM * NDIM * NTSTEP_BETWEEN_OUTPUT_SEISMOS * CUSTOM_REAL / 1024. / 1024. )
+      ! adjoint seismograms need seismograms(NDIM*NDIM,nrec_local,nlength_seismogram)
+      sizeval = dble(maxrec) * dble(NDIM * NDIM * nlength_seismogram * CUSTOM_REAL / 1024. / 1024. )
     endif
+
     ! outputs info
     write(IMAIN,*) 'seismograms:'
-    if (WRITE_SEISMOGRAMS_BY_MAIN) then
-      write(IMAIN,*) '  seismograms written by main process only'
+    if (do_save_seismograms) then
+      if (WRITE_SEISMOGRAMS_BY_MAIN) then
+        write(IMAIN,*) '  seismograms written by main process only'
+      else
+        write(IMAIN,*) '  seismograms written by all processes'
+      endif
     else
-      write(IMAIN,*) '  seismograms written by all processes'
+      write(IMAIN,*) '  seismograms will not be saved'
     endif
+    write(IMAIN,*) '  Total number of simulation steps (NSTEP)                       = ',NSTEP
     write(IMAIN,*) '  writing out seismograms at every NTSTEP_BETWEEN_OUTPUT_SEISMOS = ',NTSTEP_BETWEEN_OUTPUT_SEISMOS
+    write(IMAIN,*) '  number of subsampling steps for seismograms                    = ',NTSTEP_BETWEEN_OUTPUT_SAMPLE
+    write(IMAIN,*) '  Total number of samples for seismograms                        = ',NSTEP/NTSTEP_BETWEEN_OUTPUT_SAMPLE
+    write(IMAIN,*)
     write(IMAIN,*) '  maximum number of local receivers is ',maxrec,' in slice ',maxproc(1)
     write(IMAIN,*) '  size of maximum seismogram array       = ', sngl(sizeval),'MB'
     write(IMAIN,*) '                                         = ', sngl(sizeval/1024.d0),'GB'
@@ -1768,7 +1784,7 @@
   "('sed -e ',a1,'s/POINTS.*/POINTS',i6,' float/',a1,'<',a,'>',a)")&
       "'",NSOURCES + nrec,"'",trim(filename),trim(filename_new)
 
-    ! note: this system() routine is non-standard Fortran
+    ! calls as system command (system needs to have `sed` command)
     call system_command(command)
 
     ! only extract receiver locations and remove temporary file
@@ -1778,7 +1794,7 @@
    &print ',a1,'POINTS',i6,' float',a1,';if (NR > 5+',i6,')print $0}',a1,'<',a,'>',a)")&
       "'",'"',nrec,'"',NSOURCES,"'",trim(filename),trim(filename_new)
 
-    ! note: this system() routine is non-standard Fortran
+    ! calls as system command (system needs to have `awk` command)
     call system_command(command)
 
     ! only extract source locations and remove temporary file
@@ -1787,7 +1803,7 @@
   "('awk ',a1,'{if (NR < 6 + ',i6,') print $0}END{print}',a1,'<',a,'>',a,'; rm -f ',a)")&
       "'",NSOURCES,"'",trim(filename),trim(filename_new),trim(filename)
 
-    ! note: this system() routine is non-standard Fortran
+    ! calls as system command (system needs to have `awk` command)
     call system_command(command)
 
   endif
@@ -2590,19 +2606,18 @@
   implicit none
 
   ! local parameters
-  integer :: isource,i,j,k,ispec !,iglob
+  integer :: isource,ispec
 
   double precision, dimension(NGLLX) :: hxis,hpxis
   double precision, dimension(NGLLY) :: hetas,hpetas
   double precision, dimension(NGLLZ) :: hgammas,hpgammas
 
   real(kind=CUSTOM_REAL), dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearray
-  double precision, dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: sourcearrayd
 
   double precision :: xi,eta,gamma
   double precision :: phi, theta, depth
-  double precision :: hlagrange
-  double precision :: norm
+  double precision :: norm,comp_x,comp_y,comp_z
+  double precision :: factor_source
 
   do isource = 1,NSOURCES
 
@@ -2633,92 +2648,47 @@
       theta = theta_source(isource)
       depth = depth_source(isource)    
       
-!      ! pre-computes source contribution on GLL points
-!      call compute_arrays_source(sourcearray,xi,eta,gamma, &
-!                          Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource),Mxz(isource),Myz(isource), &
-!                          xix_crust_mantle(:,:,:,ispec),xiy_crust_mantle(:,:,:,ispec),xiz_crust_mantle(:,:,:,ispec), &
-!                          etax_crust_mantle(:,:,:,ispec),etay_crust_mantle(:,:,:,ispec),etaz_crust_mantle(:,:,:,ispec), &
-!                          gammax_crust_mantle(:,:,:,ispec),gammay_crust_mantle(:,:,:,ispec),gammaz_crust_mantle(:,:,:,ispec), &
-!                          xigll,yigll,zigll)
-!
-!      ! point forces, initializes sourcearray, used for simplified CUDA routines
-!    !-------------POINT FORCE-----------------------------------------------
-!      if (USE_FORCE_POINT_SOURCE) then
-!        ! note: for use_force_point_source xi/eta/gamma are in the range [1,NGLL*]
-!        iglob = ibool_crust_mantle(nint(xi),nint(eta),nint(gamma),ispec)
-!
-!        ! sets sourcearrays
-!        do k = 1,NGLLZ
-!          do j = 1,NGLLY
-!            do i = 1,NGLLX
-!              if (ibool_crust_mantle(i,j,k,ispec) == iglob) then
-!                ! elastic source components
-!                sourcearray(:,i,j,k) = nu_source(COMPONENT_FORCE_SOURCE,:,isource)
-!              endif
-!            enddo
-!          enddo
-!        enddo
-!      endif
-!    !-------------POINT FORCE-----------------------------------------------
-!
-!      ! stores source excitations
-!      sourcearrays(:,:,:,:,isource) = sourcearray(:,:,:,:)
-!    endif
-
       ! compute Lagrange polynomials at the source location
       call lagrange_any(xi,NGLLX,xigll,hxis,hpxis)
       call lagrange_any(eta,NGLLY,yigll,hetas,hpetas)
       call lagrange_any(gamma,NGLLZ,zigll,hgammas,hpgammas)
 
-      if (USE_FORCE_POINT_SOURCE) then ! use of FORCESOLUTION files
+      ! pre-computes source contribution on GLL points
+      if (USE_FORCE_POINT_SOURCE) then
+        ! use of FORCESOLUTION files
 
         ! note: for use_force_point_source xi/eta/gamma are also in the range [-1,1], for exact positioning
+        factor_source = factor_force_source(isource)
 
-        ! initializes source array
-        sourcearrayd(:,:,:,:) = 0.0d0
+        ! we use a tilted force defined by its magnitude and the projections
+        ! of an arbitrary (non-unitary) direction vector on the E/N/Z_UP basis
+        !
+        ! note: nu_source(iorientation,:,isource) is the rotation matrix from ECEF to local N-E-UP
+        !       (defined in src/specfem3D/locate_sources.f90)
 
-        ! calculates source array for interpolated location
-        do k=1,NGLLZ
-          do j=1,NGLLY
-            do i=1,NGLLX
-              hlagrange = hxis(i) * hetas(j) * hgammas(k)
+        ! length of component vector
+        norm = dsqrt( comp_dir_vect_source_E(isource)**2 &
+                    + comp_dir_vect_source_N(isource)**2 &
+                    + comp_dir_vect_source_Z_UP(isource)**2 )
 
-              ! elastic source
-              norm = sqrt( comp_dir_vect_source_E(isource)**2 &
-                         + comp_dir_vect_source_N(isource)**2 &
-                         + comp_dir_vect_source_Z_UP(isource)**2 )
+        ! checks norm of component vector
+        if (norm < TINYVAL) then
+          call exit_MPI(myrank,'error force point source: component vector has (almost) zero norm')
+        endif
 
-              ! checks norm of component vector
-              if (norm < TINYVAL) then
-                call exit_MPI(myrank,'error force point source: component vector has (almost) zero norm')
-              endif
+        ! normalizes given component vector
+        comp_x = comp_dir_vect_source_N(isource) / norm      ! N/E component changed compared to Cartesian version
+        comp_y = comp_dir_vect_source_E(isource) / norm
+        comp_z = comp_dir_vect_source_Z_UP(isource) / norm
 
-              ! normalizes vector
-              comp_dir_vect_source_E(isource) = comp_dir_vect_source_E(isource) / norm
-              comp_dir_vect_source_N(isource) = comp_dir_vect_source_N(isource) / norm
-              comp_dir_vect_source_Z_UP(isource) = comp_dir_vect_source_Z_UP(isource) / norm
+        call compute_arrays_source_forcesolution(sourcearray,hxis,hetas,hgammas,factor_source, &
+                                                 comp_x,comp_y,comp_z,nu_source(:,:,isource))
 
-              ! we use a tilted force defined by its magnitude and the projections
-              ! of an arbitrary (non-unitary) direction vector on the E/N/Z_UP basis
-              !
-              ! note: nu_source(iorientation,:,isource) is the rotation matrix from ECEF to local N-E-UP
-              !       (defined in src/specfem3D/locate_sources.f90)
-              sourcearrayd(:,i,j,k) = factor_force_source(isource) * hlagrange * &
-                                      ( nu_source(1,:,isource) * comp_dir_vect_source_N(isource) + &
-                                        nu_source(2,:,isource) * comp_dir_vect_source_E(isource) + &
-                                        nu_source(3,:,isource) * comp_dir_vect_source_Z_UP(isource) )
-            enddo
-          enddo
-        enddo
+      else
 
-        ! distinguish between single and double precision for reals
-        sourcearray(:,:,:,:) = real(sourcearrayd(:,:,:,:),kind=CUSTOM_REAL)
+        if (USE_SOURCE_DERIVATIVE) then
 
-      else ! use of CMTSOLUTION files
-
-         if (USE_SOURCE_DERIVATIVE) then
-
-            call compute_arrays_source_derivative(sourcearray,xi,eta,gamma, &
+            call compute_arrays_source_cmt_derivative(sourcearray,xi,eta,gamma, &
                         Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
                         Mxz(isource),Myz(isource), &
                         xix_crust_mantle(:,:,:,ispec), &
@@ -2736,21 +2706,20 @@
             
         else
 
-          call compute_arrays_source(sourcearray,xi,eta,gamma, &
-                          Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
-                          Mxz(isource),Myz(isource), &
-                          xix_crust_mantle(:,:,:,ispec), &
-                          xiy_crust_mantle(:,:,:,ispec), &
-                          xiz_crust_mantle(:,:,:,ispec), &
-                          etax_crust_mantle(:,:,:,ispec), &
-                          etay_crust_mantle(:,:,:,ispec), &
-                          etaz_crust_mantle(:,:,:,ispec), &
-                          gammax_crust_mantle(:,:,:,ispec), &
-                          gammay_crust_mantle(:,:,:,ispec), &
-                          gammaz_crust_mantle(:,:,:,ispec), &
-                          xigll,yigll,zigll)
-        
-        endif
+          ! use of CMTSOLUTION files
+          call compute_arrays_source_cmt(sourcearray, &
+                                        hxis,hetas,hgammas,hpxis,hpetas,hpgammas, &
+                                        Mxx(isource),Myy(isource),Mzz(isource),Mxy(isource), &
+                                        Mxz(isource),Myz(isource), &
+                                        xix_crust_mantle(:,:,:,ispec), &
+                                        xiy_crust_mantle(:,:,:,ispec), &
+                                        xiz_crust_mantle(:,:,:,ispec), &
+                                        etax_crust_mantle(:,:,:,ispec), &
+                                        etay_crust_mantle(:,:,:,ispec), &
+                                        etaz_crust_mantle(:,:,:,ispec), &
+                                        gammax_crust_mantle(:,:,:,ispec), &
+                                        gammay_crust_mantle(:,:,:,ispec), &
+                                        gammaz_crust_mantle(:,:,:,ispec))
 
       endif
 
@@ -2911,11 +2880,11 @@
 
     ! allocates seismogram array
     if (SIMULATION_TYPE == 1 .or. SIMULATION_TYPE == 3) then
-      allocate(seismograms(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+      allocate(seismograms(NDIM,nrec_local,nlength_seismogram),stat=ier)
       if (ier /= 0) stop 'Error while allocating seismograms'
     else
       ! adjoint seismograms
-      allocate(seismograms(NDIM*NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+      allocate(seismograms(NDIM*NDIM,nrec_local,nlength_seismogram),stat=ier)
       if (ier /= 0) stop 'Error while allocating adjoint seismograms'
 
       ! allocates Frechet derivatives array
@@ -2930,15 +2899,15 @@
       stshift_der(:) = 0._CUSTOM_REAL
       shdur_der(:) = 0._CUSTOM_REAL
     endif
+
     ! initializes seismograms
     seismograms(:,:,:) = 0._CUSTOM_REAL
-    ! adjoint seismograms
-    it_adj_written = 0
+
   else
     ! dummy arrays
     ! allocates dummy array since we need it to pass as argument e.g. in write_seismograms() routine
     ! note: nrec_local is zero, Fortran 90/95 should allow zero-sized array allocation...
-    allocate(seismograms(NDIM,0,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+    allocate(seismograms(NDIM,0,nlength_seismogram),stat=ier)
     if (ier /= 0) stop 'Error while allocating zero seismograms'
     ! dummy allocation
     allocate(hxir_store(1,1), &
@@ -2950,7 +2919,7 @@
   ! strain seismograms
   if (SAVE_SEISMOGRAMS_STRAIN) then
     if (nrec_local > 0) then
-      allocate(seismograms_eps(6,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),stat=ier)
+      allocate(seismograms_eps(6,nrec_local,nlength_seismogram),stat=ier)
       if (ier /= 0) stop 'Error while allocating strain seismograms'
       seismograms_eps(:,:,:) = 0._CUSTOM_REAL
     else
@@ -3041,12 +3010,12 @@
         do k = 1,NGLLZ
           do j = 1,NGLLY
             do i = 1,NGLLX
-              hxi = hxir_adjstore(i,irec_local)
-              heta = hetar_adjstore(j,irec_local)
-              hgamma = hgammar_adjstore(k,irec_local)
+              hxi = real(hxir_adjstore(i,irec_local),kind=CUSTOM_REAL)
+              heta = real(hetar_adjstore(j,irec_local),kind=CUSTOM_REAL)
+              hgamma = real(hgammar_adjstore(k,irec_local),kind=CUSTOM_REAL)
               ! checks if array values valid
               ! Lagrange interpolators shoud be about in a range ~ [-0.2,1.2]
-              if (abs(hxi) > 2.0 .or. abs(heta) > 2.0 .or. abs(hgamma) > 2.0) then
+              if (abs(hxi) > 2.0_CUSTOM_REAL .or. abs(heta) > 2.0_CUSTOM_REAL .or. abs(hgamma) > 2.0_CUSTOM_REAL) then
                 print *,'hxi/heta/hgamma = ',hxi,heta,hgamma,irec_local,i,j,k
                 print *,'ERROR: trying to use arrays hxir_adjstore/hetar_adjstore/hgammar_adjstore with irec_local = ', &
                         irec_local,' but these array values are invalid!'
@@ -3062,12 +3031,14 @@
 
   ! ASDF seismograms
   if (OUTPUT_SEISMOS_ASDF) then
-    if (.not. (SIMULATION_TYPE == 3 .and. (.not. SAVE_SEISMOGRAMS_IN_ADJOINT_RUN)) ) then
+    if (do_save_seismograms) then
       ! initializes the ASDF data structure by allocating arrays
       call init_asdf_data(nrec_local)
       call synchronize_all()
     endif
   endif
+
+  ! TODO: add HDF5 if any
 
   end subroutine setup_receivers_precompute_intp
 

@@ -50,6 +50,8 @@
 
   module model_sglobecrust_par
 
+  implicit none
+
   ! crustal_model_constants
   ! modified crustal model parameters for crust2.0
   integer, parameter :: CRUST_NP = 8

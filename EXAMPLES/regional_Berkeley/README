@@ -1,0 +1,39 @@
+----------------------------------------------------------
+README
+----------------------------------------------------------
+
+This example creates a regional mesh using the 3D Berkeley model SEMUCB_A3d
+and runs a spectral-element simulation.
+
+In the Par_file, we also add the following parameters to use a specific Berkeley source time function:
+```
+## Berkeley source time function
+STF_IS_UCB_HEAVISIDE            = .true.
+# UCB source frequency content (i.e., heaviside function)
+SOURCE_T1                       = 500.d0
+SOURCE_T2                       = 400.d0
+SOURCE_T3                       =  50.d0
+SOURCE_T4                       =  40.d0
+# UCB source time shift
+TAU                             = 500.d0
+```
+
+The simulation is setup to use 4 CPUs only, thus can be run locally on a desktop machine
+(needs to have MPI installed).
+
+
+1. forward simulation:
+----------------------
+
+type:
+./run_this_example.sh
+
+to setup this directory for the simulation and to run a corresponding
+script "run_mesher_solver.bash".
+
+The simulation is accurate down to a shortest period of ~ 21 s.
+(minimum period resolved ~ (256/NEX_XI) * (ANGULAR_WIDTH_XI_IN_DEGREES/90) * 17)
+ 
+Reference seismograms for comparisons are provided in the directory: REF_SEIS/
+Please modify these scripts according to your specifics.
+

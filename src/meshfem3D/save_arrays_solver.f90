@@ -313,6 +313,8 @@
       write(filename,'(a,i6.6)') trim(OUTPUT_FILES)//'/ispec_is_tiso',myrank
       call write_VTK_data_elem_l(nspec,nglob,xstore_glob,ystore_glob,zstore_glob,ibool, &
                                  ispec_is_tiso,filename)
+      ! debug
+      print *,'debug: rank',myrank,' tiso count = ',count(ispec_is_tiso)
     endif
   endif
 
@@ -329,13 +331,19 @@
   use meshfem_par, only: &
     iregion_code,LOCAL_PATH, &
     IREGION_CRUST_MANTLE,IREGION_OUTER_CORE,IREGION_INNER_CORE, &
+    IREGION_TRINFINITE,IREGION_INFINITE, &
     ADIOS_FOR_MPI_ARRAYS
+
+  use shared_parameters, only: HDF5_ENABLED
 
 !  use MPI_interfaces_par
 
   use MPI_crust_mantle_par
   use MPI_outer_core_par
   use MPI_inner_core_par
+
+  use MPI_infinite_par
+  use MPI_trinfinite_par
 
   implicit none
 
@@ -351,6 +359,15 @@
                                   num_phase_ispec_crust_mantle,phase_ispec_inner_crust_mantle, &
                                   num_colors_outer_crust_mantle,num_colors_inner_crust_mantle, &
                                   num_elem_colors_crust_mantle)
+    else if (HDF5_ENABLED) then
+      call save_MPI_arrays_hdf5(IREGION_CRUST_MANTLE,LOCAL_PATH, &
+                            num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
+                            my_neighbors_crust_mantle,nibool_interfaces_crust_mantle, &
+                            ibool_interfaces_crust_mantle, &
+                            nspec_inner_crust_mantle,nspec_outer_crust_mantle, &
+                            num_phase_ispec_crust_mantle,phase_ispec_inner_crust_mantle, &
+                            num_colors_outer_crust_mantle,num_colors_inner_crust_mantle, &
+                            num_elem_colors_crust_mantle)
     else
       call save_MPI_arrays(IREGION_CRUST_MANTLE,LOCAL_PATH, &
                             num_interfaces_crust_mantle,max_nibool_interfaces_cm, &
@@ -373,6 +390,15 @@
                                   num_phase_ispec_outer_core,phase_ispec_inner_outer_core, &
                                   num_colors_outer_outer_core,num_colors_inner_outer_core, &
                                   num_elem_colors_outer_core)
+    else if (HDF5_ENABLED) then
+      call save_MPI_arrays_hdf5(IREGION_OUTER_CORE,LOCAL_PATH, &
+                            num_interfaces_outer_core,max_nibool_interfaces_oc, &
+                            my_neighbors_outer_core,nibool_interfaces_outer_core, &
+                            ibool_interfaces_outer_core, &
+                            nspec_inner_outer_core,nspec_outer_outer_core, &
+                            num_phase_ispec_outer_core,phase_ispec_inner_outer_core, &
+                            num_colors_outer_outer_core,num_colors_inner_outer_core, &
+                            num_elem_colors_outer_core)
     else
       call save_MPI_arrays(IREGION_OUTER_CORE,LOCAL_PATH, &
                             num_interfaces_outer_core,max_nibool_interfaces_oc, &
@@ -395,6 +421,16 @@
                                   num_phase_ispec_inner_core,phase_ispec_inner_inner_core, &
                                   num_colors_outer_inner_core,num_colors_inner_inner_core, &
                                   num_elem_colors_inner_core)
+    else if (HDF5_ENABLED) then
+      call save_MPI_arrays_hdf5(IREGION_INNER_CORE,LOCAL_PATH, &
+                            num_interfaces_inner_core,max_nibool_interfaces_ic, &
+                            my_neighbors_inner_core,nibool_interfaces_inner_core, &
+                            ibool_interfaces_inner_core, &
+                            nspec_inner_inner_core,nspec_outer_inner_core, &
+                            num_phase_ispec_inner_core,phase_ispec_inner_inner_core, &
+                            num_colors_outer_inner_core,num_colors_inner_inner_core, &
+                            num_elem_colors_inner_core)
+
     else
       call save_MPI_arrays(IREGION_INNER_CORE,LOCAL_PATH, &
                             num_interfaces_inner_core,max_nibool_interfaces_ic, &
@@ -405,6 +441,69 @@
                             num_colors_outer_inner_core,num_colors_inner_inner_core, &
                             num_elem_colors_inner_core)
     endif
+
+  case (IREGION_TRINFINITE)
+    ! transition infinite
+    if (ADIOS_FOR_MPI_ARRAYS) then
+      call save_MPI_arrays_adios(IREGION_TRINFINITE,LOCAL_PATH, &
+                                  num_interfaces_trinfinite,max_nibool_interfaces_trinfinite, &
+                                  my_neighbors_trinfinite,nibool_interfaces_trinfinite, &
+                                  ibool_interfaces_trinfinite, &
+                                  nspec_inner_trinfinite,nspec_outer_trinfinite, &
+                                  num_phase_ispec_trinfinite,phase_ispec_inner_trinfinite, &
+                                  num_colors_outer_trinfinite,num_colors_inner_trinfinite, &
+                                  num_elem_colors_trinfinite)
+    else if (HDF5_ENABLED) then
+      call save_MPI_arrays_hdf5(IREGION_TRINFINITE,LOCAL_PATH, &
+                            num_interfaces_trinfinite,max_nibool_interfaces_trinfinite, &
+                            my_neighbors_trinfinite,nibool_interfaces_trinfinite, &
+                            ibool_interfaces_trinfinite, &
+                            nspec_inner_trinfinite,nspec_outer_trinfinite, &
+                            num_phase_ispec_trinfinite,phase_ispec_inner_trinfinite, &
+                            num_colors_outer_trinfinite,num_colors_inner_trinfinite, &
+                            num_elem_colors_trinfinite)
+    else
+      call save_MPI_arrays(IREGION_TRINFINITE,LOCAL_PATH, &
+                            num_interfaces_trinfinite,max_nibool_interfaces_trinfinite, &
+                            my_neighbors_trinfinite,nibool_interfaces_trinfinite, &
+                            ibool_interfaces_trinfinite, &
+                            nspec_inner_trinfinite,nspec_outer_trinfinite, &
+                            num_phase_ispec_trinfinite,phase_ispec_inner_trinfinite, &
+                            num_colors_outer_trinfinite,num_colors_inner_trinfinite, &
+                            num_elem_colors_trinfinite)
+    endif
+
+  case (IREGION_INFINITE)
+    ! infinite region
+    if (ADIOS_FOR_MPI_ARRAYS) then
+      call save_MPI_arrays_adios(IREGION_INFINITE,LOCAL_PATH, &
+                                  num_interfaces_infinite,max_nibool_interfaces_infinite, &
+                                  my_neighbors_infinite,nibool_interfaces_infinite, &
+                                  ibool_interfaces_infinite, &
+                                  nspec_inner_infinite,nspec_outer_infinite, &
+                                  num_phase_ispec_infinite,phase_ispec_inner_infinite, &
+                                  num_colors_outer_infinite,num_colors_inner_infinite, &
+                                  num_elem_colors_infinite)
+    else if (HDF5_ENABLED) then
+      call save_MPI_arrays_hdf5(IREGION_INFINITE,LOCAL_PATH, &
+                            num_interfaces_infinite,max_nibool_interfaces_infinite, &
+                            my_neighbors_infinite,nibool_interfaces_infinite, &
+                            ibool_interfaces_infinite, &
+                            nspec_inner_infinite,nspec_outer_infinite, &
+                            num_phase_ispec_infinite,phase_ispec_inner_infinite, &
+                            num_colors_outer_infinite,num_colors_inner_infinite, &
+                            num_elem_colors_infinite)
+    else
+      call save_MPI_arrays(IREGION_INFINITE,LOCAL_PATH, &
+                            num_interfaces_infinite,max_nibool_interfaces_infinite, &
+                            my_neighbors_infinite,nibool_interfaces_infinite, &
+                            ibool_interfaces_infinite, &
+                            nspec_inner_infinite,nspec_outer_infinite, &
+                            num_phase_ispec_infinite,phase_ispec_inner_infinite, &
+                            num_colors_outer_infinite,num_colors_inner_infinite, &
+                            num_elem_colors_infinite)
+    endif
+
   end select
 
   end subroutine save_arrays_solver_MPI
@@ -444,8 +543,7 @@
 
   ! mesh coloring
   integer,intent(in) :: num_colors_outer,num_colors_inner
-  integer, dimension(num_colors_outer + num_colors_inner),intent(in) :: &
-    num_elem_colors
+  integer, dimension(num_colors_outer + num_colors_inner),intent(in) :: num_elem_colors
 
   ! local parameters
   character(len=MAX_STRING_LEN) :: prname
@@ -578,10 +676,14 @@
   write(IOUT) NSPEC_REGIONS(IREGION_CRUST_MANTLE)
   write(IOUT) NSPEC_REGIONS(IREGION_OUTER_CORE)
   write(IOUT) NSPEC_REGIONS(IREGION_INNER_CORE)
+  write(IOUT) NSPEC_REGIONS(IREGION_TRINFINITE)
+  write(IOUT) NSPEC_REGIONS(IREGION_INFINITE)
 
   write(IOUT) NGLOB_REGIONS(IREGION_CRUST_MANTLE)
   write(IOUT) NGLOB_REGIONS(IREGION_OUTER_CORE)
   write(IOUT) NGLOB_REGIONS(IREGION_INNER_CORE)
+  write(IOUT) NGLOB_REGIONS(IREGION_TRINFINITE)
+  write(IOUT) NGLOB_REGIONS(IREGION_INFINITE)
 
   write(IOUT) NSPECMAX_ANISO_IC
 
@@ -602,6 +704,9 @@
   write(IOUT) ELLIPTICITY
   write(IOUT) GRAVITY
   write(IOUT) OCEANS
+
+  ! full gravity support
+  write(IOUT) FULL_GRAVITY
 
   if (TOPOGRAPHY .or. OCEANS) then
     write(IOUT) NX_BATHY
@@ -642,6 +747,16 @@
   write(IOUT) NSPEC2D_BOTTOM(IREGION_OUTER_CORE)
   write(IOUT) NSPEC2D_TOP(IREGION_OUTER_CORE)
 
+  write(IOUT) NSPEC2DMAX_XMIN_XMAX(IREGION_TRINFINITE)
+  write(IOUT) NSPEC2DMAX_YMIN_YMAX(IREGION_TRINFINITE)
+  write(IOUT) NSPEC2D_BOTTOM(IREGION_TRINFINITE)
+  write(IOUT) NSPEC2D_TOP(IREGION_TRINFINITE)
+
+  write(IOUT) NSPEC2DMAX_XMIN_XMAX(IREGION_INFINITE)
+  write(IOUT) NSPEC2DMAX_YMIN_YMAX(IREGION_INFINITE)
+  write(IOUT) NSPEC2D_BOTTOM(IREGION_INFINITE)
+  write(IOUT) NSPEC2D_TOP(IREGION_INFINITE)
+
   ! for boundary kernels
   NSPEC2D_CMB = NSPEC2D_BOTTOM(IREGION_CRUST_MANTLE)
   NSPEC2D_ICB = NSPEC2D_BOTTOM(IREGION_OUTER_CORE)
@@ -658,13 +773,13 @@
   !
   ! if absorbing_conditions are not set or if NCHUNKS=6, only one mass matrix is needed
   ! for the sake of performance, only "rmassz" array will be filled and "rmassx" & "rmassy" will be fictitious / unused
+  NGLOB_XY_CM = 0
+  NGLOB_XY_IC = 0
 
   if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
-     NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
-  else
-     NGLOB_XY_CM = 0
+    NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
   endif
-  NGLOB_XY_IC = 0
+
   if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
     NGLOB_XY_CM = NGLOB_REGIONS(IREGION_CRUST_MANTLE)
     NGLOB_XY_IC = NGLOB_REGIONS(IREGION_INNER_CORE)
@@ -673,18 +788,10 @@
   write(IOUT) NGLOB_XY_CM
   write(IOUT) NGLOB_XY_IC
 
-  if (ATTENUATION_1D_WITH_3D_STORAGE) then
-    write(IOUT) .true.
-  else
-    write(IOUT) .false.
-  endif
+  write(IOUT) ATTENUATION_1D_WITH_3D_STORAGE
 
   ! for UNDO_ATTENUATION
-  if (UNDO_ATTENUATION) then
-    write(IOUT) .true.
-  else
-    write(IOUT) .false.
-  endif
+  write(IOUT) UNDO_ATTENUATION
   write(IOUT) NT_DUMP_ATTENUATION_optimal
 
   ! mesh geometry (with format specifier to avoid writing double values on a newline)

@@ -61,6 +61,8 @@
 
   module model_jp3d_par
 
+  implicit none
+
 ! The meaningful range of Zhao et al. (1994) model is as follows:
 !        latitude : 32 - 45 N
 !        longitude: 130-145 E
@@ -73,8 +75,8 @@
   double precision, parameter :: JP3D_DEP_MAX = 500.d0
 
   ! Japan 3D model (Zhao, 1994) constants
-  integer, parameter :: MPA=42,MRA=48,MHA=21,MPB=42,MRB=48,MHB=18
-  integer, parameter :: MKA=2101,MKB=2101
+  integer, parameter :: MPA = 42,MRA = 48,MHA = 21,MPB = 42,MRB = 48,MHB = 18
+  integer, parameter :: MKA = 2101,MKB = 2101
 
   ! JP3DM_V arrays: vmod3d
   double precision,dimension(:),allocatable :: JP3DM_PNA,JP3DM_RNA,JP3DM_HNA, &
@@ -435,7 +437,7 @@
 120   FORMAT(6(10F7.2/),3F7.2)
 130   FORMAT(6(10F7.1/),3F7.1)
 
-  END
+  end subroutine INPUT2
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -453,7 +455,7 @@
   CALL LOCX(JP3DM_PNB,JP3DM_RNB,JP3DM_HNB,JP3DM_NPB,JP3DM_NRB,JP3DM_NHB,MKB, &
            JP3DM_PLB,JP3DM_RLB,JP3DM_HLB,JP3DM_IPLOCB,JP3DM_IRLOCB,JP3DM_IHLOCB)
 
-  END
+  end subroutine BLDMAP
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -499,7 +501,7 @@
       IHLOCX(I)= IH
 30    continue
 
-  END
+  end subroutine LOCX
 
 !
 !-------------------------------------------------------------------------------------------
@@ -566,7 +568,7 @@
       + JP3DM_WV(5)*V(JP3DM_IP,JP3DM_JP,JP3DM_KP1) + JP3DM_WV(6)*V(JP3DM_IP1,JP3DM_JP,JP3DM_KP1) &
       + JP3DM_WV(7)*V(JP3DM_IP,JP3DM_JP1,JP3DM_KP1)+ JP3DM_WV(8)*V(JP3DM_IP1,JP3DM_JP1,JP3DM_KP1)
 
-  END
+  end subroutine VABPS
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -582,7 +584,7 @@
   IS      = IDNINT(R+RL)
   IR      = IRLOC(IS)
 
-  END
+  end subroutine INTMAP
 
 !
 !------------------------------------------------------------------------------------------------
@@ -619,7 +621,7 @@
   JP3DM_RF1   = 1.0-JP3DM_RF
   JP3DM_HF1   = 1.0-JP3DM_HF
 
-  END
+  end subroutine PRHF
 
 !
 !----------------------------------------------------------------------------------------------
@@ -720,7 +722,7 @@
   ELSE
   endif
 
-  END
+  end subroutine VEL1D
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -755,7 +757,7 @@
     JP3DM_DEPJ(L) = 40.0+6325.59*(1.0-RA1(L))
   enddo
 
-  END
+  end subroutine INPUTJP
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -785,5 +787,5 @@
      V   = (JP3DM_VS(K1)-JP3DM_VS(K))*H12+JP3DM_VS(K)
   endif
 
-  END
+  end subroutine JPMODEL
 

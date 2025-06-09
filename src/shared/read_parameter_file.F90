@@ -99,6 +99,16 @@
   call read_value_logical(ATTENUATION, 'ATTENUATION', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: ATTENUATION'
 
+  ! full gravity support
+  if (GRAVITY) then
+    call read_value_logical(FULL_GRAVITY, 'FULL_GRAVITY', ier)
+    if (ier /= 0) stop 'an error occurred while reading the parameter file: FULL_GRAVITY'
+    if (FULL_GRAVITY) then
+      call read_value_integer(POISSON_SOLVER, 'POISSON_SOLVER', ier)
+      if (ier /= 0) stop 'an error occurred while reading the parameter file: POISSON_SOLVER'
+    endif
+  endif
+
   call read_value_double_precision(RECORD_LENGTH_IN_MINUTES, 'RECORD_LENGTH_IN_MINUTES', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: RECORD_LENGTH_IN_MINUTES'
 
@@ -216,6 +226,16 @@
   call read_value_logical(USE_MONOCHROMATIC_CMT_SOURCE, 'USE_MONOCHROMATIC_CMT_SOURCE', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: USE_MONOCHROMATIC_CMT_SOURCE'
 
+  ! (optional) Berkeley UCB STF parameters
+  call read_value_logical(STF_IS_UCB_HEAVISIDE, 'STF_IS_UCB_HEAVISIDE', ier); ier = 0
+  if (STF_IS_UCB_HEAVISIDE) then
+    call read_value_double_precision(UCB_SOURCE_T1,'SOURCE_T1', ier); ier = 0
+    call read_value_double_precision(UCB_SOURCE_T2,'SOURCE_T2', ier); ier = 0
+    call read_value_double_precision(UCB_SOURCE_T3,'SOURCE_T3', ier); ier = 0
+    call read_value_double_precision(UCB_SOURCE_T4,'SOURCE_T4', ier); ier = 0
+    call read_value_double_precision(UCB_TAU,'TAU', ier); ier = 0
+  endif
+
   ! option to save strain seismograms
   call read_value_logical(SAVE_SEISMOGRAMS_STRAIN, 'SAVE_SEISMOGRAMS_STRAIN', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: SAVE_SEISMOGRAMS_STRAIN'
@@ -231,9 +251,11 @@
   call read_value_logical(OUTPUT_SEISMOS_SAC_BINARY, 'OUTPUT_SEISMOS_SAC_BINARY', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_SEISMOS_SAC_BINARY'
   call read_value_logical(OUTPUT_SEISMOS_ASDF, 'OUTPUT_SEISMOS_ASDF', ier)
-  if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_ASDF'
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_SEISMOS_ASDF'
   call read_value_logical(OUTPUT_SEISMOS_3D_ARRAY, 'OUTPUT_SEISMOS_3D_ARRAY', ier)
-  if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_3D_ARRAY'
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_SEISMOS_3D_ARRAY'
+  call read_value_logical(OUTPUT_SEISMOS_HDF5, 'OUTPUT_SEISMOS_HDF5', ier)
+  if (ier /= 0) stop 'an error occurred while reading the parameter file: OUTPUT_SEISMOS_HDF5'
   call read_value_logical(ROTATE_SEISMOGRAMS_RT, 'ROTATE_SEISMOGRAMS_RT', ier)
   if (ier /= 0) stop 'an error occurred while reading the parameter file: ROTATE_SEISMOGRAMS_RT'
   call read_value_logical(WRITE_SEISMOGRAMS_BY_MAIN, 'WRITE_SEISMOGRAMS_BY_MAIN', ier)
@@ -370,9 +392,21 @@
     call read_value_double_precision(FILESYSTEM_IO_BANDWIDTH, 'FILESYSTEM_IO_BANDWIDTH', ier); ier = 0
   endif
 
+  ! HDF5 file I/O
+  ! (optional) hdf5 database io flag
+  call read_value_logical(HDF5_ENABLED, 'HDF5_ENABLED', ier); ier = 0
+  ! HDF file I/O server
+  if (HDF5_ENABLED) then
+    ! (optional) movie outputs
+    call read_value_logical(HDF5_FOR_MOVIES, 'HDF5_FOR_MOVIES', ier); ier = 0
+    ! (optional) number of io dedicated nodes
+    call read_value_integer(HDF5_IO_NODES, 'HDF5_IO_NODES', ier); ier = 0
+  endif
+
   ! closes parameter file
   call close_parameter_file()
 
+  ! checks ADIOS compilation support
 #if !defined(USE_ADIOS) && !defined(USE_ADIOS2)
   if (ADIOS_ENABLED) then
     print *
@@ -384,6 +418,36 @@
     print *,'**************'
     print *
     stop 'an error occurred while reading the parameter file: ADIOS is enabled but code not built with ADIOS'
+  endif
+#endif
+
+  ! checks PETSc compilation support
+#if !defined(USE_PETSC)
+  if (FULL_GRAVITY .and. POISSON_SOLVER == ISOLVER_PETSC) then
+    print *
+    print *,'**************'
+    print *,'**************'
+    print *,'PETSC solver is selected in parameter file but the code was not compiled with PETSc support'
+    print *,'See --with-petsc configure options.'
+    print *,'**************'
+    print *,'**************'
+    print *
+    stop 'an error occurred while reading the parameter file: PETSC solver is selected but code not built with PETSc support'
+  endif
+#endif
+
+  ! checks HDF5 compilation support
+#if !defined(USE_HDF5)
+  if (HDF5_ENABLED) then
+    print *
+    print *,'**************'
+    print *,'**************'
+    print *,'HDF5 is enabled in parameter file but the code was not compiled with HDF5'
+    print *,'See --with-hdf5 configure options.'
+    print *,'**************'
+    print *,'**************'
+    print *
+    stop 'an error occurred while reading the parameter file: HDF5 is enabled but code not built with HDF5'
   endif
 #endif
 

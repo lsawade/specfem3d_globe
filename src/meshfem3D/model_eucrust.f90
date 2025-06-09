@@ -35,6 +35,8 @@
 
   module model_eucrust_par
 
+  implicit none
+
   ! EUcrust
   double precision, dimension(:),allocatable :: eucrust_lat,eucrust_lon, &
       eucrust_vp_uppercrust,eucrust_vp_lowercrust,eucrust_mohodepth, &

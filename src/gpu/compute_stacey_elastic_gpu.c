@@ -299,6 +299,10 @@ void FC_FUNC_ (compute_stacey_elastic_undoatt_gpu,
   d_abs_boundary_jacobian2Dw = mp->d_abs_boundary_jacobian2Dw_crust_mantle;
   d_abs_boundary_normal = mp->d_abs_boundary_normal_crust_mantle;
 
+  // dummy - d_absorb_field is not needed, instead a dummy is defined here explicitly as realw pointer
+  // (to avoid compilation issues with function call, as NULL could have default as long int* instead of realw*)
+  realw* d_dummy = (realw*) NULL;
+
   // way 1
   // > NGLLSQUARE==NGLL2==25, but we handle this inside kernel
   //int blocksize = 32;
@@ -329,7 +333,7 @@ void FC_FUNC_ (compute_stacey_elastic_undoatt_gpu,
     clCheck (clSetKernelArg (mocl.kernels.compute_stacey_elastic_kernel, idx++, sizeof (cl_mem), (void *) &mp->d_rho_vp_crust_mantle.ocl));
     clCheck (clSetKernelArg (mocl.kernels.compute_stacey_elastic_kernel, idx++, sizeof (cl_mem), (void *) &mp->d_rho_vs_crust_mantle.ocl));
     clCheck (clSetKernelArg (mocl.kernels.compute_stacey_elastic_kernel, idx++, sizeof (int), (void *) &mp->save_stacey));
-    clCheck (clSetKernelArg (mocl.kernels.compute_stacey_elastic_kernel, idx++, sizeof (cl_mem), (void *) NULL));
+    clCheck (clSetKernelArg (mocl.kernels.compute_stacey_elastic_kernel, idx++, sizeof (cl_mem), (void *) &d_dummy));
 
     local_work_size[0] = blocksize;
     local_work_size[1] = 1;
@@ -358,7 +362,7 @@ void FC_FUNC_ (compute_stacey_elastic_undoatt_gpu,
                                                                          mp->d_rho_vp_crust_mantle.cuda,
                                                                          mp->d_rho_vs_crust_mantle.cuda,
                                                                          mp->save_stacey,
-                                                                         NULL);
+                                                                         d_dummy);
   }
 #endif
 #ifdef USE_HIP
@@ -380,7 +384,7 @@ void FC_FUNC_ (compute_stacey_elastic_undoatt_gpu,
                                                                        mp->d_rho_vp_crust_mantle.hip,
                                                                        mp->d_rho_vs_crust_mantle.hip,
                                                                        mp->save_stacey,
-                                                                       NULL);
+                                                                       d_dummy);
   }
 #endif
 

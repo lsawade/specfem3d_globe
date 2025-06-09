@@ -53,6 +53,19 @@ gmt_minor = int(elem[1])
 if gmt_major >= 5 and gmt_minor >= 3: print("version ok")
 print("")
 
+# xyz2grd, grd2xyz, grdsample, grdinfo is wrapped in gmt after version 6.0
+if gmt_major >= 6:
+    xyz2grd = 'gmt xyz2grd'
+    grd2xyz = 'gmt grd2xyz'
+    grdsample = 'gmt grdsample'
+    grdinfo = 'gmt grdinfo'
+    gmtinfo = 'gmt info'
+else:
+    xyz2grd = 'xyz2grd'
+    grd2xyz = 'grd2xyz'
+    grdsample = 'grdsample'
+    grdinfo = 'grdinfo'
+    gmtinfo = 'gmtinfo'
 
 ####################################################################
 # User parameters
@@ -150,6 +163,9 @@ url_LOLA = 'https://pds-geosciences.wustl.edu/lro/lro-l-lola-3-rdr-v1/lrolol_1xx
 ## plotting
 # plots PNM image
 plot_image = True
+
+## smoothing (turned on by default)
+use_smoothing = True
 
 ####################################################################
 
@@ -359,21 +375,21 @@ def resample_topo_file(topo,filename_web,filename_grid):
 
         if topo == 'etopo1':
             # converting from raw binary to grid file
-            cmd = 'xyz2grd '   + filename_web + ' -V -Rd ' + grid + ' -r -ZTLh ' + interval_min
+            cmd = f'{xyz2grd} '   + filename_web + ' -V -Rd ' + grid + ' -r -ZTLh ' + interval_min
 
         elif topo == 'etopo2' or topo == 'etopo4' or topo == 'etopo5' or topo == 'etopo15':
             if filename_web == 'ETOPO2v2c_i2_LSB.bin':
                 # converting from etopo2v2c raw binary to 2m grid file first
                 print("  converting binary file to grid file: etopo2v2c.grd")
-                cmd = 'xyz2grd ETOPO2v2c_i2_LSB.bin -Rd -I2m -Getopo2v2c.grd -r -ZTLh -V'
+                cmd = f'{xyz2grd} ETOPO2v2c_i2_LSB.bin -Rd -I2m -Getopo2v2c.grd -r -ZTLh -V'
                 print("> ",cmd)
                 status = subprocess.call(cmd, shell=True)
                 check_status(status)
                 # resample
-                cmd = 'grdsample etopo2v2c.grd -V -Rd ' + grid + ' ' + interval_min
+                cmd = f'{grdsample} etopo2v2c.grd -V -Rd ' + grid + ' ' + interval_min
             else:
                 # direct resample
-                cmd = 'grdsample ' + filename_web + ' -V -Rd ' + grid + ' ' + interval_min
+                cmd = f'{grdsample} ' + filename_web + ' -V -Rd ' + grid + ' ' + interval_min
 
         elif 'mars' in topo:
             # converting to raw binary grid file
@@ -388,12 +404,12 @@ def resample_topo_file(topo,filename_web,filename_grid):
             # > grdimage topo.grd -JX6i+ -I+d -P -Vl > topo.ps
             print("  converting binary file to grid file: "+filename_web)
             # using int-16 values
-            cmd = 'xyz2grd '   + filename_web + ' -Gmarstopo1.875.grd -R0/360/-90/90 -I1.875m -r -ZTLhw -fic -fog -V'
+            cmd = f'{xyz2grd} '   + filename_web + ' -Gmarstopo1.875.grd -R0/360/-90/90 -I1.875m -r -ZTLhw -fic -fog -V'
             print("> ",cmd)
             status = subprocess.call(cmd, shell=True)
             check_status(status)
             # resample
-            cmd = 'grdsample marstopo1.875.grd -V -Rd ' + grid + ' ' + interval_min
+            cmd = f'{grdsample} marstopo1.875.grd -V -Rd ' + grid + ' ' + interval_min
         elif 'moon' in topo:
             # converting to raw binary grid file
             # 0.1 degree resolution = 0.1 / (1.60.) = 6 arc-minute
@@ -438,27 +454,27 @@ def resample_topo_file(topo,filename_web,filename_grid):
             # workaround: directly using xyz2grd fails, complains about wrong array sizes, probably due to some header data.
             #             thus, we output just the elevation data and re-read into grd-format
             #  converts to binary float without x,y positions
-            cmd = 'grd2xyz topo.grd -ZTLf > topo.bin'
+            cmd = f'{grd2xyz} topo.grd -ZTLf > topo.bin'
             print("> ",cmd)
             status = subprocess.call(cmd, shell=True)
             check_status(status)
             # using int-16 values from 16-pixel resolution = 0.0625 degree resolution
             if topo == 'moon4':
-                cmd = 'xyz2grd topo.bin -Gtopo.moon.grd -R0/360/-90/90 -I0.0625 -r -ZTLf -fic -fog -Vl'
+                cmd = f'{xyz2grd} topo.bin -Gtopo.moon.grd -R0/360/-90/90 -I0.0625 -r -ZTLf -fic -fog -Vl'
             else:
                 # using int-16 values from 64-pixel resolution = 0.9375m arc-minutes
-                cmd = 'xyz2grd topo.bin -Gtopo.moon.grd -R0/360/-90/90 -I0.9375m -r -ZTLf -fic -fog -Vl'
+                cmd = f'{xyz2grd} topo.bin -Gtopo.moon.grd -R0/360/-90/90 -I0.9375m -r -ZTLf -fic -fog -Vl'
             #cmd = 'xyz2grd '   + filename_web + ' -Gmoontopo.grd -R0/360/-90/90 -I0.9375m -r -ZTLhw -fic -fog -V'
             print("> ",cmd)
             status = subprocess.call(cmd, shell=True)
             check_status(status)
             print("")
-            cmd = 'grdinfo topo.moon.grd'
+            cmd = f'{grdinfo} topo.moon.grd'
             status = subprocess.call(cmd, shell=True)
             check_status(status)
             print("")
             # resample
-            cmd = 'grdsample topo.moon.grd -V -Rd ' + grid + ' ' + interval_min
+            cmd = f'{grdsample} topo.moon.grd -V -Rd ' + grid + ' ' + interval_min
 
         else:
             print("invalid topo %s for resampling" % topo)
@@ -483,7 +499,7 @@ def extract_to_ascii(topo,filename_in,filename_out):
         print("  file %s exists already, skipping extraction" % filename_out)
     else:
         # file info
-        cmd = 'grdinfo ' + filename_in
+        cmd = f'{grdinfo} ' + filename_in
         print("> ",cmd)
         status = subprocess.call(cmd, shell=True)
         check_status(status)
@@ -491,7 +507,7 @@ def extract_to_ascii(topo,filename_in,filename_out):
 
         # converts to ascii, extracts elevation values
         print("  extracting elevation values to ascii file...")
-        cmd = 'grd2xyz -Rg ' + filename_in + ' | awk \'{ print $3 }\' > ' + filename_out
+        cmd = f'{grd2xyz} -Rg ' + filename_in + ' | awk \'{ print $3 }\' > ' + filename_out
         print("> ",cmd)
         status = subprocess.call(cmd, shell=True)
         check_status(status)
@@ -499,7 +515,7 @@ def extract_to_ascii(topo,filename_in,filename_out):
 
     print("")
     print("  gmt info:")
-    cmd = 'gmtinfo ' + filename_out
+    cmd = f'{gmtinfo} ' + filename_out
     print("> ",cmd)
     status = subprocess.call(cmd, shell=True)
     check_status(status)
@@ -637,7 +653,13 @@ def smooth_topo_bathy(topo,filename_in,filename_out):
         #    sys.exit(1)
         print("  size of window filter is (%d x %d)" %(2*SIZE_FILTER_ONE_SIDE+1,2*SIZE_FILTER_ONE_SIDE+1))
         print("")
-        area_window = np.float((2*SIZE_FILTER_ONE_SIDE+1)**2)
+        area_window = (2*SIZE_FILTER_ONE_SIDE+1)**2
+
+        # Check numpy version
+        if np.__version__ >= '1.24':
+            area_window = float(area_window)
+        else:
+            area_window = np.float(area_window)
 
 
         count = 0
@@ -967,6 +989,12 @@ def create_topo_bathy(topo):
         print("Unrecognized option %s" % topo)
         sys.exit(1)
 
+    # for raw, unmodified output sets filter size to zero
+    if not use_smoothing:
+        SIZE_FILTER_ONE_SIDE = 0
+        print("  not using smoothing")
+        print("")
+
     # 1-degree in km
     if 'mars' in topo:
         radius = 3390.0
@@ -1004,6 +1032,15 @@ def create_topo_bathy(topo):
         #filename_grid = 'etopo1_ice_c_resampled_at_2minutes.grd'
         #filename_out = 'topo_bathy_etopo1_ice_c_resampled_at_2minutes_original_unmodified_unsmoothed.dat'
 
+    # raw topo output filenames
+    if not use_smoothing:
+        # special case for etopo1 & etopo2 handling
+        if topo == 'etopo1':
+            filename_out_smoothed = 'topo_bathy_etopo1_unmodified_unsmoothed.dat'
+        elif topo == 'etopo2':
+            filename_out_smoothed = 'topo_bathy_etopo2_unmodified_unsmoothed.dat'
+        # for all other topo, it will use a default 'topo_bathy_***_smoothed_window_0.dat' output name
+
     # data file download
     download_data_file(topo,filename_web)
 
@@ -1038,13 +1075,32 @@ def create_topo_bathy(topo):
     print("all done")
 
 
+def usage():
+    print("usage: ./run_create_topo_bathy_file.py topo [== etopo1,etopo2,etopo4,etopo5,etopo15,mars,moon] [--raw]")
+    sys.exit(1)
+
+
 if __name__ == '__main__':
+
     # gets arguments
-    if '--help' in sys.argv or '-h' in sys.argv or len(sys.argv) != 2:
-        print("usage: ./run_create_topo_bathy_file.py topo [== etopo1,etopo2,etopo4,etopo5,etopo15,mars,moon]")
-        sys.exit(1)
-    else:
-        topo = sys.argv[1]
+    if len(sys.argv) <= 1:
+        usage()
+
+    topo = sys.argv[1]
+
+    # reads arguments
+    i = 0
+    for arg in sys.argv:
+        i += 1
+        #print("arg: ",i,arg)
+        # get arguments
+        if "--help" in arg or '-h' in arg:
+            usage()
+        elif "--raw" in arg:
+            use_smoothing = False
+        elif i > 2:
+            print("argument not recognized: ",arg)
+            sys.exit(1)
 
     create_topo_bathy(topo)
 

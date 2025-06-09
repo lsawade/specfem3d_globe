@@ -61,6 +61,7 @@ specfem3D_SOLVER_OBJECTS = \
 
 specfem3D_SOLVER_OBJECTS += \
 	$O/asdf_data.solverstatic_module.o \
+	$O/bcast_mesh_databases.solverstatic.o \
 	$O/check_stability.solverstatic.o \
 	$O/comp_source_time_function.solverstatic.o \
 	$O/compute_add_sources.solverstatic.o \
@@ -110,23 +111,41 @@ specfem3D_SOLVER_OBJECTS += \
 	$O/print_stf_file.solverstatic.o \
 	$O/read_adjoint_sources.solverstatic.o \
 	$O/read_arrays_solver.solverstatic.o \
+	$O/read_arrays_solver_hdf5.solverstatic.o \
 	$O/read_forward_arrays.solverstatic.o \
+	$O/read_forward_arrays_hdf5.solverstatic.o \
 	$O/read_mesh_parameters.solverstatic.o \
 	$O/read_mesh_databases.solverstatic.o \
 	$O/read_topography_bathymetry.solverstatic.o \
+	$O/SIEM_compute_kernels.solverstatic.o \
+	$O/SIEM_compute_seismograms.solverstatic.o \
+	$O/SIEM_index_region.solverstatic.o \
+	$O/SIEM_infinite_element.solverstatic.o \
+	$O/SIEM_poisson.solverstatic.o \
+	$O/SIEM_prepare_iteration.solverstatic.o \
+	$O/SIEM_prepare_solver.solverstatic.o \
+	$O/SIEM_solve.solverstatic.o \
+	$O/SIEM_solver_mpi.solverstatic.o \
+	$O/SIEM_solver_petsc.solverstatic.o \
 	$O/save_forward_arrays.solverstatic.o \
+	$O/save_forward_arrays_hdf5.solverstatic.o \
 	$O/save_kernels.solverstatic.o \
+	$O/save_kernels_hdf5.solverstatic.o \
 	$O/save_regular_kernels.solverstatic.o \
 	$O/setup_GLL_points.solverstatic.o \
 	$O/setup_sources_receivers.solverstatic.o \
 	$O/specfem3D_par.solverstatic_module.o \
+	$O/ucb_heaviside.solverstatic.o \
 	$O/update_displacement_LDDRK.solverstatic.o \
 	$O/update_displacement_Newmark.solverstatic.o \
 	$O/write_movie_output.solverstatic.o \
 	$O/write_movie_volume.solverstatic.o \
+	$O/write_movie_volume_hdf5.solverstatic.o \
 	$O/write_movie_surface.solverstatic.o \
+	$O/write_movie_surface_hdf5.solverstatic.o \
 	$O/write_output_ASCII.solverstatic.o \
 	$O/write_output_SAC.solverstatic.o \
+	$O/write_output_HDF5.solverstatic.o \
 	$O/write_seismograms.solverstatic.o \
 	$(EMPTY_MACRO)
 
@@ -134,12 +153,23 @@ specfem3D_MODULES = \
 	$(FC_MODDIR)/asdf_data.$(FC_MODEXT) \
 	$(FC_MODDIR)/constants_solver.$(FC_MODEXT) \
 	$(FC_MODDIR)/manager_adios.$(FC_MODEXT) \
+	$(FC_MODDIR)/mod_element.$(FC_MODEXT) \
+	$(FC_MODDIR)/mod_element_att.$(FC_MODEXT) \
+	$(FC_MODDIR)/mod_element_strain.$(FC_MODEXT) \
 	$(FC_MODDIR)/specfem_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/specfem_par_crustmantle.$(FC_MODEXT) \
 	$(FC_MODDIR)/specfem_par_innercore.$(FC_MODEXT) \
 	$(FC_MODDIR)/specfem_par_outercore.$(FC_MODEXT) \
+	$(FC_MODDIR)/specfem_par_trinfinite.$(FC_MODEXT) \
+	$(FC_MODDIR)/specfem_par_infinite.$(FC_MODEXT) \
 	$(FC_MODDIR)/specfem_par_noise.$(FC_MODEXT) \
 	$(FC_MODDIR)/specfem_par_movie.$(FC_MODEXT) \
+	$(FC_MODDIR)/specfem_par_full_gravity.$(FC_MODEXT) \
+	$(FC_MODDIR)/siem_infinite_element.$(FC_MODEXT) \
+	$(FC_MODDIR)/siem_poisson.$(FC_MODEXT) \
+	$(FC_MODDIR)/siem_solver_mpi.$(FC_MODEXT) \
+	$(FC_MODDIR)/siem_solver_petsc.$(FC_MODEXT) \
+	$(FC_MODDIR)/ucb_heaviside.$(FC_MODEXT) \
 	$(EMPTY_MACRO)
 
 # These files come from the shared directory
@@ -164,6 +194,7 @@ specfem3D_SHARED_OBJECTS = \
 	$O/gll_library.shared.o \
 	$O/heap_sort.shared.o \
 	$O/hex_nodes.shared.o \
+	$O/hdf5_manager.shared_hdf5_module.o \
 	$O/init_openmp.shared.o \
 	$O/intgrl.shared.o \
 	$O/lagrange_poly.shared.o \
@@ -184,6 +215,7 @@ specfem3D_SHARED_OBJECTS = \
 	$O/rthetaphi_xyz.shared.o \
 	$O/search_kdtree.shared.o \
 	$O/shared_par.shared_module.o \
+	$O/SIEM_math_library.shared.o \
 	$O/spline_routines.shared.o \
 	$O/write_VTK_file.shared.o \
 	$(EMPTY_MACRO)
@@ -278,11 +310,15 @@ else
 	specfem3D_SHARED_OBJECTS += ${asdf_specfem3D_SHARED_STUBS}
 endif
 
-#
-# conditional CEM model
+# conditional CEM or EMC model
 ifeq ($(CEM),yes)
 	specfem3D_SOLVER_OBJECTS += $O/read_write_netcdf.checknetcdf.o
+else ifeq ($(EMC),yes)
+	specfem3D_SOLVER_OBJECTS += $O/read_write_netcdf.checknetcdf.o
+else ifeq ($(NETCDF),yes)
+	specfem3D_SOLVER_OBJECTS += $O/read_write_netcdf.checknetcdf.o
 endif
+
 
 ###
 ### VTK
@@ -319,13 +355,31 @@ else
 	reqstatic_header =
 endif
 
+##
+## PETSC support
+##
+ifeq ($(PETSC),yes)
+	specfem3D_MODULES += $(FC_MODDIR)/siem_solver_petsc.$(FC_MODEXT)
+endif
+
+
+##
+## HDF5
+##
+
+ifeq ($(HDF5),yes)
+specfem3D_MODULES += \
+	$(FC_MODDIR)/specfem_par_movie_hdf5.$(FC_MODEXT) \
+	$(EMPTY_MACRO)
+endif
+
 #######################################
 
 ####
 #### rules for executables
 ####
 
-SPECFEM_LINK_FLAGS = $(LDFLAGS) $(MPILIBS) $(LIBS)
+SPECFEM_LINK_FLAGS = $(MPILIBS)
 
 # cuda/opencl/hip
 SPECFEM_LINK_FLAGS += $(GPU_LINK)
@@ -342,7 +396,7 @@ ${E}/xspecfem3D: $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS)
 	@echo ""
 
 ## use MPI here
-## DK DK add OpenMP compiler flag here if needed
+# add OpenMP compiler flag here if needed
 #	${MPIFCCOMPILE_CHECK} -qsmp=omp -o ${E}/xspecfem3D $(specfem3D_OBJECTS) $(specfem3D_SHARED_OBJECTS) $(LDFLAGS) $(MPILIBS) $(LIBS)
 
 	${FCLINK} -o $@ $+ $(SPECFEM_LINK_FLAGS)
@@ -372,9 +426,35 @@ $O/locate_point.solverstatic.o: $O/search_kdtree.shared.o
 
 $O/make_gravity.solver.o: $O/model_prem.shared.o $O/model_Sohl.shared.o $O/model_vpremoon.shared.o
 
+# for Berkeley ucb stf
+$O/comp_source_time_function.solverstatic.o: $O/ucb_heaviside.solverstatic.o
+$O/setup_sources_receivers.solverstatic.o: $O/ucb_heaviside.solverstatic.o
+
+$O/compute_forces_crust_mantle_Dev.solverstatic.o: $O/compute_element.solverstatic.o $O/compute_element_att_memory.solverstatic.o
+$O/compute_forces_crust_mantle_noDev.solverstatic.o: $O/compute_element.solverstatic.o $O/compute_element_att_memory.solverstatic.o
+$O/compute_forces_inner_core_Dev.solverstatic.o: $O/compute_element.solverstatic.o $O/compute_element_att_memory.solverstatic.o
+$O/compute_forces_inner_core_noDev.solverstatic.o: $O/compute_element.solverstatic.o $O/compute_element_att_memory.solverstatic.o
+
+$O/compute_kernels.solverstatic.o: $O/compute_element_strain.solverstatic.o
+$O/compute_seismograms.solverstatic.o: $O/compute_element_strain.solverstatic.o
+$O/compute_strain_att.solverstatic.o: $O/compute_element_strain.solverstatic.o
+
 # Version file
 $O/initialize_simulation.solverstatic.o: ${SETUP}/version.fh
 
+# SIEM
+$O/SIEM_compute_kernels.solverstatic.o: $O/SIEM_math_library.shared.o $O/SIEM_poisson.solverstatic.o \
+																				$O/SIEM_solver_petsc.solverstatic.o $O/SIEM_solver_mpi.solverstatic.o
+$O/SIEM_infinite_element.solverstatic.o: $O/SIEM_math_library.shared.o
+$O/SIEM_poisson.solverstatic.o: $O/SIEM_math_library.shared.o $O/SIEM_infinite_element.solverstatic.o
+$O/SIEM_prepare_iteration.solverstatic.o: $O/SIEM_math_library.shared.o $O/SIEM_poisson.solverstatic.o \
+																$O/SIEM_solver_petsc.solverstatic.o $O/SIEM_solver_mpi.solverstatic.o
+$O/SIEM_prepare_solver.solverstatic.o: $O/SIEM_math_library.shared.o $O/SIEM_poisson.solverstatic.o
+$O/SIEM_solve.solverstatic.o: $O/SIEM_math_library.shared.o $O/SIEM_poisson.solverstatic.o \
+															$O/SIEM_solver_petsc.solverstatic.o $O/SIEM_solver_mpi.solverstatic.o
+$O/SIEM_solver_mpi.solverstatic.o: $O/SIEM_math_library.shared.o
+$O/SIEM_solver_petsc.solverstatic.o: $O/SIEM_math_library.shared.o
+$O/SIEM_compute_seismograms.solverstatic.o: $O/SIEM_math_library.shared.o
 
 
 ###
@@ -393,7 +473,7 @@ $O/%.solverstatic.o: $S/%.F90 $O/shared_par.shared_module.o $O/specfem3D_par.sol
 	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
 
 $O/%.solverstatic_openmp.o: $S/%.f90 $O/shared_par.shared_module.o $O/specfem3D_par.solverstatic_module.o
-## DK DK add OpenMP compiler flag here if needed
+# add OpenMP compiler flag here if needed
 	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -qsmp=omp -o $@ $<
 
 

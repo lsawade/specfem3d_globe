@@ -29,6 +29,10 @@
 
   use constants, only: EXTERNAL_SOURCE_TIME_FUNCTION
 
+  ! for berkeley source time function
+  use shared_parameters, only: STF_IS_UCB_HEAVISIDE
+  use ucb_heaviside, only: comp_source_time_function_ucb_stf
+
   implicit none
 
   double precision,intent(in) :: t,hdur
@@ -38,7 +42,10 @@
   double precision, external :: comp_source_time_function_heavi
   double precision, external :: comp_source_time_function_ext
 
-  if (EXTERNAL_SOURCE_TIME_FUNCTION) then
+  if (STF_IS_UCB_HEAVISIDE) then
+    ! Berkeley stf
+    comp_source_time_function = comp_source_time_function_ucb_stf(t)
+  else if (EXTERNAL_SOURCE_TIME_FUNCTION) then
     ! external stf
     comp_source_time_function = comp_source_time_function_ext(it_index)
   else

@@ -217,6 +217,9 @@
   use model_ccrem_par, only: &
     NR_CCREM_layers,CCREM_Qmu_original
 
+  use model_1dberkeley_par, only: &
+    NR_REF_BERKELEY,Mref_V_Qmu_berkeley
+
   use model_case65tay_par, only: &
     NR_case65TAY,Mcase65TAY_V_Qmu
 
@@ -279,6 +282,10 @@
     if (myrank == 0) write(IMAIN,*) '  model: SEA_1D attenuation'
     call define_model_sea1d(.false.)
     Qn = NR_SEA1D
+
+  case(REFERENCE_MODEL_SEMUCB)
+    if (myrank == 0) write(IMAIN,*) '  model: Berkeley attenuation'
+    Qn = NR_REF_BERKELEY
 
   case (REFERENCE_MODEL_CCREM)
     ! redefines "pure" 1D model without crustal modification
@@ -349,6 +356,10 @@
     ! radius = SEA1DM_V_radius_sea1d(:)
     Qmu(:) = SEA1DM_V_Qmu_sea1d(:)
 
+  case(REFERENCE_MODEL_SEMUCB)
+    ! SEMUCB Berkeley 1D reference model
+    Qmu(:) = Mref_V_Qmu_berkeley(:)
+
   case (REFERENCE_MODEL_CCREM)
     ! Moon
     Qmu(:) = CCREM_Qmu_original(:)
@@ -377,6 +388,14 @@
   case default
     call exit_MPI(myrank, 'Error attenuation setup: Reference 1D Model values missing')
   end select
+
+  ! debugging
+  !if (myrank == 0) then
+  !  print *,'debug: Qmu '
+  !  do i = 1,Qn
+  !    print *,'  ',i,Qmu(i)
+  !  enddo
+  !endif
 
   ! sets up storage of relaxation times
   do i = 1,Qn
@@ -715,10 +734,10 @@
   call fminsearch(attenuation_eval, tau_e, n, iterations, min_value, prnt, err)
 
   if (err > 0) then
-     write(*,*)'Search did not converge for an attenuation of ', Q_real
-     write(*,*)'    Iterations: ', iterations
-     write(*,*)'    Min Value:  ', min_value
-     write(*,*)'    Aborting program'
+     write(*,*) 'Search did not converge for an attenuation of ', Q_real
+     write(*,*) '    Iterations: ', iterations
+     write(*,*) '    Min Value:  ', min_value
+     write(*,*) '    Aborting program'
      call exit_MPI(myrank,'attenuation_simplex: Search for Strain relaxation times did not converge')
   endif
 
@@ -1029,14 +1048,14 @@
   itercount = 1
   func_evals = n+1
   if (prnt == 3) then
-     write(*,*)'Iterations   Funk Evals   Value How'
-     write(*,*)itercount, func_evals, fv(1), how
+     write(*,*) 'Iterations   Funk Evals   Value How'
+     write(*,*) itercount, func_evals, fv(1), how
   endif
   if (prnt == 4) then
-     write(*,*)'How: ',how
-     write(*,*)'V: ', v
-     write(*,*)'fv: ',fv
-     write(*,*)'evals: ',func_evals
+     write(*,*) 'How: ',how
+     write(*,*) 'V: ', v
+     write(*,*) 'fv: ',fv
+     write(*,*) 'evals: ',func_evals
   endif
 
   do while (func_evals < maxfun .and. itercount < maxiter)
@@ -1113,7 +1132,7 @@
               endif
            endif
            if (how == shrink) then
-              do j=2,n+1
+              do j = 2,n+1
                  v(:,j)=v(:,1)+sigma*(v(:,j) - v(:,1))
                  x(:) = v(:,j)
                  fv(j) = funk(x)
@@ -1132,22 +1151,22 @@
 
      itercount = itercount + 1
      if (prnt == 3) then
-        write(*,*)itercount, func_evals, fv(1), how
+        write(*,*) itercount, func_evals, fv(1), how
      else if (prnt == 4) then
         write(*,*)
-        write(*,*)'How: ',how
-        write(*,*)'v: ',v
-        write(*,*)'fv: ',fv
-        write(*,*)'evals: ',func_evals
+        write(*,*) 'How: ',how
+        write(*,*) 'v: ',v
+        write(*,*) 'fv: ',fv
+        write(*,*) 'evals: ',func_evals
      endif
   enddo
 
   if (func_evals > maxfun) then
-     write(*,*)'function evaluations exceeded prescribed limit', maxfun
+     write(*,*) 'function evaluations exceeded prescribed limit', maxfun
      err = 1
   endif
   if (itercount > maxiter) then
-     write(*,*)'iterations exceeded prescribed limit', maxiter
+     write(*,*) 'iterations exceeded prescribed limit', maxiter
      err = 2
   endif
 

@@ -130,7 +130,8 @@
 
   subroutine sm_output_info()
 
-  use constants, only: IMAIN,NGLLX,NGLLY,NGLLZ,NGNOD,NGNOD2D,N_SLS
+  use constants, only: IMAIN,NGLLX,NGLLY,NGLLZ,NGNOD,NGNOD2D,N_SLS,ASSUME_PERFECT_SPHERE, &
+    USE_OLD_VERSION_FORMAT
   use shared_parameters, only: R_PLANET_KM
 
   use meshfem_models_par
@@ -164,6 +165,12 @@
   write(IMAIN,*) 'Surface shape functions defined by NGNOD2D = ',NGNOD2D,' control nodes'
   write(IMAIN,*)
 
+  ! backward compatibility
+  if (USE_OLD_VERSION_FORMAT) then
+    write(IMAIN,*) 'using old version backward compatibility (versions 7.0 to 8.0)'
+    write(IMAIN,*)
+  endif
+
   ! model user parameters
   write(IMAIN,*) 'model: ',trim(MODEL)
   if (OCEANS) then
@@ -182,7 +189,15 @@
     write(IMAIN,*) '  no surface topography'
   endif
   if (GRAVITY) then
-    write(IMAIN,*) '  incorporating self-gravitation (Cowling approximation)'
+    if (FULL_GRAVITY) then
+      if (ADD_TRINF) then
+        write(IMAIN,*) '  incorporating full self-gravitation (with transition layer)'
+      else
+        write(IMAIN,*) '  incorporating full self-gravitation (without transition layer)'
+      endif
+    else
+      write(IMAIN,*) '  incorporating self-gravitation (Cowling approximation)'
+    endif
   else
     write(IMAIN,*) '  no self-gravitation'
   endif
@@ -194,9 +209,9 @@
   if (ATTENUATION) then
     write(IMAIN,*) '  incorporating attenuation using ',N_SLS,' standard linear solids'
     if (ATTENUATION_GLL ) then
-       write(IMAIN,*)'  using GLL attenuation model'
+       write(IMAIN,*) '  using GLL attenuation model'
     else if (ATTENUATION_3D) then
-       write(IMAIN,*)'  using 3D attenuation model'
+       write(IMAIN,*) '  using 3D attenuation model'
     endif
   else
     write(IMAIN,*) '  no attenuation'
@@ -240,7 +255,10 @@
     write(IMAIN,*) '  no general mantle anisotropy'
   endif
   write(IMAIN,*)
-
+  if (ASSUME_PERFECT_SPHERE) then
+    write(IMAIN,*) '  assuming perfect sphere'
+  endif
+  write(IMAIN,*)
   write(IMAIN,*) 'Reference radius of the globe used is ',R_PLANET_KM,' km'
   write(IMAIN,*)
   write(IMAIN,*) 'Central cube is at a radius of ',R_CENTRAL_CUBE/1000.d0,' km'
