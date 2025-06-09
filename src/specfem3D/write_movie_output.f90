@@ -30,7 +30,8 @@
   use specfem_par, only: deltat,it,myrank,Mesh_pointer, &
     GPU_MODE,NTSTEP_BETWEEN_FRAMES, &
     MOVIE_START,MOVIE_STOP,MOVIE_SURFACE,MOVIE_VOLUME,MOVIE_VOLUME_TYPE, &
-    scale_displ,scale_veloc
+    scale_displ,scale_veloc, &
+    HDF5_ENABLED
 
   use specfem_par_crustmantle, only: displ_crust_mantle,veloc_crust_mantle,accel_crust_mantle, &
     eps_trace_over_3_crust_mantle,epsilondev_xx_crust_mantle,epsilondev_xy_crust_mantle,epsilondev_xz_crust_mantle, &
@@ -75,8 +76,13 @@
         endif
       endif
 
+      ! TODO ADD IO_SERVER
       ! save velocity here to avoid static offset on displacement for movies
-      call write_movie_surface()
+      if (HDF5_ENABLED) then
+        call write_movie_surface_hdf5()
+      else
+        call write_movie_surface()
+      endif
 
       ! executes an external script on the node
       if (RUN_EXTERNAL_MOVIE_SCRIPT) then
@@ -109,14 +115,14 @@
 
       ! integrates strain
       call movie_volume_integrate_strain(deltat,NSPEC_CRUST_MANTLE_3DMOVIE, &
-                                         eps_trace_over_3_crust_mantle, &
-                                         epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle, &
-                                         epsilondev_xy_crust_mantle,epsilondev_xz_crust_mantle, &
-                                         epsilondev_yz_crust_mantle, &
-                                         Ieps_trace_over_3_crust_mantle, &
-                                         Iepsilondev_xx_crust_mantle,Iepsilondev_yy_crust_mantle, &
-                                         Iepsilondev_xy_crust_mantle,Iepsilondev_xz_crust_mantle, &
-                                         Iepsilondev_yz_crust_mantle)
+                                          eps_trace_over_3_crust_mantle, &
+                                          epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle, &
+                                          epsilondev_xy_crust_mantle,epsilondev_xz_crust_mantle, &
+                                          epsilondev_yz_crust_mantle, &
+                                          Ieps_trace_over_3_crust_mantle, &
+                                          Iepsilondev_xx_crust_mantle,Iepsilondev_yy_crust_mantle, &
+                                          Iepsilondev_xy_crust_mantle,Iepsilondev_xz_crust_mantle, &
+                                          Iepsilondev_yz_crust_mantle)
     endif
 
     ! file output
@@ -134,19 +140,38 @@
                                               epsilondev_xy_crust_mantle,epsilondev_xz_crust_mantle, &
                                               epsilondev_yz_crust_mantle)
         endif
-        call  write_movie_volume_strains(NSPEC_CRUST_MANTLE_STRAIN_ONLY, &
-                                         eps_trace_over_3_crust_mantle, &
-                                         NSPEC_CRUST_MANTLE_STR_OR_ATT, &
-                                         epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
-                                         epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle)
+        ! TODO ADD IO_SERVER
+        if (HDF5_ENABLED) then
+          call  write_movie_volume_strains_hdf5(NSPEC_CRUST_MANTLE_STRAIN_ONLY, &
+                                           eps_trace_over_3_crust_mantle, &
+                                           NSPEC_CRUST_MANTLE_STR_OR_ATT, &
+                                           epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
+                                           epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle)
+
+        else
+          call  write_movie_volume_strains(NSPEC_CRUST_MANTLE_STRAIN_ONLY, &
+                                           eps_trace_over_3_crust_mantle, &
+                                           NSPEC_CRUST_MANTLE_STR_OR_ATT, &
+                                           epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
+                                           epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle)
+        endif
 
       case (2, 3)
+        ! TODO ADD IO_SERVER
         ! output the Time Integral of Strain, or \mu*TIS
-        call  write_movie_volume_strains(NSPEC_CRUST_MANTLE_3DMOVIE, &
-                                         Ieps_trace_over_3_crust_mantle, &
-                                         NSPEC_CRUST_MANTLE_3DMOVIE, &
-                                         Iepsilondev_xx_crust_mantle,Iepsilondev_yy_crust_mantle,Iepsilondev_xy_crust_mantle, &
-                                         Iepsilondev_xz_crust_mantle,Iepsilondev_yz_crust_mantle)
+        if (HDF5_ENABLED) then
+          call write_movie_volume_strains_hdf5(NSPEC_CRUST_MANTLE_3DMOVIE, &
+                    Ieps_trace_over_3_crust_mantle, &
+                    NSPEC_CRUST_MANTLE_3DMOVIE, &
+                    Iepsilondev_xx_crust_mantle,Iepsilondev_yy_crust_mantle,Iepsilondev_xy_crust_mantle, &
+                    Iepsilondev_xz_crust_mantle,Iepsilondev_yz_crust_mantle)
+        else
+          call  write_movie_volume_strains(NSPEC_CRUST_MANTLE_3DMOVIE, &
+                     Ieps_trace_over_3_crust_mantle, &
+                     NSPEC_CRUST_MANTLE_3DMOVIE, &
+                     Iepsilondev_xx_crust_mantle,Iepsilondev_yy_crust_mantle,Iepsilondev_xy_crust_mantle, &
+                     Iepsilondev_xz_crust_mantle,Iepsilondev_yz_crust_mantle)
+        endif
 
       case (4)
         ! output divergence and curl in whole volume
@@ -167,38 +192,66 @@
           call transfer_fields_oc_from_device(NGLOB_OUTER_CORE, &
                                               displ_outer_core,veloc_outer_core,accel_outer_core,Mesh_pointer)
         endif
-        call write_movie_volume_divcurl(NSPEC_CRUST_MANTLE_STRAIN_ONLY,eps_trace_over_3_crust_mantle, &
-                                        div_displ_outer_core, &
-                                        accel_outer_core,kappavstore_outer_core,rhostore_outer_core,ibool_outer_core, &
-                                        NSPEC_INNER_CORE_STRAIN_ONLY,eps_trace_over_3_inner_core, &
-                                        NSPEC_CRUST_MANTLE_STR_OR_ATT, &
-                                        epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
-                                        epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle, &
-                                        NSPEC_INNER_CORE_STR_OR_ATT, &
-                                        epsilondev_xx_inner_core,epsilondev_yy_inner_core,epsilondev_xy_inner_core, &
-                                        epsilondev_xz_inner_core,epsilondev_yz_inner_core)
-
+        ! TODO ADD IO_SERVER
+        if (HDF5_ENABLED) then
+          call write_movie_volume_divcurl_hdf5(NSPEC_CRUST_MANTLE_STRAIN_ONLY,eps_trace_over_3_crust_mantle, &
+                                              div_displ_outer_core, &
+                                              accel_outer_core,kappavstore_outer_core,rhostore_outer_core,ibool_outer_core, &
+                                              NSPEC_INNER_CORE_STRAIN_ONLY, eps_trace_over_3_inner_core, &
+                                              NSPEC_CRUST_MANTLE_STR_OR_ATT, &
+                                              epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
+                                              epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle, &
+                                              NSPEC_INNER_CORE_STR_OR_ATT, &
+                                              epsilondev_xx_inner_core,epsilondev_yy_inner_core,epsilondev_xy_inner_core, &
+                                              epsilondev_xz_inner_core,epsilondev_yz_inner_core)
+        else
+          call write_movie_volume_divcurl(NSPEC_CRUST_MANTLE_STRAIN_ONLY,eps_trace_over_3_crust_mantle, &
+                                          div_displ_outer_core, &
+                                          accel_outer_core,kappavstore_outer_core,rhostore_outer_core,ibool_outer_core, &
+                                          NSPEC_INNER_CORE_STRAIN_ONLY,eps_trace_over_3_inner_core, &
+                                          NSPEC_CRUST_MANTLE_STR_OR_ATT, &
+                                          epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
+                                          epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle, &
+                                          NSPEC_INNER_CORE_STR_OR_ATT, &
+                                          epsilondev_xx_inner_core,epsilondev_yy_inner_core,epsilondev_xy_inner_core, &
+                                          epsilondev_xz_inner_core,epsilondev_yz_inner_core)
+        endif
       case (5)
         ! output displacement
         if (GPU_MODE) then
           call transfer_displ_cm_from_device(NDIM*NGLOB_CRUST_MANTLE,displ_crust_mantle,Mesh_pointer)
         endif
         scalingval = scale_displ
-        call write_movie_volume_vector(npoints_3dmovie, &
-                                       ibool_crust_mantle, &
-                                       displ_crust_mantle, &
-                                       scalingval,mask_3dmovie,nu_3dmovie)
-
+        ! TODO ADD IO_SERVER
+        if (HDF5_ENABLED) then
+          call write_movie_volume_vector_hdf5(npoints_3dmovie, &
+                                             ibool_crust_mantle, &
+                                             displ_crust_mantle, &
+                                             scalingval,mask_3dmovie,nu_3dmovie)
+        else
+          call write_movie_volume_vector(npoints_3dmovie, &
+                                         ibool_crust_mantle, &
+                                         displ_crust_mantle, &
+                                         scalingval,mask_3dmovie,nu_3dmovie)
+        endif
       case (6)
         ! output velocity
         if (GPU_MODE) then
           call transfer_veloc_cm_from_device(NDIM*NGLOB_CRUST_MANTLE,veloc_crust_mantle,Mesh_pointer)
         endif
         scalingval = scale_veloc
-        call write_movie_volume_vector(npoints_3dmovie, &
-                                       ibool_crust_mantle, &
-                                       veloc_crust_mantle, &
-                                       scalingval,mask_3dmovie,nu_3dmovie)
+        ! TODO ADD IO_SERVER
+        if (HDF5_ENABLED) then
+          call write_movie_volume_vector_hdf5(npoints_3dmovie, &
+                                             ibool_crust_mantle, &
+                                             veloc_crust_mantle, &
+                                             scalingval,mask_3dmovie,nu_3dmovie)
+        else
+          call write_movie_volume_vector(npoints_3dmovie, &
+                                          ibool_crust_mantle, &
+                                          veloc_crust_mantle, &
+                                          scalingval,mask_3dmovie,nu_3dmovie)
+        endif
 
       case (7)
         ! output norm of displacement
@@ -209,8 +262,14 @@
           call transfer_displ_ic_from_device(NDIM*NGLOB_INNER_CORE,displ_inner_core,Mesh_pointer)
           call transfer_displ_oc_from_device(NGLOB_OUTER_CORE,displ_outer_core,Mesh_pointer)
         endif
-        call write_movie_volume_displnorm(displ_crust_mantle,displ_inner_core,displ_outer_core, &
-                                          ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        ! TODO ADD IO_SERVER
+        if (HDF5_ENABLED) then
+          call write_movie_volume_displnorm_hdf5(displ_crust_mantle,displ_inner_core,displ_outer_core, &
+                                                ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        else
+          call write_movie_volume_displnorm(displ_crust_mantle,displ_inner_core,displ_outer_core, &
+                                            ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        endif
 
       case (8)
         ! output norm of velocity
@@ -221,8 +280,14 @@
           call transfer_veloc_ic_from_device(NDIM*NGLOB_INNER_CORE,veloc_inner_core,Mesh_pointer)
           call transfer_veloc_oc_from_device(NGLOB_OUTER_CORE,veloc_outer_core,Mesh_pointer)
         endif
-        call write_movie_volume_velnorm(veloc_crust_mantle,veloc_inner_core,veloc_outer_core, &
-                                        ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        ! TODO ADD IO_SERVER
+        if (HDF5_ENABLED) then
+          call write_movie_volume_velnorm_hdf5(veloc_crust_mantle,veloc_inner_core,veloc_outer_core, &
+                                              ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        else
+          call write_movie_volume_velnorm(veloc_crust_mantle,veloc_inner_core,veloc_outer_core, &
+                                          ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        endif
 
       case (9)
         ! output norm of acceleration
@@ -233,8 +298,14 @@
           call transfer_accel_ic_from_device(NDIM*NGLOB_INNER_CORE,accel_inner_core,Mesh_pointer)
           call transfer_accel_oc_from_device(NGLOB_OUTER_CORE,accel_outer_core,Mesh_pointer)
         endif
-        call write_movie_volume_accelnorm(accel_crust_mantle,accel_inner_core,accel_outer_core, &
-                                          ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        ! TODO ADD IO_SERVER
+        if (HDF5_ENABLED) then
+          call write_movie_volume_accelnorm_hdf5(accel_crust_mantle,accel_inner_core,accel_outer_core, &
+                                              ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        else
+          call write_movie_volume_accelnorm(accel_crust_mantle,accel_inner_core,accel_outer_core, &
+                                            ibool_crust_mantle,ibool_inner_core,ibool_outer_core)
+        endif
 
       case default
         call exit_MPI(myrank, 'MOVIE_VOLUME_TYPE has to be in range from 1 to 9')

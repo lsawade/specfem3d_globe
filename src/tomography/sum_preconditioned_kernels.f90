@@ -76,7 +76,7 @@ program sum_preconditioned_kernels_globe
   kernel_list(:) = ''
 
   ! reads in event list
-  nker=0
+  nker = 0
   open(unit=IIN,file=trim(kernel_file_list),status='old',action='read',iostat=ier)
   if (ier /= 0) then
      print *,'Error opening ',trim(kernel_file_list),myrank
@@ -389,7 +389,7 @@ subroutine invert_hess( hess_matrix )
   maxh = maxval( abs(hess_matrix) )
 
   ! determines maximum from all slices on main
-  call max_allreduce_cr(maxh,maxh_all)
+  call max_all_all_cr(maxh,maxh_all)
 
   ! user output
   if (myrank == 0) then

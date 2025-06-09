@@ -49,9 +49,11 @@
 
   module model_atten3D_QRFSI12_par
 
+  implicit none
+
   ! QRFSI12 constants
-  integer,parameter :: NKQ=8,MAXL_Q=12
-  integer,parameter :: NSQ=(MAXL_Q+1)**2,NDEPTHS_REFQ=913
+  integer,parameter :: NKQ = 8,MAXL_Q = 12
+  integer,parameter :: NSQ=(MAXL_Q+1)**2,NDEPTHS_REFQ = 913
 
   ! model_atten3D_QRFSI12_variables
   double precision,dimension(:,:),allocatable :: QRFSI12_Q_dqmu
@@ -110,7 +112,7 @@
   if (ier /= 0) stop 'Error allocating helper array'
   xlmvec(:) = 0.0
 
-  end subroutine
+  end subroutine model_atten3D_QRFSI12_broadcast
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -148,11 +150,11 @@
     do l = 0,MAXL_Q
       do m = 0,l
         if (m == 0) then
-          j=j+1
+          j = j+1
           read(IIN,*)ll,mm,v1
           QRFSI12_Q_dqmu(k,j)=v1
         else
-          j=j+2
+          j = j+2
           read(IIN,*)ll,mm,v1,v2
   !       write(*,*) 'k,l,m,ll,mm:',k,l,m,ll,mm,v1
           QRFSI12_Q_dqmu(k,j-1)=2.*v1
@@ -221,8 +223,8 @@
   ! debug
   !  print *,'entering QRFSI12 subroutine'
 
-  ylat = 90.0d0 - theta
-  xlon = phi
+  ylat = real(90.0d0 - theta,kind=4)
+  xlon = real(phi,kind=4)
 
   ! only checks radius for crust, idoubling is misleading for oceanic crust
   ! when we want to expand mantle up to surface...
@@ -256,15 +258,15 @@
 
     ! we are in the mantle
 
-    depth = R_PLANET_KM - radius
+    depth = real(R_PLANET_KM - radius,kind=4)
 
     !debug
     !   print *,'QRFSI12: we are in the mantle at depth',depth
 
     ifnd = 0
-    do i=2,NDEPTHS_REFQ
+    do i = 2,NDEPTHS_REFQ
       if (depth >= QRFSI12_Q_refdepth(i-1) .and. depth < QRFSI12_Q_refdepth(i)) then
-        ifnd=i
+        ifnd = i
       endif
     enddo
     if (ifnd == 0) then
@@ -280,14 +282,14 @@
         shdep(j) = 0.0
       enddo
       do n = 1,NKQ
-        splpts(n) = QRFSI12_Q_spknt(n)
+        splpts(n) = real(QRFSI12_Q_spknt(n),kind=4)
       enddo
 
       call vbspl(depth,NKQ,splpts,splcon,splcond)
 
       do n = 1,NKQ
         do j = 1,NSQ
-          shdep(j) = shdep(j)+(splcon(n)*QRFSI12_Q_dqmu(n,j))
+          shdep(j) = shdep(j) + real(splcon(n) * QRFSI12_Q_dqmu(n,j),kind=4)
         enddo
       enddo
 

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Check for changes
       id: diff
@@ -29,9 +29,20 @@ jobs:
           export DIFF=$( git diff --name-only ${{ github.event.before }} $GITHUB_SHA )
           echo "  diff between ${{ github.event.before }} and $GITHUB_SHA"
         fi
-        echo "$DIFF"
+        echo "***"; echo "$DIFF"; echo "***"
         # Escape newlines (replace \n with %0A)
-        echo "::set-output name=diff::$( echo "$DIFF" | sed ':a;N;$!ba;s/\n/%0A/g' )"
+        # deprecated:
+        #echo "::set-output name=diff::$( echo "$DIFF" | sed ':a;N;$!ba;s/\n/%0A/g' )"
+        # new:
+        # replace new line with %0A - will result finding only one file with a very long name...
+        #echo "diff=$( echo "$DIFF" | sed ':a;N;$!ba;s/\n/%0A/g' )" >> $GITHUB_OUTPUT
+        # doesn't work...
+        #echo "diff=\"$DIFF\"" >> "$GITHUB_OUTPUT"
+        # new multi-line format:
+        # (https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings)
+        echo "diff<<EOF" >> $GITHUB_OUTPUT
+        echo "$DIFF" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Output changes
       run: echo "${{ steps.diff.outputs.diff }}"
@@ -75,7 +86,7 @@ jobs:
     needs: changesCheck
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
@@ -93,16 +104,27 @@ jobs:
         echo ""
         ## avoids sed -i '' issue on MacOS, using gnu sed to have the same sed command lines as in linux
         brew install gnu-sed
-        echo "PATH=/usr/local/opt/gnu-sed/libexec/gnubin:$PATH" >> $GITHUB_ENV
+        echo "PATH=/opt/homebrew/opt/gnu-sed/libexec/gnubin:$PATH" >> $GITHUB_ENV
         ## OpenMP
         echo "OMP_NUM_THREADS=2" >> $GITHUB_ENV
+        ## MPI
+        echo
+        echo "MPI environment:"
+        echo "mpif90 on path: $(which mpif90)"
+        echo
+        # add OpenMPI path to have ./configure detect mpi.h
+        echo "MPI_INC=/opt/homebrew/include" >> $GITHUB_ENV
         ## avoids MPI issue with number of slots
         echo "OMPI_MCA_rmaps_base_oversubscribe=1" >> $GITHUB_ENV
         echo "OMPI_MCA_rmaps_base_inherit=1" >> $GITHUB_ENV
         ## avoids MPI issue when running in MacOS
         echo "OMPI_MCA_btl=self,tcp" >> $GITHUB_ENV
+        # newer OpenMPI version (5.x)
+        echo "PRTE_MCA_rmaps_default_mapping_policy=:oversubscribe" >> $GITHUB_ENV
         # exports for xterm output (for make tests)
         echo "TERM=xterm" >> $GITHUB_ENV
+        # warning: (arm64)  could not find object file symbol for symbol ___mulsc3
+        echo "LDFLAGS=-lgcc" >> $GITHUB_ENV
         echo ""
         echo "exports:"
         export
@@ -119,16 +141,16 @@ jobs:
       run: make tests
 
   linuxCheck:
-    name: Test on ${{ matrix.os }}    
+    name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     needs: changesCheck
 
     strategy:
       matrix:
-        os: [ubuntu-latest,ubuntu-18.04]
+        os: [ubuntu-latest,ubuntu-22.04]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: ./.github/scripts/run_install.sh
@@ -136,22 +158,22 @@ jobs:
 
     - name: configure
       run: ./configure
-      
+
     - name: make
-      run: make -j2 all
+      run: make -j4 all
 
 
   linuxCheck-Intel:
-    name: Test Intel on ubuntu-20.04
-    runs-on: ubuntu-20.04
+    name: Test Intel on ubuntu-22.04
+    runs-on: ubuntu-22.04
     needs: changesCheck
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Cache Intel oneapi packages
       id: cache-intel-oneapi
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: /opt/intel/oneapi
         key: install-${{ runner.os }}-all
@@ -165,8 +187,12 @@ jobs:
         sudo echo "deb https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
         sudo apt-get update
         echo ""
-        echo "packages intel oneapi:"
-        sudo apt-get install -y intel-oneapi-compiler-fortran intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic intel-oneapi-mpi intel-oneapi-mpi-devel
+        # info
+        #sudo -E apt-cache pkgnames intel | grep intel-oneapi
+        #echo ""
+        echo "installing packages intel oneapi:"
+        sudo apt-get install -y intel-oneapi-compiler-fortran-2023.2.2 intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic-2023.2.2 intel-oneapi-mpi intel-oneapi-mpi-devel
+        echo ""
 
     - name: compiler infos
       run: |
@@ -174,22 +200,54 @@ jobs:
         source /opt/intel/oneapi/setvars.sh
         echo ""
         echo "compiler versions:"
+        echo "icx --version"
+        which icx
+        icx --version
+        echo ""
         echo "icc --version"
+        which icc
         icc --version
+        echo ""
+        echo "ifx --version"
+        which ifx
+        ifx --version
+        echo ""
         echo "ifort --version"
+        which ifort
         ifort --version
+        echo ""
         echo "mpiifort --version"
+        which mpiifort
         mpiifort --version
+        echo ""
         echo "mpif90 --version"
+        which mpif90
         mpif90 --version
         echo ""
-        export TERM=xterm
-        echo "exports:"
-        export
-        echo ""
+        # infos
         which ifort
         which icc
         which mpiifort
+        echo "mpirun:"
+        which mpirun
+        echo ""
+        # intel setup for running tests
+        echo ""
+        echo "replacing mpif90 with mpiifort link:"
+        sudo ln -sf $(which mpiifort) $(which mpif90)
+        mpif90 --version
+        echo ""
+        # debug
+        #export I_MPI_DEBUG=5,pid,host
+        #export I_MPI_LIBRARY_KIND=debug
+        # remove -ftrapuv which leads to issues for running tests
+        sed -i "s/-ftrapuv//g" flags.guess
+        # environment setting
+        export TERM=xterm
+        # export info
+        echo "exports:"
+        export
+        echo ""
         echo ""
         printenv >> $GITHUB_ENV
         echo "CXX=icpc" >> $GITHUB_ENV
@@ -198,7 +256,8 @@ jobs:
         echo ""
 
     - name: configure debug
-      run: ./configure --enable-debug FC=ifort CC=icc MPIFC=mpiifort
+      run: |
+        ./configure --enable-debug FC=ifort CC=icc MPIFC=mpiifort
 
     - name: make debug
       run: |
@@ -207,24 +266,26 @@ jobs:
         make clean
 
     - name: configure
-      run: ./configure FC=ifort CC=icc MPIFC=mpiifort
+      run: |
+        ./configure FC=ifort CC=icc MPIFC=mpiifort
 
     - name: make
       run: |
         make -j2 all
         make clean
 
-    # fails due to MPI issue on virtual nodes
-    #- name: make tests
-    #  run: make tests
+    # note: fails with -ftrapuv flag due to MPI issue on virtual nodes
+    - name: make tests
+      run: |
+        make tests
 
   linuxTest_0:
-    name: Test run example 0 - make tests
+    name: Test 0 - make tests
     runs-on: ubuntu-latest
     needs: [linuxCheck]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: ./.github/scripts/run_install.sh
@@ -237,12 +298,12 @@ jobs:
       run: make tests
 
   linuxTest_1:
-     name: Test run example 1 - regional_Greece_small debug
+     name: Test 1 - regional_Greece_small debug
      runs-on: ubuntu-latest
      needs: [linuxCheck]
 
      steps:
-     - uses: actions/checkout@v2
+     - uses: actions/checkout@v4
 
      - name: Install packages
        run: ./.github/scripts/run_install.sh
@@ -262,12 +323,12 @@ jobs:
        shell: bash
 
   linuxTest_2:
-    name: Test run example 2 - regional_Greece_small
+    name: Test 2 - regional_Greece_small
     runs-on: ubuntu-latest
     needs: [linuxCheck]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: ./.github/scripts/run_install.sh
@@ -286,20 +347,18 @@ jobs:
       shell: bash
 
   linuxTest_3:
-    name: Test run example 3 - regional_sgloberani
+    name: Test 3 - regional_sgloberani
     runs-on: ubuntu-latest
     needs: [linuxCheck]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: ./.github/scripts/run_install.sh
       shell: bash
 
     - name: Run build
-      env:
-        TESTFLAGS:  # no extra flags
       run: ./.github/scripts/run_build.sh
       shell: bash
 
@@ -310,12 +369,12 @@ jobs:
       shell: bash
 
   linuxTest_4:
-    name: Test run example 4 - point_force
+    name: Test 4 - point_force
     runs-on: ubuntu-latest
     needs: [linuxCheck]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: ./.github/scripts/run_install.sh
@@ -323,7 +382,7 @@ jobs:
 
     - name: Run build
       env:
-        TESTFLAGS: "FLAGS_CHECK=-O3 -mcmodel=medium -std=gnu -Wall -Wno-do-subscript -Wno-conversion -Wno-maybe-uninitialized"
+        TESTFLAGS: check-mcmodel-medium
       run: ./.github/scripts/run_build.sh
       shell: bash
 
@@ -335,12 +394,12 @@ jobs:
 
 
   linuxTest_5:
-    name: Test run example 5 - moon_global
+    name: Test 5 - moon_global
     runs-on: ubuntu-latest
     needs: [linuxCheck]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: ./.github/scripts/run_install.sh
@@ -359,12 +418,12 @@ jobs:
       shell: bash
 
   linuxTest_6:
-    name: Test run example 6 - mars_regional
+    name: Test 6 - mars_regional
     runs-on: ubuntu-latest
     needs: [linuxCheck]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: ./.github/scripts/run_install.sh
@@ -379,5 +438,252 @@ jobs:
     - name: Run test
       env:
         TESTDIR: EXAMPLES/mars_regional
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_7:
+    name: Test 7 - global_small
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        TESTFLAGS: --enable-vectorization
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/global_small
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_8:
+    name: Test 8 - global_small w/ FULL_GRAVITY netCDF
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      env:
+        NETCDF: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        TESTFLAGS: --enable-debug
+        NETCDF: true
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/global_small
+        FULL_GRAVITY: true
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_9:
+    name: Test 9 - global_small w/ FULL_GRAVITY PETSc
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      env:
+        PETSC: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        PETSC: true
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/global_small
+        FULL_GRAVITY: true
+        PETSC: true
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_10:
+    name: Test 10 - regional_Greece_small_LDDRK kernel ADIOS2
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      env:
+        ADIOS2: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        ADIOS2: true
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/regional_Greece_small_LDDRK
+        ADIOS2: true
+        RUN_KERNEL: true
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_11:
+    name: Test 11 - regional_Greece_small hdf5 i/o
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      env:
+        HDF5: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        HDF5: true
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/regional_Greece_small
+        HDF5: true
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_12:
+    name: Test 12 - regional_EMC_model netCDF
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      env:
+        EMC_MODEL: true
+        NETCDF: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        NETCDF: true
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/regional_EMC_model
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_13:
+    name: Test 13 - regional_EMC_model kernel netCDF
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      env:
+        EMC_MODEL: true
+        NETCDF: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        NETCDF: true
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test kernel
+      env:
+        TESTDIR: EXAMPLES/regional_EMC_model
+        RUN_KERNEL: true
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_14:
+    name: Test 14 - regional_EMC_model kernel netCDF GPU HIP
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true      # needs submodule content in folder external_libs/ROCm-HIP-CPU/
+
+    - name: Install packages
+      env:
+        EMC_MODEL: true
+        NETCDF: true
+        HIP: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        NETCDF: true
+        HIP: true
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test kernel
+      env:
+        TESTDIR: EXAMPLES/regional_EMC_model
+        RUN_KERNEL: true
+        GPU: true
+      run: ./.github/scripts/run_tests.sh
+      shell: bash
+
+  linuxTest_15:
+    name: Test 15 - regional_Berkeley
+    runs-on: ubuntu-latest
+    needs: [linuxCheck]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        TESTFLAGS: --enable-vectorization
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+    - name: Run test
+      env:
+        TESTDIR: EXAMPLES/regional_Berkeley
       run: ./.github/scripts/run_tests.sh
       shell: bash

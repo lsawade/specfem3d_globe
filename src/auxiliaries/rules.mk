@@ -501,6 +501,7 @@ xcreate_movie_AVS_DX_SHARED_OBJECTS = \
 	$O/reduce.shared.o \
 	$O/rthetaphi_xyz.shared.o \
 	$O/sort_array_coordinates.shared.o \
+	$O/write_VTK_file.shared.o \
 	$(EMPTY_MACRO)
 
 ##
@@ -577,6 +578,7 @@ xwrite_profile_OBJECTS += \
 	$O/lgndr.check.o \
 	$O/meshfem3D_models.check.o \
 	$O/meshfem3D_par.check_module.o \
+	$O/model_1dberkeley.check.o \
 	$O/model_1dref.check.o \
 	$O/model_1066a.check.o \
 	$O/model_ak135.check.o \
@@ -586,11 +588,13 @@ xwrite_profile_OBJECTS += \
 	$O/model_atten3D_QRFSI12.check.o \
 	$O/model_attenuation_gll.check.o \
 	$O/model_attenuation.check.o \
+	$O/model_berkeley.check.o \
 	$O/model_bkmns.check.o \
 	$O/model_case65TAY.check.o \
 	$O/model_ccrem.check.o \
 	$O/model_crust_1_0.check.o \
 	$O/model_crust_2_0.check.o \
+	$O/model_crust_berkeley.check.o \
 	$O/model_crustmaps.check.o \
 	$O/model_eucrust.check.o \
 	$O/model_epcrust.check.o \
@@ -623,6 +627,7 @@ xwrite_profile_SHARED_OBJECTS = \
 	$O/count_points.shared.o \
 	$O/create_name_database.shared.o \
 	$O/define_all_layers.shared.o \
+	$O/euler_angles.shared.o \
 	$O/exit_mpi.shared.o \
 	$O/fft.shared.o \
 	$O/flush_system.shared.o \
@@ -649,6 +654,7 @@ xwrite_profile_SHARED_OBJECTS = \
 	$O/rthetaphi_xyz.shared.o \
 	$O/smooth_weights_vec.shared.o \
 	$O/sort_array_coordinates.shared.o \
+	$O/spl_A3d.cc.o \
 	$O/spline_routines.shared.o \
 	$O/write_VTK_file.shared.o \
 	$O/ylm.shared.o \
@@ -688,6 +694,11 @@ ifeq ($(CEM),yes)
 xwrite_profile_OBJECTS += $O/model_cem.checknetcdf.o
 endif
 
+# conditional CEM model
+ifeq ($(EMC),yes)
+xwrite_profile_OBJECTS += $O/model_EMC.checknetcdf.o
+endif
+
 ##
 ## C++ Parallel STL sorting
 ##
@@ -697,7 +708,7 @@ endif
 
 
 ${E}/xwrite_profile: $(xwrite_profile_OBJECTS) $(xwrite_profile_SHARED_OBJECTS)
-	${MPIFCCOMPILE_CHECK} -o $@ $+ $(LDFLAGS) $(MPILIBS) $(LIBS)
+	${MPIFCCOMPILE_CHECK} -o $@ $+ $(MPILIBS)
 
 ## additional module dependencies
 $O/write_profile.aux.o: $O/meshfem3D_models.check.o

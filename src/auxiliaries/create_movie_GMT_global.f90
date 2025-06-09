@@ -75,7 +75,7 @@
   integer :: ispec
 
   real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: x,y,z,displn
-  real(kind=CUSTOM_REAL) :: xcoord,ycoord,zcoord,rval,thetaval,phival
+  real(kind=CUSTOM_REAL) :: xcoord,ycoord,zcoord,rval,thetaval,phival,latval,longval
   real(kind=CUSTOM_REAL) :: RRval,rhoval
   real(kind=CUSTOM_REAL) :: displx,disply,displz
   real(kind=CUSTOM_REAL) :: normal_x,normal_y,normal_z
@@ -127,10 +127,10 @@
   print *,'reading parameter file'
   print *
 
-! read the parameter file and compute additional parameters
+  ! read the parameter file and compute additional parameters
   call read_compute_parameters()
 
-! get the base pathname for output files
+  ! get the base pathname for output files
   OUTPUT_FILES = OUTPUT_FILES_BASE
 
   if (.not. MOVIE_SURFACE) stop 'movie frames were not saved by the solver'
@@ -304,6 +304,10 @@
     print *
   endif
 
+  ! initializes
+  mute_factor = 0.0_CUSTOM_REAL
+  t0 = 0.0_CUSTOM_REAL
+
   if (MUTE_SOURCE) then
     ! initializes
     LAT_SOURCE = -1000.0
@@ -358,9 +362,9 @@
       close(IIN)
     endif
     ! effective half duration in movie runs
-    hdur = sqrt( cmt_hdur**2 + HDUR_MOVIE**2)
+    hdur = real(sqrt( cmt_hdur**2 + HDUR_MOVIE**2),kind=CUSTOM_REAL)
     ! start time of simulation
-    t0 = - 1.5d0*( cmt_t_shift - hdur )
+    t0 = real(-1.5d0*( cmt_t_shift - hdur ),kind=CUSTOM_REAL)
 
     ! becomes time (s) from hypocenter to reach surface (using average 8 km/s s-wave speed)
     ! note: especially for deep sources, this helps determine a better starttime to mute
@@ -383,15 +387,15 @@
 
     ! converts values into radians
     ! colatitude [0, PI]
-    LAT_SOURCE = (90.0 - LAT_SOURCE)*DEGREES_TO_RADIANS
+    LAT_SOURCE = real((90.d0 - LAT_SOURCE)*DEGREES_TO_RADIANS,kind=CUSTOM_REAL)
 
     ! longitude [-PI, PI]
     if (LON_SOURCE < -180.0 ) LON_SOURCE = LON_SOURCE + 360.0
     if (LON_SOURCE > 180.0 ) LON_SOURCE = LON_SOURCE - 360.0
-    LON_SOURCE = LON_SOURCE * DEGREES_TO_RADIANS
+    LON_SOURCE = real(LON_SOURCE * DEGREES_TO_RADIANS,kind=CUSTOM_REAL)
 
     ! mute radius in rad
-    RADIUS_TO_MUTE = RADIUS_TO_MUTE * DEGREES_TO_RADIANS
+    RADIUS_TO_MUTE = real(RADIUS_TO_MUTE * DEGREES_TO_RADIANS,kind=CUSTOM_REAL)
   endif
 
   print *,'--------'
@@ -468,7 +472,7 @@
 
         ! approximate wavefront travel distance in degrees
         ! (~3.5 km/s wave speed for surface waves)
-        distance = SURFACE_WAVE_VELOCITY * ((it-1)*DT-t0) / (R_PLANET/1000.d0) * RADIANS_TO_DEGREES
+        distance = real(SURFACE_WAVE_VELOCITY * ((it-1)*DT-t0) / (R_PLANET/1000.d0) * RADIANS_TO_DEGREES,kind=CUSTOM_REAL)
 
         print *,'distance approximate: ',distance,'(degrees)'
 
@@ -498,7 +502,7 @@
         print *,'muting radius: ',0.7 * distance,'(degrees)'
 
         ! new radius of mute area (in rad)
-        RADIUS_TO_MUTE = 0.7 * distance * DEGREES_TO_RADIANS
+        RADIUS_TO_MUTE = real(0.7d0 * distance * DEGREES_TO_RADIANS,kind=CUSTOM_REAL)
       else
         ! mute_factor used at the beginning for scaling displacement values
         if (STARTTIME_TO_MUTE > TINYVAL) then
@@ -507,9 +511,9 @@
           ! linear scaling between [0,1]:
           ! from 0 (simulation time equal to zero )
           ! to 1 (simulation time equals starttime_to_mute)
-          mute_factor = 1.0 - ( STARTTIME_TO_MUTE - ((it-1)*DT-t0) ) / (STARTTIME_TO_MUTE+t0)
+          mute_factor = real(1.d0 - ( STARTTIME_TO_MUTE - ((it-1)*DT-t0) ) / (STARTTIME_TO_MUTE+t0),kind=CUSTOM_REAL)
           ! threshold value for mute_factor
-          if (mute_factor < TINYVAL ) mute_factor = TINYVAL
+          if (mute_factor < TINYVAL ) mute_factor = real(TINYVAL,kind=CUSTOM_REAL)
           if (mute_factor > 1.0 ) mute_factor = 1.0
         endif
       endif
@@ -611,17 +615,17 @@
                   ! checks source longitude range
                   if (LON_SOURCE - RADIUS_TO_MUTE < -PI .or. LON_SOURCE + RADIUS_TO_MUTE > PI) then
                     ! source close to 180. longitudes, shifts range to [0, 2PI]
-                    if (phival < 0.0 ) phival = phival + TWO_PI
+                    if (phival < 0.0 ) phival = phival + real(TWO_PI,kind=CUSTOM_REAL)
                     if (LON_SOURCE < 0.0) then
-                      dist_lon = phival - (LON_SOURCE + TWO_PI)
+                      dist_lon = phival - real((LON_SOURCE + TWO_PI),kind=CUSTOM_REAL)
                     else
                       dist_lon = phival - LON_SOURCE
                     endif
                   else
                     ! source well between range to [-PI, PI]
                     ! shifts phival to be like LON_SOURCE between [-PI,PI]
-                    if (phival > PI ) phival = phival - TWO_PI
-                    if (phival < -PI ) phival = phival + TWO_PI
+                    if (phival > PI ) phival = phival - real(TWO_PI,kind=CUSTOM_REAL)
+                    if (phival < -PI ) phival = phival + real(TWO_PI,kind=CUSTOM_REAL)
 
                     dist_lon = phival - LON_SOURCE
                   endif
@@ -634,7 +638,7 @@
                     if ((it-1)*DT-t0 > STARTTIME_TO_MUTE) then
                       ! wavefield will be tapered to mask out noise in source area
                       ! factor from 0 to 1
-                      mute_factor = ( 0.5*(1.0 - cos(distance/RADIUS_TO_MUTE*PI)) )**6
+                      mute_factor = real( ( 0.d5*(1.d0 - cos(distance/RADIUS_TO_MUTE*PI)) )**6,kind=CUSTOM_REAL)
                       ! factor from 0.01 to 1
                       mute_factor = mute_factor * 0.99 + 0.01
                       displn(i,j) = displn(i,j) * mute_factor
@@ -721,11 +725,11 @@
 
                 ! determines North / South pole index for stamping maximum values
                 if (USE_AVERAGED_MAXIMUM .and. AVERAGE_NORMALIZE_VALUES) then
-                  xmesh = xp(ieoff)
-                  ymesh = yp(ieoff)
-                  zmesh = zp(ieoff)
-                  if (zmesh > -SMALL_VAL_ANGLE .and. zmesh <= ZERO) zmesh = -SMALL_VAL_ANGLE
-                  if (zmesh < SMALL_VAL_ANGLE .and. zmesh >= ZERO) zmesh = SMALL_VAL_ANGLE
+                  xmesh = real(xp(ieoff),kind=CUSTOM_REAL)
+                  ymesh = real(yp(ieoff),kind=CUSTOM_REAL)
+                  zmesh = real(zp(ieoff),kind=CUSTOM_REAL)
+                  if (zmesh > -SMALL_VAL_ANGLE .and. zmesh <= ZERO) zmesh = - real(SMALL_VAL_ANGLE,kind=CUSTOM_REAL)
+                  if (zmesh < SMALL_VAL_ANGLE .and. zmesh >= ZERO) zmesh = real(SMALL_VAL_ANGLE,kind=CUSTOM_REAL)
                   thetaval = atan2(sqrt(xmesh*xmesh+ymesh*ymesh),zmesh)
                   ! thetaval between 0 and PI / 2
                   !print *,'thetaval:',thetaval * 180. / PI
@@ -812,7 +816,7 @@
 
         if (max_absol < max_average) then
           ! distance (in degree) of surface waves travelled
-          distance = SURFACE_WAVE_VELOCITY * ((it-1)*DT-t0) / (R_PLANET/1000.d0) * RADIANS_TO_DEGREES
+          distance = real(SURFACE_WAVE_VELOCITY * ((it-1)*DT-t0) / (R_PLANET/1000.d0) * RADIANS_TO_DEGREES,kind=CUSTOM_REAL)
           if (distance > 10.0 .and. distance <= 20.0) then
             ! smooth transition between 10 and 20 degrees
             ! sets positive and negative maximum
@@ -866,15 +870,15 @@
               ! linear scaling between [0,1]:
               ! from 0 (simulation time equal to -t0 )
               ! to 1 (simulation time equals starttime_to_mute)
-              mute_factor = 1.0 - ( STARTTIME_TO_MUTE - ((it-1)*DT-t0) ) / (STARTTIME_TO_MUTE+t0)
+              mute_factor = real(1.d0 - ( STARTTIME_TO_MUTE - ((it-1)*DT-t0) ) / (STARTTIME_TO_MUTE+t0),kind=CUSTOM_REAL)
               ! takes complement and shifts scale to (1,100)
               ! thus, mute factor is 100 at simulation start and 1.0 at starttime_to_mute
               mute_factor = abs(1.0 - mute_factor) * 99.0 + 1.0
               ! positive and negative maximum reach average when wavefield appears
-              val = mute_factor * max_average
+              val = real(mute_factor * max_average,kind=CUSTOM_REAL)
             else
               ! uses a constant factor
-              val = 100.0 * max_average
+              val = real(100.d0 * max_average,kind=CUSTOM_REAL)
             endif
             ! positive and negative maximum
             field_display(istamp1) = + val
@@ -969,15 +973,14 @@
               ycoord = sngl(yp(ieoff))
               zcoord = sngl(zp(ieoff))
 
-              ! location latitude/longitude (with geocentric colatitude theta )
-              call xyz_2_rthetaphi(xcoord,ycoord,zcoord,rval,thetaval,phival)
+              ! location latitude/longitude (with geographic latitude in degrees)
+              call xyz_2_rlatlon_cr(xcoord,ycoord,zcoord,rval,latval,longval,ELLIPTICITY)
 
-              ! converts the geocentric colatitude to a geographic colatitude
-              call geocentric_2_geographic_cr(thetaval,thetaval)
+              ! converts to real
+              lat = latval
+              long = longval
 
-              ! gets geographic latitude and longitude in degrees
-              lat = sngl(90.d0 - thetaval*RADIANS_TO_DEGREES)
-              long = sngl(phival*RADIANS_TO_DEGREES)
+              ! puts lon in range [-180,180]
               if (long > 180.0) long = long-360.0
             endif
 

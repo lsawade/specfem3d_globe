@@ -73,6 +73,13 @@ GRAVITY                         = .true.
 ROTATION                        = .true.
 ATTENUATION                     = .true.
 
+# full gravity calculation by solving Poisson's equation for gravity potential instead of using a Cowling approximation
+# (must have also GRAVITY flag set to .true. to become active)
+FULL_GRAVITY                    = .false.
+# for full gravity calculation, set to 0 == builtin or 1 == PETSc Poisson solver
+# (the PETSc solver option needs the PETSc library installed; code configuration --with-petsc)
+POISSON_SOLVER                  = 0
+
 # record length in minutes
 RECORD_LENGTH_IN_MINUTES        = 35.0d0
 
@@ -290,6 +297,7 @@ OUTPUT_SEISMOS_SAC_ALPHANUM     = .false.
 OUTPUT_SEISMOS_SAC_BINARY       = .false.
 OUTPUT_SEISMOS_ASDF             = .false.
 OUTPUT_SEISMOS_3D_ARRAY         = .false.
+OUTPUT_SEISMOS_HDF5             = .false.
 
 # rotate seismograms to Radial-Transverse-Z or use default North-East-Z reference frame
 ROTATE_SEISMOGRAMS_RT           = .false.
@@ -422,4 +430,8 @@ ADIOS_FOR_AVS_DX                = .true.
 ADIOS_FOR_KERNELS               = .true.
 ADIOS_FOR_MODELS                = .true.
 ADIOS_FOR_UNDO_ATTENUATION      = .true.
+
+# HDF5 Database I/O
+# (note the flags for HDF5 and ADIOS are mutually exclusive, only one can be used)
+HDF5_ENABLED                    = .false.
 

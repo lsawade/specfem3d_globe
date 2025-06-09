@@ -29,11 +29,10 @@
 !---- locate_receivers finds the correct position of the receivers
 !----
 
-  subroutine locate_receivers(yr,jda,ho,mi,sec, &
-                              theta_source,phi_source)
+  subroutine locate_receivers(yr,jda,ho,mi,sec)
 
   use constants_solver, only: &
-    ELLIPTICITY_VAL,NCHUNKS_VAL,NPROCTOT_VAL,NDIM, &
+    ELLIPTICITY_VAL,NCHUNKS_VAL,NDIM, &
     MAX_LENGTH_STATION_NAME,MAX_LENGTH_NETWORK_NAME, &
     DISPLAY_DETAILS_STATIONS,nrec_SUBSET_MAX, &
     THRESHOLD_EXCLUDE_STATION, &
@@ -47,57 +46,49 @@
     nrec,islice_selected_rec,ispec_selected_rec, &
     xi_receiver,eta_receiver,gamma_receiver,station_name,network_name, &
     stlat,stlon,stele,stbur,nu_rec,receiver_final_distance_max, &
-    rspl,ellipicity_spline,ellipicity_spline2,nspl,ibathy_topo, &
-    TOPOGRAPHY,RECEIVERS_CAN_BE_BURIED
+    RECEIVERS_CAN_BE_BURIED, &
+    ibathy_topo,TOPOGRAPHY
+
+  use specfem_par, only: rspl_ellip,ellipicity_spline,ellipicity_spline2,nspl_ellip
+
+  use specfem_par, only: source_theta_ref,source_phi_ref
 
   implicit none
 
   integer,intent(in) :: yr,jda,ho,mi
   double precision,intent(in) :: sec
-  double precision,intent(in) :: theta_source,phi_source
 
   ! local parameters
-  integer :: iprocloop
-  integer :: irec,i
-  integer :: ier
+  integer :: irec,i,ier
 
-  integer, dimension(nrec) :: islice_selected_found,ispec_selected_found
-  double precision, dimension(nrec) :: xi_receiver_found,eta_receiver_found,gamma_receiver_found
-  double precision, dimension(3,3,nrec) :: nu_found
+  integer, allocatable, dimension(:) :: islice_selected_found,ispec_selected_found
+  double precision, allocatable, dimension(:) :: xi_receiver_found,eta_receiver_found,gamma_receiver_found
+  double precision, allocatable, dimension(:) :: stlat_found,stlon_found,stele_found,stbur_found,epidist_found
+  double precision, allocatable, dimension(:,:,:) :: nu_found
   integer :: nrec_found
 
   ! point locations
   double precision, allocatable, dimension(:,:) :: xyz_target
   double precision, allocatable, dimension(:,:) :: xyz_found
-
   double precision, allocatable, dimension(:,:) :: xyz_found_subset
-  double precision, allocatable, dimension(:,:,:) :: xyz_found_all
-
-  double precision, dimension(nrec) :: stlat_found,stlon_found,stele_found,stbur_found,epidist_found
-
   double precision, allocatable, dimension(:) :: epidist
 
   integer :: nrec_SUBSET_current_size
   integer :: irec_in_this_subset,irec_already_done
 
   integer, allocatable, dimension(:) :: ispec_selected_subset
-  integer, allocatable, dimension(:,:) :: ispec_selected_all
 
   double precision, dimension(:), allocatable :: final_distance
   double precision, allocatable, dimension(:) :: final_distance_subset
-  double precision, dimension(:,:), allocatable :: final_distance_all
-
   double precision, allocatable, dimension(:) :: xi_subset,eta_subset,gamma_subset
-  double precision, allocatable, dimension(:,:) :: xi_all,eta_all,gamma_all
 
   double precision :: lat,lon,radius,depth,r_target
 
   double precision :: theta,phi
-  double precision :: sint,cost,sinp,cosp
+  double precision :: sint,cost,sinp,cosp,dist
 
-  double precision :: ell
   double precision :: elevation
-  double precision :: r0,p20
+  double precision :: r0
 
   double precision :: distmin_not_squared
   double precision :: x_target,y_target,z_target
@@ -142,10 +133,21 @@
 
   ! allocate memory for arrays using number of stations
   allocate(epidist(nrec), &
+           islice_selected_found(nrec),ispec_selected_found(nrec), &
+           xi_receiver_found(nrec),eta_receiver_found(nrec),gamma_receiver_found(nrec), &
+           stlat_found(nrec),stlon_found(nrec),stele_found(nrec),stbur_found(nrec),epidist_found(nrec), &
+           nu_found(3,3,nrec), &
            xyz_target(NDIM,nrec), &
            xyz_found(NDIM,nrec), &
            final_distance(nrec),stat=ier)
   if (ier /= 0) call exit_MPI(myrank,'Error allocating temporary receiver arrays')
+  epidist(:) = HUGEVAL
+  islice_selected_found(:) = 0; ispec_selected_found(:) = 0
+  xi_receiver_found(:) = 0.d0; eta_receiver_found(:) = 0.d0; gamma_receiver_found(:) = 0.d0
+  nu_found(:,:,:) = 0.d0
+  xyz_target(:,:) = 0.d0
+  xyz_found(:,:) = 0.d0
+  final_distance(:) = HUGEVAL
 
   ! read that STATIONS file on the main
   call read_receiver_locations()
@@ -162,9 +164,12 @@
     if (lon > 360.d0 ) lon = lon - 360.d0
 
     ! converts geographic latitude stlat (degrees) to geocentric colatitude theta (radians)
-    call lat_2_geocentric_colat_dble(lat,theta)
+    call lat_2_geocentric_colat_dble(lat,theta,ELLIPTICITY_VAL)
 
+    ! longitude
     phi = lon*DEGREES_TO_RADIANS
+
+    ! theta to [0,PI] and phi to [0,2PI]
     call reduce(theta,phi)
 
     sint = sin(theta)
@@ -172,21 +177,25 @@
     sinp = sin(phi)
     cosp = cos(phi)
 
-    ! compute epicentral distance
-    epidist(irec) = acos(cost*cos(theta_source) + &
-                         sint*sin(theta_source)*cos(phi-phi_source))*RADIANS_TO_DEGREES
+    ! compute epicentral distance to reference source position (in radians)
+    call get_greatcircle_distance(theta,phi,source_theta_ref,source_phi_ref,dist)
+
+    epidist(irec) = dist * RADIANS_TO_DEGREES
 
     ! record three components for each station
     do iorientation = 1,3
-      !     North
+      ! initializes azimuth/dip
+      stazi = 0.d0
+      stdip = 0.d0
+      ! North
       if (iorientation == 1) then
         stazi = 0.d0
         stdip = 0.d0
-      !     East
+      ! East
       else if (iorientation == 2) then
         stazi = 90.d0
         stdip = 0.d0
-      !     Vertical
+      ! Vertical
       else if (iorientation == 3) then
         stazi = 0.d0
         stdip = - 90.d0
@@ -194,20 +203,19 @@
         call exit_MPI(myrank,'incorrect orientation')
       endif
 
-      !     get the orientation of the seismometer
+      ! get the orientation of the seismometer
       thetan = (90.0d0+stdip)*DEGREES_TO_RADIANS
       phin = stazi*DEGREES_TO_RADIANS
 
       ! we use the same convention as in Harvard normal modes for the orientation
-
-      !     vertical component
+      ! vertical component
       n(1) = cos(thetan)
-      !     N-S component
+      ! N-S component
       n(2) = - sin(thetan)*cos(phin)
-      !     E-W component
+      ! E-W component
       n(3) = sin(thetan)*sin(phin)
 
-      !     get the Cartesian components of n in the model: nu
+      ! get the Cartesian components of n in the model: nu
       nu_rec(iorientation,1,irec) = n(1)*sint*cosp + n(2)*cost*cosp - n(3)*sinp
       nu_rec(iorientation,2,irec) = n(1)*sint*sinp + n(2)*cost*sinp + n(3)*cosp
       nu_rec(iorientation,3,irec) = n(1)*cost - n(2)*sint
@@ -227,19 +235,15 @@
 
     ! ellipticity
     if (ELLIPTICITY_VAL) then
-      ! this is the Legendre polynomial of degree two, P2(cos(theta)),
-      ! see the discussion above eq (14.4) in Dahlen and Tromp (1998)
-      p20 = 0.5d0*(3.0d0*cost*cost-1.0d0)
-
-      ! get ellipticity using spline evaluation
-      call spline_evaluation(rspl,ellipicity_spline,ellipicity_spline2,nspl,r0,ell)
-
-      ! this is eq (14.4) in Dahlen and Tromp (1998)
-      r0 = r0*(1.0d0-(2.0d0/3.0d0)*ell*p20)
+      ! adds ellipticity factor to radius
+      call add_ellipticity_rtheta(r0,theta,nspl_ellip,rspl_ellip,ellipicity_spline,ellipicity_spline2)
     endif
 
     ! subtract station burial depth (in meters)
-    r_target = r0 - depth/R_PLANET
+    r0 = r0 - depth/R_PLANET
+
+    ! receiver position
+    r_target = r0
 
     ! compute the Cartesian position of the receiver
     x_target = r_target*sint*cosp
@@ -321,8 +325,8 @@
 
   endif
 
-500 format(a8,1x,a3,6x,f9.4,1x,f9.4,1x,f6.1,1x,f6.1,1x,f6.1,1x,f6.1,1x,f12.4,1x,i7,1x,i4.4,1x,i3.3,1x,i2.2,1x,i2.2,1x,f6.3)
-600 format(a8,1x,a3,6x,f9.4,1x,f9.4,1x,i6,1x,f6.1,f6.1,1x,f6.1,1x,f12.4,1x,i7,1x,i4.4,1x,i3.3,1x,i2.2,1x,i2.2,1x,f6.3)
+500 format(a8,1x,a3,6x,f9.4,1x,f9.4,1x,f6.1,1x,f9.1,1x,f6.1,1x,f6.1,1x,f12.4,1x,i7,1x,i4.4,1x,i3.3,1x,i2.2,1x,i2.2,1x,f6.3)
+600 format(a8,1x,a3,6x,f9.4,1x,f9.4,1x,i6,1x,f9.1,f6.1,1x,f6.1,1x,f12.4,1x,i7,1x,i4.4,1x,i3.3,1x,i2.2,1x,i2.2,1x,f6.3)
 
   ! make sure we clean the array before the gather
   ispec_selected_rec(:) = 0
@@ -351,31 +355,9 @@
              final_distance_subset(nrec_SUBSET_current_size),stat=ier)
     if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary receiver arrays')
 
-    ! gather arrays
-    if (myrank == 0) then
-      ! only main process needs full arrays allocated
-      allocate(ispec_selected_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               xi_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               eta_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               gamma_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               xyz_found_all(NDIM,nrec_SUBSET_current_size,0:NPROCTOT_VAL-1), &
-               final_distance_all(nrec_SUBSET_current_size,0:NPROCTOT_VAL-1),stat=ier)
-      if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary gather receiver arrays')
-    else
-      ! dummy arrays
-      allocate(ispec_selected_all(1,1), &
-               xi_all(1,1), &
-               eta_all(1,1), &
-               gamma_all(1,1), &
-               xyz_found_all(1,1,1), &
-               final_distance_all(1,1),stat=ier)
-      if (ier /= 0 ) call exit_MPI(myrank,'Error allocating temporary dummy receiver arrays')
-    endif
-
     ! initializes search results
     ispec_selected_subset(:) = 0
     final_distance_subset(:) = HUGEVAL
-    final_distance_all(:,:) = HUGEVAL
 
     ! find point locations
     ! loop over the stations within this subset
@@ -418,72 +400,20 @@
     enddo ! end of loop on all stations within current subset
 
     ! for MPI version, gather information from all the nodes
-    ispec_selected_all(:,:) = -1
-
-    call gather_all_i(ispec_selected_subset,nrec_SUBSET_current_size, &
-                      ispec_selected_all,nrec_SUBSET_current_size,NPROCTOT_VAL)
-
-    ! this is executed by main process only
-    if (myrank == 0) then
-      ! check that the gather operation went well
-      if (any(ispec_selected_all(:,:) == -1)) then
-        print *,'Error ispec all: procs = ',NPROCTOT_VAL,'receivers subset size = ',nrec_SUBSET_current_size
-        print *,ispec_selected_all(:,:)
-        call exit_MPI(myrank,'gather operation failed for receivers')
-      endif
-    endif
-
-    call gather_all_dp(xi_subset,nrec_SUBSET_current_size, &
-                       xi_all,nrec_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(eta_subset,nrec_SUBSET_current_size, &
-                       eta_all,nrec_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(gamma_subset,nrec_SUBSET_current_size, &
-                       gamma_all,nrec_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(final_distance_subset,nrec_SUBSET_current_size, &
-                       final_distance_all,nrec_SUBSET_current_size,NPROCTOT_VAL)
-    call gather_all_dp(xyz_found_subset,NDIM*nrec_SUBSET_current_size, &
-                       xyz_found_all,NDIM*nrec_SUBSET_current_size,NPROCTOT_VAL)
-
-    ! this is executed by main process only
-    if (myrank == 0) then
-
-      ! selects best location in all slices
-      ! MPI loop on all the results to determine the best slice
-      do irec_in_this_subset = 1,nrec_SUBSET_current_size
-
-        ! mapping from station number in current subset to real station number in all the subsets
-        irec = irec_in_this_subset + irec_already_done
-
-        ! loop on all the results to determine the best slice
-        distmin_not_squared = HUGEVAL
-        do iprocloop = 0,NPROCTOT_VAL-1
-          if (final_distance_all(irec_in_this_subset,iprocloop) < distmin_not_squared) then
-            ! stores this slice's info
-            distmin_not_squared = final_distance_all(irec_in_this_subset,iprocloop)
-            islice_selected_rec(irec) = iprocloop
-            ispec_selected_rec(irec) = ispec_selected_all(irec_in_this_subset,iprocloop)
-
-            xi_receiver(irec) = xi_all(irec_in_this_subset,iprocloop)
-            eta_receiver(irec) = eta_all(irec_in_this_subset,iprocloop)
-            gamma_receiver(irec) = gamma_all(irec_in_this_subset,iprocloop)
-
-            xyz_found(:,irec) = xyz_found_all(:,irec_in_this_subset,iprocloop)
-          endif
-        enddo
-        final_distance(irec) = distmin_not_squared
-        if (final_distance(irec) == HUGEVAL) call exit_MPI(myrank,'Error locating receiver')
-
-      enddo
-    endif ! end of section executed by main process only
+    call locate_MPI_slice(nrec_SUBSET_current_size,irec_already_done, &
+                          ispec_selected_subset, &
+                          xyz_found_subset, &
+                          xi_subset,eta_subset,gamma_subset, &
+                          final_distance_subset, &
+                          nrec,ispec_selected_rec,islice_selected_rec, &
+                          xyz_found, &
+                          xi_receiver,eta_receiver,gamma_receiver, &
+                          final_distance)
 
     deallocate(ispec_selected_subset)
-    deallocate(ispec_selected_all)
     deallocate(xi_subset,eta_subset,gamma_subset)
-    deallocate(xi_all,eta_all,gamma_all)
-    deallocate(final_distance_all)
     deallocate(final_distance_subset)
     deallocate(xyz_found_subset)
-    deallocate(xyz_found_all)
 
   enddo ! end of loop over all station subsets
 
@@ -515,13 +445,18 @@
         write(IMAIN,*) '      original longitude: ',sngl(stlon(irec))
         write(IMAIN,*) '     epicentral distance: ',sngl(epidist(irec))
         write(IMAIN,*) '  closest estimate found: ',sngl(final_distance(irec)),' km away'
-        write(IMAIN,*) '   in slice ',islice_selected_rec(irec),' in element ',ispec_selected_rec(irec)
-        write(IMAIN,*) '   at xi,eta,gamma coordinates = ',xi_receiver(irec),eta_receiver(irec),gamma_receiver(irec)
+        write(IMAIN,*) '  in slice ',islice_selected_rec(irec),' in element ',ispec_selected_rec(irec)
+        write(IMAIN,*) '  at xi,eta,gamma coordinates = ', &
+                       sngl(xi_receiver(irec)),sngl(eta_receiver(irec)),sngl(gamma_receiver(irec))
+        write(IMAIN,*) '  at (x,y,z)                  = ', &
+                       sngl(xyz_found(1,irec)),sngl(xyz_found(2,irec)),sngl(xyz_found(3,irec))
 
         ! converts geocentric coordinates x/y/z to geographic radius/latitude/longitude (in degrees)
-        call xyz_2_rlatlon_dble(xyz_found(1,irec),xyz_found(2,irec),xyz_found(3,irec),radius,lat,lon)
+        call xyz_2_rlatlon_dble(xyz_found(1,irec),xyz_found(2,irec),xyz_found(3,irec),radius,lat,lon,ELLIPTICITY_VAL)
 
-        write(IMAIN,*) '   at lat/lon = ',sngl(lat),sngl(lon)
+        ! output same longitude range ([0,360] by default) as input range from stations file stlon(..)
+        if (stlon(irec) < 0.d0) lon = lon - 360.d0
+        write(IMAIN,*) '  at lat/lon                  = ',sngl(lat),sngl(lon)
       endif
 
       ! add warning if estimate is poor
@@ -627,7 +562,7 @@
       if (ier /= 0 ) call exit_MPI(myrank,'Error opening file STATIONS_FILTERED')
       ! loop on all the stations to read station information
       do irec = 1,nrec
-        write(IOUT,'(a8,1x,a3,6x,f8.4,1x,f9.4,1x,f6.1,1x,f6.1)') trim(station_name(irec)),trim(network_name(irec)), &
+        write(IOUT,'(a8,1x,a3,6x,f8.4,1x,f9.4,1x,f9.1,1x,f9.1)') trim(station_name(irec)),trim(network_name(irec)), &
           sngl(stlat(irec)),sngl(stlon(irec)),sngl(stele(irec)),sngl(stbur(irec))
       enddo
       ! close receiver file
@@ -655,8 +590,12 @@
   call bcast_all_dp(stbur,nrec)
   call bcast_all_dp(nu_rec,nrec*3*3)
 
-  ! deallocate arrays
+  ! deallocate temporary arrays
   deallocate(epidist)
+  deallocate(islice_selected_found,ispec_selected_found)
+  deallocate(xi_receiver_found,eta_receiver_found,gamma_receiver_found)
+  deallocate(stlat_found,stlon_found,stele_found,stbur_found,epidist_found)
+  deallocate(nu_found)
   deallocate(xyz_found)
   deallocate(final_distance)
 
@@ -749,11 +688,10 @@
     ! close receiver file
     close(IIN)
 
-! BS BS begin
-! In case that the same station and network name appear twice (or more times) in the STATIONS
-! file, problems occur, as two (or more) seismograms are written (with mode
-! "append") to a file with same name. The philosophy here is to accept multiple
-! appearances and to just add a count to the station name in this case.
+    ! In case that the same station and network name appear twice (or more times) in the STATIONS
+    ! file, problems occur, as two (or more) seismograms are written (with mode
+    ! "append") to a file with same name. The philosophy here is to accept multiple
+    ! appearances and to just add a count to the station name in this case.
     allocate(station_duplet(nrec),stat=ier)
     if (ier /= 0 ) call exit_MPI(myrank,'Error allocating station_duplet array')
 
@@ -774,7 +712,6 @@
       enddo
     enddo
     deallocate(station_duplet)
-! BS BS end
 
     ! if receivers can not be buried, sets depth to zero
     if (.not. RECEIVERS_CAN_BE_BURIED ) stbur(:) = 0.d0

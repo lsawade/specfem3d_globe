@@ -272,7 +272,7 @@
 !
   subroutine auto_attenuation_periods(WIDTH, NEX_MAX, MIN_ATTENUATION_PERIOD, MAX_ATTENUATION_PERIOD)
 
-  use constants, only: N_SLS
+  use constants, only: N_SLS,USE_OLD_VERSION_FORMAT
 
   use shared_parameters, only: T_min_period
 
@@ -317,6 +317,13 @@
 
   ! maximum period
   MAX_ATTENUATION_PERIOD = tmp
+
+  ! older version uses integer values for min/max attenuation period
+  if (USE_OLD_VERSION_FORMAT) then
+    ! convert to integer (and back to double)
+    MIN_ATTENUATION_PERIOD = dble(int(MIN_ATTENUATION_PERIOD))
+    MAX_ATTENUATION_PERIOD = dble(int(MAX_ATTENUATION_PERIOD))
+  endif
 
   ! check
   if (MIN_ATTENUATION_PERIOD <= 0.d0) then

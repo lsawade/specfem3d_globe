@@ -34,6 +34,8 @@
   use constants
   use meshfem_par, only: ADIOS_FOR_ARRAYS_SOLVER,nspec
 
+  use shared_parameters, only: HDF5_ENABLED
+
   implicit none
 
   integer,intent(in) :: iregion
@@ -146,6 +148,9 @@
         call get_absorb_adios(iregion, &
                               nimin, nimax, njmin, njmax, nkmin_xi, nkmin_eta, &
                               NSPEC2DMAX_XMIN_XMAX,NSPEC2DMAX_YMIN_YMAX)
+      else if (HDF5_ENABLED) then
+        ! no HDF5 support yet
+        call exit_MPI(myrank,'HDF5 not supported yet for old format Stacey boundary condition output')
       else
         open(unit=IOUT,file=prname(1:len_trim(prname))//'stacey.old_format.bin', &
               status='unknown',form='unformatted',action='write',iostat=ier)
@@ -196,8 +201,8 @@
     abs_boundary_ijk,abs_boundary_normal,abs_boundary_jacobian2Dw
 
   ! input parameters
-  use shared_parameters, only: REGIONAL_MESH_CUTOFF,ADIOS_FOR_ARRAYS_SOLVER
-
+  use shared_parameters, only: REGIONAL_MESH_CUTOFF,ADIOS_FOR_ARRAYS_SOLVER, &
+                               HDF5_ENABLED
   ! debug
   use meshfem_par, only: nspec,nglob,ibool,xstore_glob,ystore_glob,zstore_glob
 
@@ -246,6 +251,9 @@
        wgllwgll_yz(j,k) = wygll(j)*wzgll(k)
     enddo
   enddo
+
+  ! checks if element arrays available
+  if (.not. allocated(nimin)) call exit_MPI(myrank,'Error Stacey element arrays nimin,.. not allocated')
 
   ! initializes bottom boundary flag
   add_bottom_boundary = .false.
@@ -354,7 +362,7 @@
           abs_boundary_normal(1,igll,iface) = nx
           abs_boundary_normal(2,igll,iface) = ny
           abs_boundary_normal(3,igll,iface) = nz
-          abs_boundary_jacobian2Dw(igll,iface) = weight
+          abs_boundary_jacobian2Dw(igll,iface) = real(weight,kind=CUSTOM_REAL)
         enddo
       enddo
       abs_boundary_npoin(iface) = igll
@@ -390,7 +398,7 @@
           abs_boundary_normal(1,igll,iface) = nx
           abs_boundary_normal(2,igll,iface) = ny
           abs_boundary_normal(3,igll,iface) = nz
-          abs_boundary_jacobian2Dw(igll,iface) = weight
+          abs_boundary_jacobian2Dw(igll,iface) = real(weight,kind=CUSTOM_REAL)
         enddo
       enddo
       abs_boundary_npoin(iface) = igll
@@ -424,7 +432,7 @@
         abs_boundary_normal(1,igll,iface) = nx
         abs_boundary_normal(2,igll,iface) = ny
         abs_boundary_normal(3,igll,iface) = nz
-        abs_boundary_jacobian2Dw(igll,iface) = weight
+        abs_boundary_jacobian2Dw(igll,iface) = real(weight,kind=CUSTOM_REAL)
       enddo
     enddo
     abs_boundary_npoin(iface) = igll
@@ -457,7 +465,7 @@
         abs_boundary_normal(1,igll,iface) = nx
         abs_boundary_normal(2,igll,iface) = ny
         abs_boundary_normal(3,igll,iface) = nz
-        abs_boundary_jacobian2Dw(igll,iface) = weight
+        abs_boundary_jacobian2Dw(igll,iface) = real(weight,kind=CUSTOM_REAL)
       enddo
     enddo
     abs_boundary_npoin(iface) = igll
@@ -489,7 +497,7 @@
           abs_boundary_normal(1,igll,iface) = nx
           abs_boundary_normal(2,igll,iface) = ny
           abs_boundary_normal(3,igll,iface) = nz
-          abs_boundary_jacobian2Dw(igll,iface) = weight
+          abs_boundary_jacobian2Dw(igll,iface) = real(weight,kind=CUSTOM_REAL)
         enddo
       enddo
       abs_boundary_npoin(iface) = igll
@@ -508,6 +516,10 @@
     call get_absorb_stacey_boundary_adios(iregion, num_abs_boundary_faces, &
                                           abs_boundary_ispec,abs_boundary_npoin, &
                                           abs_boundary_ijk,abs_boundary_normal,abs_boundary_jacobian2Dw)
+  else if (HDF5_ENABLED) then
+    call get_absorb_stacey_boundary_hdf5(iregion, num_abs_boundary_faces, &
+                                         abs_boundary_ispec,abs_boundary_npoin, &
+                                         abs_boundary_ijk,abs_boundary_normal,abs_boundary_jacobian2Dw)
   else
     ! binary format
     open(unit=IOUT,file=prname(1:len_trim(prname))//'stacey.bin', &

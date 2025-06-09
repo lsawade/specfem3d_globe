@@ -90,18 +90,27 @@
   double precision :: r,phi,theta
   logical, parameter :: DEBUG = .false.
 
+  ! initializes
+  Usolidnorm = 0._CUSTOM_REAL
+  Usolidnorm_all = 0._CUSTOM_REAL
+  Ufluidnorm = 0._CUSTOM_REAL
+  Ufluidnorm_all = 0._CUSTOM_REAL
+
   ! slow node detection
   I_am_running_on_a_slow_node = .false.
 
   ! compute maximum of norm of displacement in each slice
   if (.not. GPU_MODE) then
     ! on CPU
-    norm_cm = maxval(sqrt(displ_crust_mantle(1,:)**2 + displ_crust_mantle(2,:)**2 + displ_crust_mantle(3,:)**2))
+    norm_cm = maxval( (displ_crust_mantle(1,:)**2 + displ_crust_mantle(2,:)**2 + displ_crust_mantle(3,:)**2) )
+    norm_cm = sqrt(norm_cm)
     if (NSPEC_INNER_CORE > 0) then
-      norm_ic = maxval(sqrt(displ_inner_core(1,:)**2 + displ_inner_core(2,:)**2 + displ_inner_core(3,:)**2))
+      norm_ic = maxval( (displ_inner_core(1,:)**2 + displ_inner_core(2,:)**2 + displ_inner_core(3,:)**2) )
+      norm_ic = sqrt(norm_ic)
     else
       norm_ic = 0._CUSTOM_REAL
     endif
+
     Usolidnorm = max(norm_cm,norm_ic)
 
     if (NSPEC_OUTER_CORE > 0) then
@@ -150,7 +159,7 @@
   ! negative values can occur with some compilers when the unstable value is greater
   ! than the greatest possible floating-point number of the machine
   ! this trick checks for NaN (Not a Number), which is not even equal to itself
-  if (Usolidnorm > STABILITY_THRESHOLD .or. Usolidnorm < 0 .or. Usolidnorm /= Usolidnorm) then
+  if (Usolidnorm > STABILITY_THRESHOLD .or. Usolidnorm < 0._CUSTOM_REAL .or. Usolidnorm /= Usolidnorm) then
     print *,'Error: simulation became unstable in solid, process',myrank
     if (GPU_MODE) then
       print *,'     norm solid = ',Usolidnorm
@@ -160,7 +169,7 @@
     print *,'Please check time step setting in get_timestep_and_layers.f90, exiting...'
     call exit_MPI(myrank,'forward simulation became unstable in solid and blew up')
   endif
-  if (Ufluidnorm > STABILITY_THRESHOLD .or. Ufluidnorm < 0 .or. Ufluidnorm /= Ufluidnorm) then
+  if (Ufluidnorm > STABILITY_THRESHOLD .or. Ufluidnorm < 0._CUSTOM_REAL .or. Ufluidnorm /= Ufluidnorm) then
     print *,'Error: simulation became unstable in fluid, process',myrank
     print *,'        norm fluid = ',Ufluidnorm
     print *,'Please check time step setting in get_timestep_and_layers.f90, exiting...'
@@ -169,14 +178,22 @@
 
   ! compute the maximum of the maxima for all the slices using an MPI reduction
   call max_all_cr(Usolidnorm,Usolidnorm_all)
-  call max_all_cr(Ufluidnorm,Ufluidnorm_all)
+  if (NSPEC_OUTER_CORE > 0) call max_all_cr(Ufluidnorm,Ufluidnorm_all)
 
   if (SIMULATION_TYPE == 3) then
+    ! initializes
+    b_Usolidnorm = 0._CUSTOM_REAL
+    b_Usolidnorm_all = 0._CUSTOM_REAL
+    b_Ufluidnorm = 0._CUSTOM_REAL
+    b_Ufluidnorm_all = 0._CUSTOM_REAL
+
     if (.not. GPU_MODE) then
       ! on CPU
-      norm_cm = maxval(sqrt(b_displ_crust_mantle(1,:)**2 + b_displ_crust_mantle(2,:)**2 + b_displ_crust_mantle(3,:)**2))
+      norm_cm = maxval( (b_displ_crust_mantle(1,:)**2 + b_displ_crust_mantle(2,:)**2 + b_displ_crust_mantle(3,:)**2) )
+      norm_cm = sqrt(norm_cm)
       if (NSPEC_INNER_CORE > 0) then
-        norm_ic = maxval(sqrt(b_displ_inner_core(1,:)**2 + b_displ_inner_core(2,:)**2 + b_displ_inner_core(3,:)**2))
+        norm_ic = maxval( (b_displ_inner_core(1,:)**2 + b_displ_inner_core(2,:)**2 + b_displ_inner_core(3,:)**2) )
+        norm_ic = sqrt(norm_ic)
       else
         norm_ic = 0._CUSTOM_REAL
       endif
@@ -192,26 +209,30 @@
       call check_norm_elastic_acoustic_from_device(b_Usolidnorm,b_Ufluidnorm,Mesh_pointer,3)
     endif
 
-! this trick checks for NaN (Not a Number), which is not even equal to itself
-    if (b_Usolidnorm > STABILITY_THRESHOLD .or. b_Usolidnorm < 0 .or. b_Usolidnorm /= b_Usolidnorm) &
+    ! this trick checks for NaN (Not a Number), which is not even equal to itself
+    if (b_Usolidnorm > STABILITY_THRESHOLD .or. b_Usolidnorm < 0._CUSTOM_REAL .or. b_Usolidnorm /= b_Usolidnorm) &
       call exit_MPI(myrank,'backward simulation became unstable and blew up  in the solid')
-    if (b_Ufluidnorm > STABILITY_THRESHOLD .or. b_Ufluidnorm < 0 .or. b_Ufluidnorm /= b_Ufluidnorm) &
+    if (b_Ufluidnorm > STABILITY_THRESHOLD .or. b_Ufluidnorm < 0._CUSTOM_REAL .or. b_Ufluidnorm /= b_Ufluidnorm) &
       call exit_MPI(myrank,'backward simulation became unstable and blew up  in the fluid')
 
     ! compute the maximum of the maxima for all the slices using an MPI reduction
     call max_all_cr(b_Usolidnorm,b_Usolidnorm_all)
-    call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
+    if (NSPEC_OUTER_CORE > 0) call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
   endif
 
   if (COMPUTE_AND_STORE_STRAIN) then
+    ! initializes
+    Strain_norm = 0._CUSTOM_REAL
+    Strain2_norm = 0._CUSTOM_REAL
+
     if (.not. GPU_MODE) then
       ! on CPU
       if (NSPEC_CRUST_MANTLE_STRAIN_ONLY > 0) Strain_norm = maxval(abs(eps_trace_over_3_crust_mantle))
-      Strain2_norm= max( maxval(abs(epsilondev_xx_crust_mantle)), &
-                         maxval(abs(epsilondev_yy_crust_mantle)), &
-                         maxval(abs(epsilondev_xy_crust_mantle)), &
-                         maxval(abs(epsilondev_xz_crust_mantle)), &
-                         maxval(abs(epsilondev_yz_crust_mantle)) )
+      Strain2_norm = max( maxval(abs(epsilondev_xx_crust_mantle)), &
+                          maxval(abs(epsilondev_yy_crust_mantle)), &
+                          maxval(abs(epsilondev_xy_crust_mantle)), &
+                          maxval(abs(epsilondev_xz_crust_mantle)), &
+                          maxval(abs(epsilondev_yz_crust_mantle)) )
     else
       ! on GPU
       call check_norm_strain_from_device(Strain_norm,Strain2_norm,Mesh_pointer)
@@ -221,8 +242,8 @@
     call max_all_cr(Strain2_norm,Strain2_norm_all)
   endif
 
+  ! user output
   if (myrank == 0) then
-
     ! this is in the case of restart files, when a given run consists of several partial runs
     ! information about the current run only
     SHOW_SEPARATE_RUN_INFORMATION = ( NUMBER_OF_RUNS > 1 .and. NUMBER_OF_THIS_RUN < NUMBER_OF_RUNS )
@@ -265,17 +286,20 @@
     Usolidnorm_all = Usolidnorm_all * sngl(scale_displ)
     if (SIMULATION_TYPE == 1) then
       write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for forward prop. (m) = ',Usolidnorm_all
-      write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
+      if (NSPEC_OUTER_CORE > 0) &
+        write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
     else
       write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for adjoint prop. (m)= ',Usolidnorm_all
-      write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
+      if (NSPEC_OUTER_CORE > 0) &
+        write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
     endif
 
     if (SIMULATION_TYPE == 3) then
       b_Usolidnorm_all = b_Usolidnorm_all * sngl(scale_displ)
       if (.not. UNDO_ATTENUATION) then
         write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for back prop.(m) = ',b_Usolidnorm_all
-        write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
+        if (NSPEC_OUTER_CORE > 0) &
+          write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
       endif
     endif
 
@@ -286,15 +310,17 @@
       write(IMAIN,*) 'Max of strain, epsilondev_crust_mantle  =',Strain2_norm_all
     endif
 
-    write(IMAIN,*) 'Elapsed time in seconds = ',tCPU
+    write(IMAIN,*) 'Elapsed time in seconds = ',sngl(tCPU)
     write(IMAIN,"(' Elapsed time in hh:mm:ss = ',i6,' h ',i2.2,' m ',i2.2,' s')") ihours,iminutes,iseconds
-    write(IMAIN,*) 'Mean elapsed time per time step in seconds = ',tCPU/dble(it)
+    write(IMAIN,*) 'Mean elapsed time per time step in seconds = ',sngl(tCPU/dble(it))
 
-! do not check before MIN_TIME_STEPS_FOR_SLOW_NODES time steps
-! because the time step estimate (which is an average) may then be unreliable
-    if (CHECK_FOR_SLOW_NODES .and. NUMBER_OF_SIMULTANEOUS_RUNS > 1 .and. it >= MIN_TIME_STEPS_FOR_SLOW_NODES .and. &
+    ! do not check before MIN_TIME_STEPS_FOR_SLOW_NODES time steps
+    ! because the time step estimate (which is an average) may then be unreliable
+    if (CHECK_FOR_SLOW_NODES) then
+      if (NUMBER_OF_SIMULTANEOUS_RUNS > 1 .and. it >= MIN_TIME_STEPS_FOR_SLOW_NODES .and. &
           tCPU/dble(it) > TOLERANCE_FACTOR_FOR_SLOW_NODES * REFERENCE_TIME_PER_TIME_STEP_ON_NORMAL_NODES) &
         I_am_running_on_a_slow_node = .true.
+    endif
 
     if (SHOW_SEPARATE_RUN_INFORMATION) then
       write(IMAIN,*) 'Time steps done for this run = ',it_run,' out of ',nstep_run
@@ -306,11 +332,11 @@
       write(IMAIN,*) 'Time steps remaining = ',NSTEP - it
     endif
 
-    write(IMAIN,*) 'Estimated remaining time in seconds = ',t_remain
+    write(IMAIN,*) 'Estimated remaining time in seconds = ',sngl(t_remain)
     write(IMAIN,"(' Estimated remaining time in hh:mm:ss = ',i6,' h ',i2.2,' m ',i2.2,' s')") &
              ihours_remain,iminutes_remain,iseconds_remain
 
-    write(IMAIN,*) 'Estimated total run time in seconds = ',t_total
+    write(IMAIN,*) 'Estimated total run time in seconds = ',sngl(t_total)
     write(IMAIN,"(' Estimated total run time in hh:mm:ss = ',i6,' h ',i2.2,' m ',i2.2,' s')") &
              ihours_total,iminutes_total,iseconds_total
     write(IMAIN,*) 'We have done ',sngl(100.d0*dble(it)/dble(NSTEP)),'% of that'
@@ -406,7 +432,8 @@
     ! negative values can occur with some compilers when the unstable value is greater
     ! than the greatest possible floating-point number of the machine
     ! this trick checks for NaN (Not a Number), which is not even equal to itself
-    if (Usolidnorm_all > STABILITY_THRESHOLD .or. Usolidnorm_all < 0 .or. Usolidnorm_all /= Usolidnorm_all) then
+    if (Usolidnorm_all > STABILITY_THRESHOLD .or. Usolidnorm_all < 0._CUSTOM_REAL &
+        .or. Usolidnorm_all /= Usolidnorm_all) then
       print *,'Error: simulation became unstable'
       if (GPU_MODE) then
         print *,'       all processes total norm solid = ',Usolidnorm_all
@@ -417,7 +444,8 @@
       print *,'Please check time step setting in get_timestep_and_layers.f90, exiting...'
       call exit_MPI(myrank,'forward simulation became unstable and blew up in the solid')
     endif
-    if (Ufluidnorm_all > STABILITY_THRESHOLD .or. Ufluidnorm_all < 0 .or. Ufluidnorm_all /= Ufluidnorm_all) then
+    if (Ufluidnorm_all > STABILITY_THRESHOLD .or. Ufluidnorm_all < 0._CUSTOM_REAL &
+        .or. Ufluidnorm_all /= Ufluidnorm_all) then
       print *,'Error: simulation became unstable'
       print *,'       all processes total norm fluid = ',Ufluidnorm_all
       print *,'Please check time step setting in get_timestep_and_layers.f90, exiting...'
@@ -426,9 +454,11 @@
 
     if (SIMULATION_TYPE == 3 .and. .not. UNDO_ATTENUATION) then
       ! this trick checks for NaN (Not a Number), which is not even equal to itself
-      if (b_Usolidnorm_all > STABILITY_THRESHOLD .or. b_Usolidnorm_all < 0 .or. b_Usolidnorm_all /= b_Usolidnorm_all) &
+      if (b_Usolidnorm_all > STABILITY_THRESHOLD .or. b_Usolidnorm_all < 0._CUSTOM_REAL &
+          .or. b_Usolidnorm_all /= b_Usolidnorm_all) &
         call exit_MPI(myrank,'backward simulation became unstable and blew up in the solid')
-      if (b_Ufluidnorm_all > STABILITY_THRESHOLD .or. b_Ufluidnorm_all < 0 .or. b_Ufluidnorm_all /= b_Ufluidnorm_all) &
+      if (b_Ufluidnorm_all > STABILITY_THRESHOLD .or. b_Ufluidnorm_all < 0._CUSTOM_REAL &
+          .or. b_Ufluidnorm_all /= b_Ufluidnorm_all) &
         call exit_MPI(myrank,'backward simulation became unstable and blew up in the fluid')
     endif
 
@@ -476,12 +506,20 @@
   ! checks if anything to do
   if (SIMULATION_TYPE /= 3 ) return
 
+  ! initializes
+  b_Usolidnorm = 0._CUSTOM_REAL
+  b_Usolidnorm_all = 0._CUSTOM_REAL
+  b_Ufluidnorm = 0._CUSTOM_REAL
+  b_Ufluidnorm_all = 0._CUSTOM_REAL
+
   ! compute maximum of norm of displacement in each slice
   if (.not. GPU_MODE) then
     ! on CPU
-    norm_cm = maxval(sqrt(b_displ_crust_mantle(1,:)**2 + b_displ_crust_mantle(2,:)**2 + b_displ_crust_mantle(3,:)**2))
+    norm_cm = maxval( (b_displ_crust_mantle(1,:)**2 + b_displ_crust_mantle(2,:)**2 + b_displ_crust_mantle(3,:)**2) )
+    norm_cm = sqrt(norm_cm)
     if (NSPEC_INNER_CORE > 0) then
-      norm_ic = maxval(sqrt(b_displ_inner_core(1,:)**2 + b_displ_inner_core(2,:)**2 + b_displ_inner_core(3,:)**2))
+      norm_ic = maxval( (b_displ_inner_core(1,:)**2 + b_displ_inner_core(2,:)**2 + b_displ_inner_core(3,:)**2) )
+      norm_ic = sqrt(norm_ic)
     else
       norm_ic = 0._CUSTOM_REAL
     endif
@@ -496,18 +534,18 @@
     call check_norm_elastic_acoustic_from_device(b_Usolidnorm,b_Ufluidnorm,Mesh_pointer,3)
   endif
 
-! this trick checks for NaN (Not a Number), which is not even equal to itself
-  if (b_Usolidnorm > STABILITY_THRESHOLD .or. b_Usolidnorm < 0 .or. b_Usolidnorm /= b_Usolidnorm) &
+  ! this trick checks for NaN (Not a Number), which is not even equal to itself
+  if (b_Usolidnorm > STABILITY_THRESHOLD .or. b_Usolidnorm < 0._CUSTOM_REAL .or. b_Usolidnorm /= b_Usolidnorm) &
     call exit_MPI(myrank,'backward simulation became unstable and blew up  in the solid')
-  if (b_Ufluidnorm > STABILITY_THRESHOLD .or. b_Ufluidnorm < 0 .or. b_Ufluidnorm /= b_Ufluidnorm) &
+  if (b_Ufluidnorm > STABILITY_THRESHOLD .or. b_Ufluidnorm < 0._CUSTOM_REAL .or. b_Ufluidnorm /= b_Ufluidnorm) &
     call exit_MPI(myrank,'backward simulation became unstable and blew up  in the fluid')
 
   ! compute the maximum of the maxima for all the slices using an MPI reduction
   call max_all_cr(b_Usolidnorm,b_Usolidnorm_all)
-  call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
+  if (NSPEC_OUTER_CORE > 0) call max_all_cr(b_Ufluidnorm,b_Ufluidnorm_all)
 
+  ! user output
   if (myrank == 0) then
-
     ! this is in the case of restart files, when a given run consists of several partial runs
     ! information about the current run only
     SHOW_SEPARATE_RUN_INFORMATION = ( NUMBER_OF_RUNS > 1 .and. NUMBER_OF_THIS_RUN < NUMBER_OF_RUNS )
@@ -532,7 +570,8 @@
     ! rescale maximum displacement to correct dimensions
     b_Usolidnorm_all = b_Usolidnorm_all * sngl(scale_displ)
     write(IMAIN,*) 'Max norm displacement vector U in solid in all slices for back prop.(m) = ',b_Usolidnorm_all
-    write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IMAIN,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
 
     ! no timing info, things get confusing with forward check timing
     !write(IMAIN,*) 'Elapsed time in seconds = ',tCPU
@@ -556,10 +595,12 @@
     ! check stability of the code, exit if unstable
     ! negative values can occur with some compilers when the unstable value is greater
     ! than the greatest possible floating-point number of the machine
-! this trick checks for NaN (Not a Number), which is not even equal to itself
-    if (b_Usolidnorm_all > STABILITY_THRESHOLD .or. b_Usolidnorm_all < 0 .or. b_Usolidnorm_all /= b_Usolidnorm_all) &
+    ! this trick checks for NaN (Not a Number), which is not even equal to itself
+    if (b_Usolidnorm_all > STABILITY_THRESHOLD .or. b_Usolidnorm_all < 0._CUSTOM_REAL &
+        .or. b_Usolidnorm_all /= b_Usolidnorm_all) &
       call exit_MPI(myrank,'backward simulation became unstable and blew up in the solid')
-    if (b_Ufluidnorm_all > STABILITY_THRESHOLD .or. b_Ufluidnorm_all < 0 .or. b_Ufluidnorm_all /= b_Ufluidnorm_all) &
+    if (b_Ufluidnorm_all > STABILITY_THRESHOLD .or. b_Ufluidnorm_all < 0._CUSTOM_REAL &
+        .or. b_Ufluidnorm_all /= b_Ufluidnorm_all) &
       call exit_MPI(myrank,'backward simulation became unstable and blew up in the fluid')
 
   endif
@@ -585,7 +626,8 @@
 
   use specfem_par, only: &
     SIMULATION_TYPE,OUTPUT_FILES,DT,t0, &
-    NSTEP,it,it_begin,it_end,NUMBER_OF_RUNS,NUMBER_OF_THIS_RUN
+    NSTEP,it,it_begin,it_end,NUMBER_OF_RUNS,NUMBER_OF_THIS_RUN, &
+    NSPEC_OUTER_CORE
 
   implicit none
 
@@ -637,22 +679,25 @@
   write(IOUT,*)
   if (SIMULATION_TYPE == 1) then
     write(IOUT,*) 'Max norm displacement vector U in solid in all slices for forward prop. (m) = ',Usolidnorm_all
-    write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for forward prop. = ',Ufluidnorm_all
   else
     write(IOUT,*) 'Max norm displacement vector U in solid in all slices (m) for adjoint prop. (m) = ',Usolidnorm_all
-    write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for adjoint prop. = ',Ufluidnorm_all
   endif
   write(IOUT,*)
 
   if (SIMULATION_TYPE == 3) then
     write(IOUT,*) 'Max norm displacement vector U in solid in all slices for back prop. (m) = ',b_Usolidnorm_all
-    write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
+    if (NSPEC_OUTER_CORE > 0) &
+      write(IOUT,*) 'Max non-dimensional potential Ufluid in fluid in all slices for back prop.= ',b_Ufluidnorm_all
     write(IOUT,*)
   endif
 
-  write(IOUT,*) 'Elapsed time in seconds = ',tCPU
+  write(IOUT,*) 'Elapsed time in seconds = ',sngl(tCPU)
   write(IOUT,"(' Elapsed time in hh:mm:ss = ',i6,' h ',i2.2,' m ',i2.2,' s')") ihours,iminutes,iseconds
-  write(IOUT,*) 'Mean elapsed time per time step in seconds = ',tCPU/dble(it)
+  write(IOUT,*) 'Mean elapsed time per time step in seconds = ',sngl(tCPU/dble(it))
   write(IOUT,*)
 
   if (NUMBER_OF_RUNS > 1 .and. NUMBER_OF_THIS_RUN < NUMBER_OF_RUNS) then
@@ -666,12 +711,12 @@
     write(IOUT,*) 'Time steps remaining = ',NSTEP - it
   endif
 
-  write(IOUT,*) 'Estimated remaining time in seconds = ',t_remain
+  write(IOUT,*) 'Estimated remaining time in seconds = ',sngl(t_remain)
   write(IOUT,"(' Estimated remaining time in hh:mm:ss = ',i6,' h ',i2.2,' m ',i2.2,' s')") &
            ihours_remain,iminutes_remain,iseconds_remain
   write(IOUT,*)
 
-  write(IOUT,*) 'Estimated total run time in seconds = ',t_total
+  write(IOUT,*) 'Estimated total run time in seconds = ',sngl(t_total)
   write(IOUT,"(' Estimated total run time in hh:mm:ss = ',i6,' h ',i2.2,' m ',i2.2,' s')") &
            ihours_total,iminutes_total,iseconds_total
   write(IOUT,*) 'We have done ',sngl(100.d0*dble(it)/dble(NSTEP)),'% of that'
@@ -710,19 +755,21 @@
 
   close(IOUT)
 
-! if the run is slow and gives up, create a disk file to indicate it, so that users or batch scripts can know it.
-! do not check before MIN_TIME_STEPS_FOR_SLOW_NODES time steps
-! because the time step estimate (which is an average) may then be unreliable
-  if (CHECK_FOR_SLOW_NODES .and. NUMBER_OF_SIMULTANEOUS_RUNS > 1 .and. it >= MIN_TIME_STEPS_FOR_SLOW_NODES .and. &
+  ! if the run is slow and gives up, create a disk file to indicate it, so that users or batch scripts can know it.
+  ! do not check before MIN_TIME_STEPS_FOR_SLOW_NODES time steps
+  ! because the time step estimate (which is an average) may then be unreliable
+  if (CHECK_FOR_SLOW_NODES) then
+    if (NUMBER_OF_SIMULTANEOUS_RUNS > 1 .and. it >= MIN_TIME_STEPS_FOR_SLOW_NODES .and. &
         tCPU/dble(it) > TOLERANCE_FACTOR_FOR_SLOW_NODES * REFERENCE_TIME_PER_TIME_STEP_ON_NORMAL_NODES) then
-    I_am_running_on_a_slow_node = .true.
-! rank is between 0 and the max rank - 1, for the earthquake here we start at 1, i.e. we use mygroup + 1 rather than mygroup
-    write(outputname,"('/slow_run_on_rank_',i6.6,'_giving_up_for_earthquake_run_',i6.6,'_at_time_step_',i6.6)") &
+      I_am_running_on_a_slow_node = .true.
+      ! rank is between 0 and the max rank - 1, for the earthquake here we start at 1, i.e. we use mygroup + 1 rather than mygroup
+      write(outputname,"('/slow_run_on_rank_',i6.6,'_giving_up_for_earthquake_run_',i6.6,'_at_time_step_',i6.6)") &
              myrank,mygroup + 1,it
-    open(unit=IOUT,file=trim(OUTPUT_FILES)//outputname,status='unknown',action='write')
-! write outputname as the information message, since it contains all the information needed
+      open(unit=IOUT,file=trim(OUTPUT_FILES)//outputname,status='unknown',action='write')
+      ! write outputname as the information message, since it contains all the information needed
       write(IOUT,*) outputname
-    close(IOUT)
+      close(IOUT)
+    endif
   endif
 
   end subroutine write_timestamp_file
@@ -757,7 +804,7 @@
     iminutes = (int_tCPU - 3600*ihours) / 60
     iseconds = int_tCPU - 3600*ihours - 60*iminutes
     write(IMAIN,*) 'Time-Loop Complete. Timing info:'
-    write(IMAIN,*) 'Total elapsed time in seconds = ',tCPU
+    write(IMAIN,*) 'Total elapsed time in seconds = ',sngl(tCPU)
     write(IMAIN,"(' Total elapsed time in hh:mm:ss = ',i6,' h ',i2.2,' m ',i2.2,' s')") ihours,iminutes,iseconds
     write(IMAIN,*)
     call flush_IMAIN()

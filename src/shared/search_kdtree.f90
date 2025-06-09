@@ -34,6 +34,7 @@
 module kdtree_search
 
   ! kd-tree for searching nearest neighbors
+  implicit none
 
   private
 
@@ -1413,5 +1414,4 @@ contains
 
   end subroutine get_distance_ellip
 
-
-end module
+end module kdtree_search

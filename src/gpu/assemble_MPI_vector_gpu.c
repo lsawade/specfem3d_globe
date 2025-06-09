@@ -181,7 +181,7 @@ void FC_FUNC_(transfer_boun_from_device,
                                      global_work_size, local_work_size, 0, NULL, &kernel_evt));
 
     // copies buffer to CPU
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // waits until kernel is finished before starting async memcpy
       clCheck (clFinish (mocl.command_queue));
       if (mp->has_last_copy_evt) {
@@ -225,7 +225,7 @@ void FC_FUNC_(transfer_boun_from_device,
                                                                             d_ibool_interfaces.cuda);
 
     // copies buffer to CPU
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // waits until kernel is finished before starting async memcpy
       cudaStreamSynchronize(mp->compute_stream);
       // copies buffer to CPU
@@ -264,7 +264,7 @@ void FC_FUNC_(transfer_boun_from_device,
                                                                           d_ibool_interfaces.hip);
 
     // copies buffer to CPU
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // waits until kernel is finished before starting async memcpy
       hipStreamSynchronize(mp->compute_stream);
       // copies buffer to CPU
@@ -402,7 +402,7 @@ void FC_FUNC_ (transfer_asmbl_accel_to_device,
     global_work_size[1] = num_blocks_y;
 
     // gets last copy event
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       if (mp->has_last_copy_evt) {
         copy_evt = &mp->last_copy_evt;
         num_evt = 1;
@@ -434,7 +434,7 @@ void FC_FUNC_ (transfer_asmbl_accel_to_device,
                                      global_work_size, local_work_size, num_evt, copy_evt, NULL));
 
     // releases copy event
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       if (mp->has_last_copy_evt) {
         clCheck (clReleaseEvent (mp->last_copy_evt));
         mp->has_last_copy_evt = 0;
@@ -448,7 +448,7 @@ void FC_FUNC_ (transfer_asmbl_accel_to_device,
     dim3 threads(blocksize,1,1);
 
     // asynchronous copy
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // Wait until previous copy stream finishes. We assemble while other compute kernels execute.
       cudaStreamSynchronize(mp->copy_stream);
     }else{
@@ -480,7 +480,7 @@ void FC_FUNC_ (transfer_asmbl_accel_to_device,
     dim3 threads(blocksize,1,1);
 
     // asynchronous copy
-    if (GPU_ASYNC_COPY) {
+    if (mp->GPU_ASYNC_COPY) {
       // Wait until previous copy stream finishes. We assemble while other compute kernels execute.
       hipStreamSynchronize(mp->copy_stream);
     }else{
@@ -535,8 +535,8 @@ void FC_FUNC_(transfer_buffer_to_device_async,
   Mesh *mp = (Mesh *) *Mesh_pointer_f;
 
   // checks async-memcpy
-  if (! GPU_ASYNC_COPY ) {
-    exit_on_error("transfer_buffer_to_device_async must be called with GPU_ASYNC_COPY == 1, please check mesh_constants_gpu.h");
+  if (! mp->GPU_ASYNC_COPY) {
+    exit_on_error("transfer_buffer_to_device_async must be called with GPU_ASYNC_COPY == 1, please check constants.h");
   }
 
   // safety check
@@ -704,8 +704,8 @@ void FC_FUNC_(sync_copy_from_device,
   Mesh *mp = (Mesh *) *Mesh_pointer_f;
 
   // checks async-memcpy
-  if (! GPU_ASYNC_COPY ) {
-    exit_on_error("sync_copy_from_device must be called with GPU_ASYNC_COPY == 1, please check mesh_constants_gpu.h");
+  if (! mp->GPU_ASYNC_COPY) {
+    exit_on_error("sync_copy_from_device must be called with GPU_ASYNC_COPY == 1, please check constants.h");
   }
 
   // Wait until async-memcpy of outer elements is finished and start MPI.

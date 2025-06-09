@@ -57,6 +57,7 @@ shared_OBJECTS = \
 	$O/get_model_parameters.shared.o \
 	$O/get_timestep_and_layers.shared.o \
 	$O/gll_library.shared.o \
+	$O/hdf5_manager.shared_hdf5_module.o \
 	$O/heap_sort.shared.o \
 	$O/hex_nodes.shared.o \
 	$O/init_openmp.shared.o \
@@ -80,8 +81,10 @@ shared_OBJECTS = \
 	$O/rthetaphi_xyz.shared.o \
 	$O/save_header_file.shared.o \
 	$O/search_kdtree.shared.o \
+	$O/SIEM_math_library.shared.o \
 	$O/smooth_weights_vec.shared.o \
 	$O/sort_array_coordinates.shared.o \
+	$O/spl_A3d.cc.o \
 	$O/spline_routines.shared.o \
 	$O/write_VTK_file.shared.o \
 	$O/ylm.shared.o \
@@ -90,6 +93,7 @@ shared_OBJECTS = \
 shared_MODULES = \
 	$(FC_MODDIR)/constants.$(FC_MODEXT) \
 	$(FC_MODDIR)/manager_adios.$(FC_MODEXT) \
+	$(FC_MODDIR)/manager_hdf5.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_prem_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_sohl_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/model_mars_1d_par.$(FC_MODEXT) \
@@ -98,6 +102,10 @@ shared_MODULES = \
 	$(FC_MODDIR)/shared_input_parameters.$(FC_MODEXT) \
 	$(FC_MODDIR)/shared_compute_parameters.$(FC_MODEXT) \
 	$(FC_MODDIR)/shared_parameters.$(FC_MODEXT) \
+	$(FC_MODDIR)/siem_math_library.$(FC_MODEXT) \
+	$(FC_MODDIR)/siem_math_library_mpi.$(FC_MODEXT) \
+	$(FC_MODDIR)/siem_gll_library.$(FC_MODEXT) \
+	$(FC_MODDIR)/smooth_etopo5_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/kdtree_search.$(FC_MODEXT) \
 	$(EMPTY_MACRO)
 
@@ -142,6 +150,9 @@ shared_MODULES += $(adios_shared_MODULES)
 else
 shared_OBJECTS += $(adios_shared_STUBS)
 endif
+
+## HDF5 file i/o
+
 
 ##
 ## ASDF
@@ -215,7 +226,7 @@ $O/%.shared.o: $S/%.f90 $O/shared_par.shared_module.o
 $O/%.shared.o: $S/%.F90 $O/shared_par.shared_module.o
 	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
 
-$O/%.sharedmpi.o: $S/%.f90 $O/shared_par.shared_module.o $O/read_parameter_file.shared.o $O/read_value_parameters.shared.o
+$O/%.sharedmpi.o: $S/%.f90 $O/shared_par.shared_module.o
 	${MPIFCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
 
 ## adios
@@ -272,6 +283,19 @@ $O/%.shared_asdf.o: $S/%.f90
 
 $O/%.cc.o: $S/%.c ${SETUP}/config.h
 	${CC} -c $(CPPFLAGS) $(CFLAGS) -o $@ $<
+
+## HDF5
+$O/%.shared_hdf5_module.o: $S/%.f90 $O/shared_par.shared_module.o
+	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
+
+$O/%.shared_hdf5_module.o: $S/%.F90 $O/shared_par.shared_module.o
+	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
+
+$O/%.shared_hdf5.o: $S/%.f90 $O/hdf5_manager.shared_hdf5_module.o
+	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
+
+$O/%.shared_hdf5.o: $S/%.F90 $O/hdf5_manager.shared_hdf5_module.o
+	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -c -o $@ $<
 
 ## c++ files
 $O/%.shared.o: $S/%.cpp ${SETUP}/config.h

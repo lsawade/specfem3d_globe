@@ -45,27 +45,28 @@
 !
 
   use constants, only: &
-    IMAIN,IREGION_CRUST_MANTLE,IREGION_OUTER_CORE,IREGION_INNER_CORE,CUSTOM_REAL, &
+    IMAIN,CUSTOM_REAL, &
+    IREGION_CRUST_MANTLE,IREGION_OUTER_CORE,IREGION_INNER_CORE, &
+    IREGION_TRINFINITE,IREGION_INFINITE, &
     SAVE_BOUNDARY_MESH,SAVE_MESHFILES_AVS_DX_FORMAT
 
   use shared_parameters, only: &
-    R_CENTRAL_CUBE,RICB,RCMB
+    R_CENTRAL_CUBE,RICB,RCMB,RINF, &
+    HDF5_ENABLED
 
   use meshfem_par, only: &
-    myrank,nspec,nglob,iregion_code, &
+    myrank,nspec,iregion_code, &
     ibool,idoubling,xstore,ystore,zstore, &
     xstore_glob,ystore_glob,zstore_glob
 
   use meshfem_par, only: &
     NCHUNKS,SAVE_MESH_FILES,ABSORBING_CONDITIONS,LOCAL_PATH, &
     ADIOS_FOR_ARRAYS_SOLVER,ADIOS_FOR_SOLVER_MESHFILES, &
-    ROTATION,EXACT_MASS_MATRIX_FOR_ROTATION,GRAVITY_INTEGRALS, &
+    GRAVITY_INTEGRALS, &
+    FULL_GRAVITY, &
     NGLOB1D_RADIAL_CORNER, &
     NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX, &
     volume_total,Earth_mass_total,Earth_center_of_mass_x_total,Earth_center_of_mass_y_total,Earth_center_of_mass_z_total
-
-  use meshfem_models_par, only: &
-    OCEANS
 
 #ifdef USE_CEM
   use meshfem_models_par, only: CEM_REQUEST
@@ -92,8 +93,8 @@
     mu0store,Gc_prime_store,Gs_prime_store, &
     rho_vp,rho_vs, &
     Qmu_store,tau_e_store, &
-    nglob_xy,rmassx,rmassy,rmassz,b_rmassx,b_rmassy, &
-    nglob_oceans,rmass_ocean_load, &
+    rmassx,rmassy,rmassz,b_rmassx,b_rmassy, &
+    rmass_ocean_load, &
     iMPIcut_xi,iMPIcut_eta, &
     ispec_is_tiso
 
@@ -125,9 +126,6 @@
   ! now perform two passes in this part to be able to save memory
   integer,intent(in) :: ipass
 
-  ! local parameters
-  integer :: ier
-
   ! user output
   if (myrank == 0) then
     write(IMAIN,*)
@@ -149,7 +147,7 @@
   call synchronize_all()
   if (myrank == 0) then
     write(IMAIN,*)
-    write(IMAIN,*) '  ...allocating arrays '
+    write(IMAIN,*) '  ...allocating arrays'
     call flush_IMAIN()
   endif
   call crm_allocate_arrays(ipass, &
@@ -161,7 +159,7 @@
   call synchronize_all()
   if (myrank == 0) then
     write(IMAIN,*)
-    write(IMAIN,*) '  ...setting up layers '
+    write(IMAIN,*) '  ...setting up layers'
     call flush_IMAIN()
   endif
   call crm_setup_layers(ipass,NEX_PER_PROC_ETA)
@@ -170,12 +168,18 @@
   call synchronize_all()
   if (myrank == 0) then
     write(IMAIN,*)
-    write(IMAIN,*) '  ...creating mesh elements '
+    write(IMAIN,*) '  ...creating mesh elements'
     call flush_IMAIN()
   endif
   call create_regions_elements(ipass, &
                                NEX_PER_PROC_XI,NEX_PER_PROC_ETA, &
                                offset_proc_xi,offset_proc_eta)
+
+  ! at this point, we have created the cubed-sphere mesh that accommodates Moho variations, topography and ellipticity,
+  ! together with the rheological properties on all GLL points.
+  !
+  ! we still need to compute all assembly related arrays (indexing, MPI partitioning, absorbing boundaries)
+  ! and pre-calculate the mass matrices.
 
   select case (ipass)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -212,18 +216,21 @@
     ! Only go into here if we're requesting xyz files for CEM
 #ifdef USE_CEM
     if (CEM_REQUEST) then
-
-      call build_global_coordinates(iregion_code)
-      call write_cem_request(iregion_code)
+      ! for Comprehensive Earth Model request
       call synchronize_all()
+      if (myrank == 0) then
+        write(IMAIN,*)
+        write(IMAIN,*) '  ...creating CEM request file'
+        call flush_IMAIN()
+      endif
 
-      deallocate(ibool1D_leftxi_lefteta,ibool1D_rightxi_lefteta, &
-                 ibool1D_leftxi_righteta,ibool1D_rightxi_righteta, &
-                 xyz1D_leftxi_lefteta,xyz1D_rightxi_lefteta, &
-                 xyz1D_leftxi_righteta,xyz1D_rightxi_righteta,iboolleft_xi, &
-                 iboolright_xi,iboolleft_eta,iboolright_eta,nimin,nimax, &
-                 njmin, njmax,nkmin_xi,nkmin_eta,iboolfaces,iboolcorner)
+      ! builds global coordinate arrays for CEM request
+      call build_global_coordinates(iregion_code)
 
+      ! writes out CEM request file
+      call write_cem_request(iregion_code)
+
+      call synchronize_all()
     endif
 #endif
 
@@ -236,7 +243,7 @@
     call synchronize_all()
     if (myrank == 0) then
       write(IMAIN,*)
-      write(IMAIN,*) '  ...fills global mesh points '
+      write(IMAIN,*) '  ...fills global mesh points'
       call flush_IMAIN()
     endif
     call crm_fill_global_meshes()
@@ -272,7 +279,7 @@
                                  NSPEC2DMAX_XMIN_XMAX,NSPEC2DMAX_YMIN_YMAX, &
                                  xigll,yigll,zigll)
 
-!! DK DK for gravity integrals
+    ! for gravity integrals
     ! creation of the top observation surface if region is the crust_mantle
     if (GRAVITY_INTEGRALS) then
       if (iregion_code == IREGION_CRUST_MANTLE) call gravity_observation_surface()
@@ -311,14 +318,13 @@
 
     ! only deallocates after second pass
     deallocate(iboolleft_xi,iboolright_xi,iboolleft_eta,iboolright_eta)
-    deallocate(iboolfaces)
-    deallocate(iboolcorner)
+    deallocate(iboolcorner,iboolfaces)
 
     ! sets up inner/outer element arrays
     call synchronize_all()
     if (myrank == 0) then
       write(IMAIN,*)
-      write(IMAIN,*) '  ...element inner/outer separation '
+      write(IMAIN,*) '  ...element inner/outer separation'
       call flush_IMAIN()
     endif
     call setup_inner_outer(iregion_code)
@@ -327,10 +333,10 @@
     call synchronize_all()
     if (myrank == 0) then
       write(IMAIN,*)
-      write(IMAIN,*) '  ...element mesh coloring '
+      write(IMAIN,*) '  ...element mesh permutation'
       call flush_IMAIN()
     endif
-    call setup_color_perm(iregion_code)
+    call setup_mesh_permutation(iregion_code)
 
     !uncomment: adds model smoothing for point profile models
     !    if (THREE_D_MODEL == THREE_D_MODEL_PPM) then
@@ -362,81 +368,16 @@
       write(IMAIN,*) '  ...creating mass matrix'
       call flush_IMAIN()
     endif
-
-    ! allocates mass matrices in this slice (will be fully assembled in the solver)
-    !
-    ! in the case of Stacey boundary conditions, add C*deltat/2 contribution to the mass matrix
-    ! on Stacey edges for the crust_mantle and outer_core regions but not for the inner_core region
-    ! thus the mass matrix must be replaced by three mass matrices including the "C" damping matrix
-    !
-    ! if absorbing_conditions are not set or if NCHUNKS=6, only one mass matrix is needed
-    ! for the sake of performance, only "rmassz" array will be filled and "rmassx" & "rmassy" will be obsolete
-    if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
-      select case (iregion_code)
-      case (IREGION_CRUST_MANTLE)
-        nglob_xy = nglob
-      case (IREGION_INNER_CORE, IREGION_OUTER_CORE)
-        nglob_xy = 1
-      end select
-    else
-       nglob_xy = 1
-    endif
-
-    if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
-      select case (iregion_code)
-      case (IREGION_CRUST_MANTLE,IREGION_INNER_CORE)
-         nglob_xy = nglob
-      case (IREGION_OUTER_CORE)
-         nglob_xy = 1
-      end select
-    endif
-
-    allocate(rmassx(nglob_xy), &
-             rmassy(nglob_xy), &
-             stat=ier)
-    if (ier /= 0) stop 'Error in allocate 21'
-    rmassx(:) = 0.0_CUSTOM_REAL
-    rmassy(:) = 0.0_CUSTOM_REAL
-
-    allocate(b_rmassx(nglob_xy), &
-             b_rmassy(nglob_xy),stat=ier)
-    if (ier /= 0) stop 'Error in allocate b_21'
-    b_rmassx(:) = 0.0_CUSTOM_REAL
-    b_rmassy(:) = 0.0_CUSTOM_REAL
-
-    allocate(rmassz(nglob),stat=ier)
-    if (ier /= 0) stop 'Error in allocate 22'
-    rmassz(:) = 0.0_CUSTOM_REAL
-
-    ! allocates ocean load mass matrix as well if oceans
-    if (OCEANS .and. iregion_code == IREGION_CRUST_MANTLE) then
-      nglob_oceans = nglob
-    else
-      ! allocate dummy array if no oceans
-      nglob_oceans = 1
-    endif
-    allocate(rmass_ocean_load(nglob_oceans),stat=ier)
-    if (ier /= 0) stop 'Error in allocate 22'
-    rmass_ocean_load(:) = 0.0_CUSTOM_REAL
-
     ! creating mass matrices in this slice (will be fully assembled in the solver)
     ! note: for Stacey boundaries, needs indexing nimin,.. filled in the first pass
     call create_mass_matrices(idoubling,ibool, &
                               iregion_code,xstore,ystore,zstore, &
                               NSPEC2D_TOP)
 
-    ! free Stacey helper arrays (not needed anymore)
-    deallocate(nimin,nimax,njmin,njmax,nkmin_xi,nkmin_eta)
-    if (allocated(abs_boundary_ispec)) then
-      deallocate(abs_boundary_ispec,abs_boundary_npoin,abs_boundary_ijk)
-      deallocate(abs_boundary_jacobian2Dw)
-      deallocate(abs_boundary_normal)
-    endif
-
     ! save the binary files
     call synchronize_all()
 
-!! DK DK for gravity integrals
+    ! for gravity integrals
     ! gravity integrals computation won't need mesh nor solver runs
     if (.not. GRAVITY_INTEGRALS) then
       if (myrank == 0) then
@@ -449,6 +390,9 @@
         call save_arrays_solver_adios(idoubling,ibool,xstore,ystore,zstore, &
                                       NSPEC2DMAX_XMIN_XMAX, NSPEC2DMAX_YMIN_YMAX, &
                                       NSPEC2D_TOP,NSPEC2D_BOTTOM)
+      else if (HDF5_ENABLED) then
+        call save_arrays_solver_hdf5(idoubling,ibool,xstore,ystore,zstore, &
+                                     NSPEC2D_TOP,NSPEC2D_BOTTOM)
       else
         call save_arrays_solver(idoubling,ibool,xstore,ystore,zstore, &
                                 NSPEC2D_TOP,NSPEC2D_BOTTOM)
@@ -469,6 +413,8 @@
         ! saves boundary file
         if (ADIOS_FOR_ARRAYS_SOLVER) then
           call save_arrays_boundary_adios()
+        else if (HDF5_ENABLED) then
+          call save_arrays_boundary_hdf5()
         else
           call save_arrays_boundary()
         endif
@@ -476,7 +422,8 @@
 
       ! saves mesh files for visualization, GLL model updates, etc.
       ! create AVS or DX mesh data for the slices
-      if (SAVE_MESH_FILES) then
+      if (SAVE_MESH_FILES .and. &
+          iregion_code /= IREGION_TRINFINITE .and. iregion_code /= IREGION_INFINITE) then
         ! user output
         call synchronize_all()
         if (myrank == 0) then
@@ -489,6 +436,8 @@
         if (ADIOS_FOR_SOLVER_MESHFILES) then
           ! adios file output
           call save_model_meshfiles_adios()
+        else if (HDF5_ENABLED) then
+          call save_model_meshfiles_hdf5()
         else
           ! outputs model files in binary format
           call save_model_meshfiles()
@@ -502,23 +451,11 @@
 
     endif ! .not. GRAVITY_INTEGRALS
 
-    ! synchronizes processes before clean up memory
-    call synchronize_all()
-
-    ! frees memory
-    deallocate(rmassx,rmassy,rmassz)
-    deallocate(b_rmassx,b_rmassy)
-    deallocate(rmass_ocean_load)
-    ! frees allocated mesh memory
-    deallocate(xstore_glob,ystore_glob,zstore_glob)
-    ! frees MPI arrays memory
-    call crm_free_MPI_arrays()
-
     ! compute volume, bottom and top area of that part of the slice, and then the total
     call compute_volumes_and_areas(NCHUNKS,iregion_code,nspec,wxgll,wygll,wzgll, &
                                    xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore,gammaxstore,gammaystore,gammazstore, &
                                    NSPEC2D_BOTTOM,jacobian2D_bottom,NSPEC2D_TOP,jacobian2D_top,idoubling, &
-                                   volume_total,RCMB,RICB,R_CENTRAL_CUBE)
+                                   volume_total,RCMB,RICB,R_CENTRAL_CUBE,RINF)
 
     ! compute Earth mass of that part of the slice, and then total Earth mass
     call compute_Earth_mass(Earth_mass_total, &
@@ -526,7 +463,7 @@
                             nspec,wxgll,wygll,wzgll,xstore,ystore,zstore,xixstore,xiystore,xizstore, &
                             etaxstore,etaystore,etazstore,gammaxstore,gammaystore,gammazstore,rhostore,idoubling)
 
-!! DK DK for gravity integrals
+    ! for gravity integrals
     if (GRAVITY_INTEGRALS) then
       call synchronize_all()
       if (myrank == 0) then
@@ -542,10 +479,32 @@
 
     endif
 
+    ! synchronizes processes before clean up memory
+    call synchronize_all()
+
+    ! frees memory
+    deallocate(rmassx,rmassy,rmassz)
+    deallocate(b_rmassx,b_rmassy)
+    deallocate(rmass_ocean_load)
+    ! frees allocated mesh memory
+    deallocate(xstore_glob,ystore_glob,zstore_glob)
+    ! frees MPI arrays memory
+    call crm_free_MPI_arrays()
+    ! free Stacey helper arrays (not needed anymore)
+    if (allocated(nimin)) deallocate(nimin,nimax,njmin,njmax,nkmin_xi,nkmin_eta)
+    if (allocated(abs_boundary_ispec)) then
+      deallocate(abs_boundary_ispec,abs_boundary_npoin,abs_boundary_ijk)
+      deallocate(abs_boundary_jacobian2Dw)
+      deallocate(abs_boundary_normal)
+    endif
+
   case default
     stop 'there cannot be more than two passes in mesh creation'
 
   end select  ! end of test if first or second pass
+
+  ! infinite region for full gravity support
+  if (FULL_GRAVITY) call SIEM_mesh_set_reference_arrays(iregion_code,ipass)
 
   ! synchronizes processes
   call synchronize_all()
@@ -623,7 +582,7 @@
   integer,intent(in) :: NSPEC2D_BOTTOM,NSPEC2D_TOP
 
   ! local parameters
-  integer :: ier,isampling_ratio
+  integer :: i,isampling_ratio,ier
   integer :: nspec_actually,nspec_att
 
   ! adios needs properly initialized arrays, otherwise its intrinsic check procedures will cause undefined operations
@@ -809,14 +768,18 @@
   allocate(iMPIcut_xi(2,nspec), &
            iMPIcut_eta(2,nspec),stat=ier)
   if (ier /= 0) stop 'Error in allocate 15'
-
   iMPIcut_xi(:,:) = .false.; iMPIcut_eta(:,:) = .false.
 
   ! MPI buffer indices
   !
   ! define maximum size for message buffers
-  ! use number of elements found in the mantle since it is the largest region
-  NGLOB2DMAX_XY = max(NGLOB2DMAX_XMIN_XMAX(IREGION_CRUST_MANTLE),NGLOB2DMAX_YMIN_YMAX(IREGION_CRUST_MANTLE))
+  NGLOB2DMAX_XY = 0
+  ! use maximum number of elements found over all regions (mostly determined by the mantle since it is the largest region)
+  do i = 1,MAX_NUM_REGIONS
+    NGLOB2DMAX_XY = max(NGLOB2DMAX_XY,NGLOB2DMAX_XMIN_XMAX(i))
+    NGLOB2DMAX_XY = max(NGLOB2DMAX_XY,NGLOB2DMAX_YMIN_YMAX(i))
+  enddo
+
   ! 1-D buffers
   NGLOB1D_RADIAL_MAX = maxval(NGLOB1D_RADIAL_CORNER(iregion_code,:))
 
@@ -934,10 +897,11 @@
   subroutine crm_setup_layers(ipass,NEX_PER_PROC_ETA)
 
   use constants, only: SUPPRESS_CRUSTAL_MESH, &
-    GAUSSALPHA,GAUSSBETA,NGLLX,NGLLY,NGLLZ,NGNOD
+    GAUSSALPHA,GAUSSBETA,NGLLX,NGLLY,NGLLZ,NGNOD, &
+    IREGION_CRUST_MANTLE,IREGION_TRINFINITE,IREGION_INFINITE
 
   use meshfem_par, only: &
-    iregion_code,IREGION_CRUST_MANTLE, &
+    iregion_code, &
     R670,RMOHO,R400,RMIDDLE_CRUST, &
     ner_mesh_layers,r_top,r_bottom, &
     CASE_3D
@@ -952,7 +916,7 @@
   implicit none
 
   integer,intent(in) :: ipass
-  integer :: NEX_PER_PROC_ETA
+  integer,intent(in) :: NEX_PER_PROC_ETA
 
   ! local parameters
   integer :: cpt
@@ -1013,9 +977,9 @@
   endif
 
   ! to consider anisotropic elements first and to build the mesh from the bottom to the top of the region
-  allocate (perm_layer(ifirst_region:ilast_region),stat=ier)
+  allocate(perm_layer(ifirst_region:ilast_region),stat=ier)
   if (ier /= 0) stop 'Error in allocate 18'
-  perm_layer = (/ (i, i=ilast_region,ifirst_region,-1) /)
+  perm_layer = (/ (i, i = ilast_region,ifirst_region,-1) /)
 
   if (iregion_code == IREGION_CRUST_MANTLE .and. (.not. REGIONAL_MESH_CUTOFF)) then
     ! sets start of anisotropic layering after the first/last layer aniso
@@ -1087,6 +1051,12 @@
     endif
   endif
 
+  ! SIEM meshing for full gravity support
+  if (iregion_code == IREGION_TRINFINITE .or. &
+      iregion_code == IREGION_INFINITE) then
+    call SIEM_mesh_setup_layers(ipass)
+  endif
+
   end subroutine crm_setup_layers
 
 !
@@ -1126,7 +1096,7 @@
   if (npointot > 0) then
     if (myrank == 0) then
       write(IMAIN,*) '    total number of points            : ',npointot
-      write(IMAIN,*) '    array memory required per process : ',dble(npointot) * dble(8) / 1024.d0 / 1024.d0,'MB'
+      write(IMAIN,*) '    array memory required per process : ',sngl(3.d0 * dble(npointot) * dble(8) / 1024.d0 / 1024.d0),'MB'
       call flush_IMAIN()
     endif
 
@@ -1172,6 +1142,7 @@
       call flush_IMAIN()
     endif
 
+    ! creates ibool array mapping and number of unique nodes nglob_new
     call get_global(npointot,xp,yp,zp,ibool,nglob_new)
 
     deallocate(xp,yp,zp)
@@ -1267,7 +1238,8 @@
     xstore,ystore,zstore, &
     NSPEC1D_RADIAL_CORNER,NGLOB1D_RADIAL_CORNER, &
     NSPEC2D_XI_FACE,NSPEC2D_ETA_FACE, &
-    NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX
+    NGLOB2DMAX_XMIN_XMAX,NGLOB2DMAX_YMIN_YMAX, &
+    NPROCTOT
 
   use regions_mesh_par2, only: prname,iMPIcut_xi,iMPIcut_eta
 
@@ -1290,11 +1262,12 @@
   iboolright_xi(:) = 0
   iboolright_eta(:) = 0
 
-  if (nspec > 0) then
+  if (nspec > 0 .and. NPROCTOT > 1) then
     ! arrays mask_ibool(npointot) used to save memory
     ! allocate memory for arrays
     allocate(mask_ibool(npointot),stat=ier)
     if (ier /= 0) stop 'Error in allocate 20b'
+    mask_ibool(:) = .false.
 
     ! gets MPI buffer indices
     call get_MPI_cutplanes_xi(prname,nspec,iMPIcut_xi,ibool, &
@@ -1332,6 +1305,7 @@
 
   subroutine crm_free_MPI_arrays()
 
+  use constants, only: myrank
   use meshfem_par, only: iregion_code
 
   use MPI_interfaces_par
@@ -1339,6 +1313,9 @@
   use MPI_crust_mantle_par
   use MPI_outer_core_par
   use MPI_inner_core_par
+
+  use MPI_trinfinite_par
+  use MPI_infinite_par
 
   implicit none
 
@@ -1356,6 +1333,16 @@
     ! inner core
     deallocate(phase_ispec_inner_inner_core)
     deallocate(num_elem_colors_inner_core)
+  case (IREGION_TRINFINITE)
+    ! transition-to-infinite
+    deallocate(phase_ispec_inner_trinfinite)
+    deallocate(num_elem_colors_trinfinite)
+  case (IREGION_INFINITE)
+    ! infinite region
+    deallocate(phase_ispec_inner_infinite)
+    deallocate(num_elem_colors_infinite)
+  case default
+    call exit_mpi(myrank,'Invalid region code in crm_free_MPI_arrays')
   end select
 
   end subroutine crm_free_MPI_arrays

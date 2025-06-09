@@ -40,7 +40,8 @@
                                               epsilondev_xz,epsilondev_yz, &
                                               epsilon_trace_over_3, &
                                               alphaval,betaval,gammaval, &
-                                              factor_common,vnspec,sum_terms )
+                                              factor_common,vnspec,sum_terms, &
+                                              pgrav_crust_mantle )
 
 ! this routine is optimized for NGLLX = NGLLY = NGLLZ = 5 using the Deville et al. (2002) inlined matrix-matrix products
 
@@ -49,6 +50,7 @@
     N_SLS,NSPEC_CRUST_MANTLE_STRAIN_ONLY,NSPEC_CRUST_MANTLE, &
     ATT1_VAL,ATT2_VAL,ATT3_VAL, &
     ANISOTROPIC_3D_MANTLE_VAL,ATTENUATION_VAL,PARTIAL_PHYS_DISPERSION_ONLY_VAL,GRAVITY_VAL, &
+    FULL_GRAVITY_VAL,DISCARD_GCONTRIB, &
     m1,m2
 
   use specfem_par, only: &
@@ -88,6 +90,16 @@
 !daniel: att - debug
 !  use specfem_par, only: it,NSTEP
 
+  ! full gravity
+  use specfem_par_full_gravity, only: &
+    gravity_rho => gravity_rho_crust_mantle
+
+  ! element compute routines
+  use mod_element, only: compute_element_iso,compute_element_tiso,compute_element_aniso, &
+                         compute_element_add_full_gravity
+
+  use mod_element_att, only: compute_element_att_memory_cm,compute_element_att_memory_cm_lddrk
+
   implicit none
 
   integer,intent(in) :: NSPEC_STR_OR_ATT,NGLOB,NSPEC_ATT
@@ -124,6 +136,9 @@
   ! inner/outer element run flag
   integer,intent(in) :: iphase
 
+  ! full gravity
+  real(kind=CUSTOM_REAL), dimension(NGLOB),intent(in) :: pgrav_crust_mantle
+
   ! local parameters
 
   ! Deville
@@ -136,6 +151,7 @@
 
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: dummyx_loc,dummyy_loc,dummyz_loc
 
+  ! strain
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,5) :: epsilondev_loc
   real(kind=CUSTOM_REAL) :: fac1,fac2,fac3
 
@@ -180,6 +196,7 @@
 !$OMP R_xx,R_yy,R_xy,R_xz,R_yz, &
 !$OMP epsilondev_xx,epsilondev_yy,epsilondev_xy,epsilondev_xz,epsilondev_yz,epsilon_trace_over_3, &
 !$OMP gravity_pre_store,gravity_H, &
+!$OMP gravity_rho,pgrav_crust_mantle, &
 !$OMP R_xx_lddrk,R_yy_lddrk,R_xy_lddrk,R_xz_lddrk,R_yz_lddrk, &
 !$OMP sum_terms, &
 #ifdef FORCE_VECTORIZATION
@@ -199,7 +216,8 @@
 !$OMP FIRSTPRIVATE( hprime_xx, hprime_xxT, hprimewgll_xxT, hprimewgll_xx, &
 !$OMP wgllwgll_yz_3D, wgllwgll_xz_3D, wgllwgll_xy_3D, wgll_cube, &
 !$OMP att1_val, att2_val, att3_val, vnspec, &
-!$OMP ANISOTROPIC_3D_MANTLE_VAL,GRAVITY_VAL, &
+!$OMP NSPEC_CRUST_MANTLE,NGLOB, &
+!$OMP ANISOTROPIC_3D_MANTLE_VAL,GRAVITY_VAL,FULL_GRAVITY_VAL, &
 !$OMP ATTENUATION_VAL,PARTIAL_PHYS_DISPERSION_ONLY_VAL,COMPUTE_AND_STORE_STRAIN, &
 !$OMP USE_LDDRK )
 
@@ -228,37 +246,17 @@
     ! for incompressible fluid flow, Cambridge University Press (2002),
     ! pages 386 and 389 and Figure 8.3.1
 
-#ifdef DANIEL_TEST_LOOP
-    ! loop over single x/y/z-component, to test if cache utilization is better
-    ! x-comp
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleA_1(hprime_xx,m1,dummyx_loc,tempx1,m2)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_3dmat_singleB_1(dummyx_loc,m1,hprime_xxT,m1,tempx2,NGLLX)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleB_1(dummyx_loc,m2,hprime_xxT,tempx3,m1)
-    ! y-comp
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleA_1(hprime_xx,m1,dummyy_loc,tempy1,m2)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_3dmat_singleB_1(dummyy_loc,m1,hprime_xxT,m1,tempy2,NGLLX)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleB_1(dummyy_loc,m2,hprime_xxT,tempy3,m1)
-    ! z-comp
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleA_1(hprime_xx,m1,dummyz_loc,tempz1,m2)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_3dmat_singleB_1(dummyz_loc,m1,hprime_xxT,m1,tempz2,NGLLX)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleB_1(dummyz_loc,m2,hprime_xxT,tempz3,m1)
-#else
     ! computes 1. matrix multiplication for tempx1,..
+#ifdef USE_HANDOPT
     call mxm5_3comp_singleA(hprime_xx,m1,dummyx_loc,dummyy_loc,dummyz_loc,tempx1,tempy1,tempz1,m2)
+    !call mxm5_3comp_singleA(hprime_xxT,m1,dummyx_loc,dummyy_loc,dummyz_loc,tempx1,tempy1,tempz1,m2) ! A transposed
+#else
+    call mxm5_3comp_singleA(hprime_xx,m1,dummyx_loc,dummyy_loc,dummyz_loc,tempx1,tempy1,tempz1,m2)
+#endif
     ! computes 2. matrix multiplication for tempx2,..
     call mxm5_3comp_3dmat_singleB(dummyx_loc,dummyy_loc,dummyz_loc,m1,hprime_xxT,m1,tempx2,tempy2,tempz2,NGLLX)
     ! computes 3. matrix multiplication for tempx3,..
     call mxm5_3comp_singleB(dummyx_loc,dummyy_loc,dummyz_loc,m2,hprime_xxT,tempx3,tempy3,tempz3,m1)
-#endif
 
     !
     ! compute either isotropic, transverse isotropic or anisotropic elements
@@ -317,37 +315,17 @@
     ! for incompressible fluid flow, Cambridge University Press (2002),
     ! pages 386 and 389 and Figure 8.3.1
 
-#ifdef DANIEL_TEST_LOOP
-    ! loop over single x/y/z-component, to test if cache utilization is better
-    ! x-comp
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleA_1(hprimewgll_xxT,m1,tempx1,newtempx1,m2)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_3dmat_singleB_1(tempx2,m1,hprimewgll_xx,m1,newtempx2,NGLLX)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleB_1(tempx3,m2,hprimewgll_xx,newtempx3,m1)
-    ! y-comp
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleA_1(hprimewgll_xxT,m1,tempy1,newtempy1,m2)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_3dmat_singleB_1(tempy2,m1,hprimewgll_xx,m1,newtempy2,NGLLX)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleB_1(tempy3,m2,hprimewgll_xx,newtempy3,m1)
-    ! z-comp
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleA_1(hprimewgll_xxT,m1,tempz1,newtempz1,m2)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_3dmat_singleB_1(tempz2,m1,hprimewgll_xx,m1,newtempz2,NGLLX)
-!DIR$ FORCEINLINE
-    call mxm5_3comp_singleB_1(tempz3,m2,hprimewgll_xx,newtempz3,m1)
-#else
     ! computes 1. matrix multiplication for newtempx1,..
+#ifdef USE_HANDOPT
     call mxm5_3comp_singleA(hprimewgll_xxT,m1,tempx1,tempy1,tempz1,newtempx1,newtempy1,newtempz1,m2)
+    !call mxm5_3comp_singleA(hprimewgll_xx,m1,tempx1,tempy1,tempz1,newtempx1,newtempy1,newtempz1,m2)  ! A transposed
+#else
+    call mxm5_3comp_singleA(hprimewgll_xxT,m1,tempx1,tempy1,tempz1,newtempx1,newtempy1,newtempz1,m2)
+#endif
     ! computes 2. matrix multiplication for tempx2,..
     call mxm5_3comp_3dmat_singleB(tempx2,tempy2,tempz2,m1,hprimewgll_xx,m1,newtempx2,newtempy2,newtempz2,NGLLX)
     ! computes 3. matrix multiplication for newtempx3,..
     call mxm5_3comp_singleB(tempx3,tempy3,tempz3,m2,hprimewgll_xx,newtempx3,newtempy3,newtempz3,m1)
-#endif
 
     ! sums contributions
     DO_LOOP_IJK
@@ -361,6 +339,12 @@
 
     ! adds gravity terms
     if (GRAVITY_VAL) then
+      ! full gravity
+      if (FULL_GRAVITY_VAL .and. .not. DISCARD_GCONTRIB) then
+        call compute_element_add_full_gravity(ispec,NSPEC_CRUST_MANTLE,NGLOB,gravity_rho,deriv(1,1,1,1,ispec),ibool, &
+                                              pgrav_crust_mantle,rho_s_H)
+      endif
+
 #ifdef FORCE_VECTORIZATION
       do ijk = 1,NDIM*NGLLCUBE
         sum_terms(ijk,1,1,1,ispec) = sum_terms(ijk,1,1,1,ispec) + rho_s_H(ijk,1,1,1)
@@ -557,14 +541,18 @@
 !
 ! please leave the routines here to help compilers inlining the code
 
-  subroutine mxm5_3comp_singleA(A,n1,B1,B2,B3,C1,C2,C3,n3)
+  pure subroutine mxm5_3comp_singleA(A,n1,B1,B2,B3,C1,C2,C3,n3)
 
 ! we can force inlining (Intel compiler)
 #if defined __INTEL_COMPILER
 !DIR$ ATTRIBUTES FORCEINLINE :: mxm5_3comp_singleA
 #else
 ! cray
-!DIR$ INLINEALWAYS mxm5_3comp_singleA
+! note: with Cray Fortran versions >= 14 on Frontier, inlining this routine together with optimization -O3 leads to problems.
+!       for now, will avoid inlining by this directive INLINENEVER to allow for default compilation,
+!       otherwise the compilation flag -hipa0 would need to be added to suppress all inlining as well.
+!!DIR$ INLINEALWAYS mxm5_3comp_singleA
+!DIR$ INLINENEVER mxm5_3comp_singleA
 #endif
 
 ! 3 different arrays for x/y/z-components, 2-dimensional arrays (25,5)/(5,25), same B matrix for all 3 component arrays
@@ -572,13 +560,19 @@
   use constants_solver, only: CUSTOM_REAL
 
 #ifdef USE_XSMM
-  use my_libxsmm, only: libxsmm_smm_5_25_5
+  !use my_libxsmm, only: libxsmm_smm_5_25_5
+  use my_libxsmm, only: xmm1,libxsmm_mmcall_abc => libxsmm_smmcall_abc
 #endif
 
   implicit none
 
   integer,intent(in) :: n1,n3
+#ifdef USE_HANDOPT
   real(kind=CUSTOM_REAL),dimension(n1,5),intent(in) :: A
+  !real(kind=CUSTOM_REAL),dimension(5,n1),intent(in) :: A   ! transposed
+#else
+  real(kind=CUSTOM_REAL),dimension(n1,5),intent(in) :: A
+#endif
   real(kind=CUSTOM_REAL),dimension(5,n3),intent(in) :: B1,B2,B3
   real(kind=CUSTOM_REAL),dimension(n1,n3),intent(out) :: C1,C2,C3
 
@@ -589,16 +583,57 @@
   ! matrix-matrix multiplication C = alpha A * B + beta C
   ! with A(n1,n2) 5x5-matrix, B(n2,n3) 5x25-matrix and C(n1,n3) 5x25-matrix
   ! static version using MNK="5 25, 5" ALPHA=1 BETA=0
-  call libxsmm_smm_5_25_5(a=A, b=B1, c=C1, pa=A, pb=B2, pc=C2)
-  call libxsmm_smm_5_25_5(a=A, b=B2, c=C2, pa=A, pb=B3, pc=C3)
-  call libxsmm_smm_5_25_5(a=A, b=B3, c=C3, pa=A, pb=B1, pc=C1) ! with dummy prefetch
+  !call libxsmm_smm_5_25_5(a=A, b=B1, c=C1, pa=A, pb=B2, pc=C2)
+  !call libxsmm_smm_5_25_5(a=A, b=B2, c=C2, pa=A, pb=B3, pc=C3)
+  !call libxsmm_smm_5_25_5(a=A, b=B3, c=C3, pa=A, pb=B1, pc=C1) ! with dummy prefetch
+  ! dispatch
+  call libxsmm_mmcall_abc(xmm1, A, B1, C1)
+  call libxsmm_mmcall_abc(xmm1, A, B2, C2)
+  call libxsmm_mmcall_abc(xmm1, A, B3, C3)
   return
 #endif
 
   ! matrix-matrix multiplication
   do j = 1,n3
+
+#ifdef USE_HANDOPT
+
 !DIR$ IVDEP
+#if defined __INTEL_COMPILER
 !DIR$ SIMD
+#endif
+    do i = 1,n1
+      C1(i,j) = A(i,1) * B1(1,j) + A(i,2) * B1(2,j) + A(i,3) * B1(3,j) + A(i,4) * B1(4,j) + A(i,5) * B1(5,j)
+      ! transposed
+      !C1(i,j) = A(1,i) * B1(1,j) + A(2,i) * B1(2,j) + A(3,i) * B1(3,j) + A(4,i) * B1(4,j) + A(5,i) * B1(5,j)
+    enddo
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
+    do i = 1,n1
+      C2(i,j) = A(i,1) * B2(1,j) + A(i,2) * B2(2,j) + A(i,3) * B2(3,j) + A(i,4) * B2(4,j) + A(i,5) * B2(5,j)
+      ! transposed
+      !C2(i,j) = A(1,i) * B2(1,j) + A(2,i) * B2(2,j) + A(3,i) * B2(3,j) + A(4,i) * B2(4,j) + A(5,i) * B2(5,j)
+    enddo
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
+    do i = 1,n1
+      C3(i,j) = A(i,1) * B3(1,j) + A(i,2) * B3(2,j) + A(i,3) * B3(3,j) + A(i,4) * B3(4,j) + A(i,5) * B3(5,j)
+      ! transposed
+      !C3(i,j) = A(1,i) * B3(1,j) + A(2,i) * B3(2,j) + A(3,i) * B3(3,j) + A(4,i) * B3(4,j) + A(5,i) * B3(5,j)
+    enddo
+
+#else
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
     do i = 1,n1
       C1(i,j) =  A(i,1) * B1(1,j) &
                + A(i,2) * B1(2,j) &
@@ -618,6 +653,9 @@
                + A(i,4) * B3(4,j) &
                + A(i,5) * B3(5,j)
     enddo
+
+#endif
+
   enddo
 
   end subroutine mxm5_3comp_singleA
@@ -625,14 +663,18 @@
 
 !--------------------------------------------------------------------------------------------
 
-  subroutine mxm5_3comp_singleB(A1,A2,A3,n1,B,C1,C2,C3,n3)
+  pure subroutine mxm5_3comp_singleB(A1,A2,A3,n1,B,C1,C2,C3,n3)
 
 ! we can force inlining (Intel compiler)
 #if defined __INTEL_COMPILER
 !DIR$ ATTRIBUTES FORCEINLINE :: mxm5_3comp_singleB
 #else
 ! cray
-!DIR$ INLINEALWAYS mxm5_3comp_singleB
+! note: with Cray Fortran versions >= 14 on Frontier, inlining this routine together with optimization -O3 leads to problems.
+!       for now, will avoid inlining by this directive INLINENEVER to allow for default compilation,
+!       otherwise the compilation flag -hipa0 would need to be added to suppress all inlining as well.
+!!DIR$ INLINEALWAYS mxm5_3comp_singleB
+!DIR$ INLINENEVER mxm5_3comp_singleB
 #endif
 
 ! 3 different arrays for x/y/z-components, 2-dimensional arrays (25,5)/(5,25), same B matrix for all 3 component arrays
@@ -640,7 +682,8 @@
   use constants_solver, only: CUSTOM_REAL
 
 #ifdef USE_XSMM
-  use my_libxsmm, only: libxsmm_smm_25_5_5
+  !use my_libxsmm, only: libxsmm_smm_25_5_5
+  use my_libxsmm, only: xmm2,libxsmm_mmcall_abc => libxsmm_smmcall_abc
 #endif
 
   implicit none
@@ -657,16 +700,51 @@
   ! matrix-matrix multiplication C = alpha A * B + beta C
   ! with A(n1,n2) 25x5-matrix, B(n2,n3) 5x5-matrix and C(n1,n3) 25x5-matrix
   ! static version
-  call libxsmm_smm_25_5_5(a=A1, b=B, c=C1, pa=A2, pb=B, pc=C2)
-  call libxsmm_smm_25_5_5(a=A2, b=B, c=C2, pa=A3, pb=B, pc=C3)
-  call libxsmm_smm_25_5_5(a=A3, b=B, c=C3, pa=A1, pb=B, pc=C1)
+  !call libxsmm_smm_25_5_5(a=A1, b=B, c=C1, pa=A2, pb=B, pc=C2)
+  !call libxsmm_smm_25_5_5(a=A2, b=B, c=C2, pa=A3, pb=B, pc=C3)
+  !call libxsmm_smm_25_5_5(a=A3, b=B, c=C3, pa=A1, pb=B, pc=C1)
+  ! dispatch
+  call libxsmm_mmcall_abc(xmm2, A1, B, C1)
+  call libxsmm_mmcall_abc(xmm2, A2, B, C2)
+  call libxsmm_mmcall_abc(xmm2, A3, B, C3)
   return
 #endif
 
   ! matrix-matrix multiplication
   do j = 1,n3
+
+#ifdef USE_HANDOPT
+
 !DIR$ IVDEP
+#if defined __INTEL_COMPILER
 !DIR$ SIMD
+#endif
+    do i = 1,n1
+      C1(i,j) = A1(i,1) * B(1,j) + A1(i,2) * B(2,j) + A1(i,3) * B(3,j) + A1(i,4) * B(4,j) + A1(i,5) * B(5,j)
+    enddo
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
+    do i = 1,n1
+      C2(i,j) = A2(i,1) * B(1,j) + A2(i,2) * B(2,j) + A2(i,3) * B(3,j) + A2(i,4) * B(4,j) + A2(i,5) * B(5,j)
+    enddo
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
+    do i = 1,n1
+      C3(i,j) = A3(i,1) * B(1,j) + A3(i,2) * B(2,j) + A3(i,3) * B(3,j) + A3(i,4) * B(4,j) + A3(i,5) * B(5,j)
+    enddo
+
+#else
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
     do i = 1,n1
       C1(i,j) =  A1(i,1) * B(1,j) &
                + A1(i,2) * B(2,j) &
@@ -686,6 +764,9 @@
                + A3(i,4) * B(4,j) &
                + A3(i,5) * B(5,j)
     enddo
+
+#endif
+
   enddo
 
   end subroutine mxm5_3comp_singleB
@@ -693,14 +774,18 @@
 
 !--------------------------------------------------------------------------------------------
 
-  subroutine mxm5_3comp_3dmat_singleB(A1,A2,A3,n1,B,n2,C1,C2,C3,n3)
+  pure subroutine mxm5_3comp_3dmat_singleB(A1,A2,A3,n1,B,n2,C1,C2,C3,n3)
 
 ! we can force inlining (Intel compiler)
 #if defined __INTEL_COMPILER
 !DIR$ ATTRIBUTES FORCEINLINE :: mxm5_3comp_3dmat_singleB
 #else
 ! cray
-!DIR$ INLINEALWAYS mxm5_3comp_3dmat_singleB
+! note: with Cray Fortran versions >= 14 on Frontier, inlining this routine together with optimization -O3 leads to problems.
+!       for now, will avoid inlining by this directive INLINENEVER to allow for default compilation,
+!       otherwise the compilation flag -hipa0 would need to be added to suppress all inlining as well.
+!!DIR$ INLINEALWAYS mxm5_3comp_3dmat_singleB
+!DIR$ INLINENEVER mxm5_3comp_3dmat_singleB
 #endif
 
 ! 3 different arrays for x/y/z-components, 3-dimensional arrays (5,5,5), same B matrix for all 3 component arrays
@@ -710,7 +795,8 @@
 ! note: on CPUs like Haswell or Sandy Bridge, the following will slow down computations
 !       however, on Intel Phi (KNC) it is still helpful (speedup +3%)
 #if defined(XSMM_FORCE_EVEN_IF_SLOWER) || ( defined(XSMM) && defined(__MIC__) )
-  use my_libxsmm, only: libxsmm_smm_5_5_5
+  !use my_libxsmm, only: libxsmm_smm_5_5_5
+  use my_libxsmm, only: xmm3,libxsmm_mmcall_abc => libxsmm_smmcall_abc
 #endif
 
   implicit none
@@ -732,33 +818,81 @@
   !  call libxsmm_call(xmm3, A2(:,:,k), B, C2(:,:,k))
   !  call libxsmm_call(xmm3, A3(:,:,k), B, C3(:,:,k))
   !enddo
-
+  ! dispatch
+  do k = 1,5
+    call libxsmm_mmcall_abc(xmm3, A1(1,1,k), B, C1(1,1,k))
+    call libxsmm_mmcall_abc(xmm3, A2(1,1,k), B, C2(1,1,k))
+    call libxsmm_mmcall_abc(xmm3, A3(1,1,k), B, C3(1,1,k))
+  enddo
   ! unrolled
-  call libxsmm_smm_5_5_5(a=A1(1,1,1), b=B, c=C1(1,1,1),pa=A1(1,1,1+1), pb=B, pc=C1(1,1,1+1))
-  call libxsmm_smm_5_5_5(a=A1(1,1,2), b=B, c=C1(1,1,2),pa=A1(1,1,2+1), pb=B, pc=C1(1,1,2+1))
-  call libxsmm_smm_5_5_5(a=A1(1,1,3), b=B, c=C1(1,1,3),pa=A1(1,1,3+1), pb=B, pc=C1(1,1,3+1))
-  call libxsmm_smm_5_5_5(a=A1(1,1,4), b=B, c=C1(1,1,4),pa=A1(1,1,4+1), pb=B, pc=C1(1,1,4+1))
-  call libxsmm_smm_5_5_5(a=A1(1,1,5), b=B, c=C1(1,1,5),pa=A2(1,1,1), pb=B, pc=C2(1,1,1))
+  !call libxsmm_smm_5_5_5(a=A1(1,1,1), b=B, c=C1(1,1,1),pa=A1(1,1,1+1), pb=B, pc=C1(1,1,1+1))
+  !call libxsmm_smm_5_5_5(a=A1(1,1,2), b=B, c=C1(1,1,2),pa=A1(1,1,2+1), pb=B, pc=C1(1,1,2+1))
+  !call libxsmm_smm_5_5_5(a=A1(1,1,3), b=B, c=C1(1,1,3),pa=A1(1,1,3+1), pb=B, pc=C1(1,1,3+1))
+  !call libxsmm_smm_5_5_5(a=A1(1,1,4), b=B, c=C1(1,1,4),pa=A1(1,1,4+1), pb=B, pc=C1(1,1,4+1))
+  !call libxsmm_smm_5_5_5(a=A1(1,1,5), b=B, c=C1(1,1,5),pa=A2(1,1,1), pb=B, pc=C2(1,1,1))
 
-  call libxsmm_smm_5_5_5(a=A2(1,1,1), b=B, c=C2(1,1,1),pa=A2(1,1,1+1), pb=B, pc=C2(1,1,1+1))
-  call libxsmm_smm_5_5_5(a=A2(1,1,2), b=B, c=C2(1,1,2),pa=A2(1,1,2+1), pb=B, pc=C2(1,1,2+1))
-  call libxsmm_smm_5_5_5(a=A2(1,1,3), b=B, c=C2(1,1,3),pa=A2(1,1,3+1), pb=B, pc=C2(1,1,3+1))
-  call libxsmm_smm_5_5_5(a=A2(1,1,4), b=B, c=C2(1,1,4),pa=A2(1,1,4+1), pb=B, pc=C2(1,1,4+1))
-  call libxsmm_smm_5_5_5(a=A2(1,1,5), b=B, c=C2(1,1,5),pa=A3(1,1,1), pb=B, pc=C3(1,1,1))
+  !call libxsmm_smm_5_5_5(a=A2(1,1,1), b=B, c=C2(1,1,1),pa=A2(1,1,1+1), pb=B, pc=C2(1,1,1+1))
+  !call libxsmm_smm_5_5_5(a=A2(1,1,2), b=B, c=C2(1,1,2),pa=A2(1,1,2+1), pb=B, pc=C2(1,1,2+1))
+  !call libxsmm_smm_5_5_5(a=A2(1,1,3), b=B, c=C2(1,1,3),pa=A2(1,1,3+1), pb=B, pc=C2(1,1,3+1))
+  !call libxsmm_smm_5_5_5(a=A2(1,1,4), b=B, c=C2(1,1,4),pa=A2(1,1,4+1), pb=B, pc=C2(1,1,4+1))
+  !call libxsmm_smm_5_5_5(a=A2(1,1,5), b=B, c=C2(1,1,5),pa=A3(1,1,1), pb=B, pc=C3(1,1,1))
 
-  call libxsmm_smm_5_5_5(a=A3(1,1,1), b=B, c=C3(1,1,1),pa=A3(1,1,1+1), pb=B, pc=C3(1,1,1+1))
-  call libxsmm_smm_5_5_5(a=A3(1,1,2), b=B, c=C3(1,1,2),pa=A3(1,1,2+1), pb=B, pc=C3(1,1,2+1))
-  call libxsmm_smm_5_5_5(a=A3(1,1,3), b=B, c=C3(1,1,3),pa=A3(1,1,3+1), pb=B, pc=C3(1,1,3+1))
-  call libxsmm_smm_5_5_5(a=A3(1,1,4), b=B, c=C3(1,1,4),pa=A3(1,1,4+1), pb=B, pc=C3(1,1,4+1))
-  call libxsmm_smm_5_5_5(a=A3(1,1,5), b=B, c=C3(1,1,5),pa=A3(1,1,5), pb=B, pc=C3(1,1,5))
+  !call libxsmm_smm_5_5_5(a=A3(1,1,1), b=B, c=C3(1,1,1),pa=A3(1,1,1+1), pb=B, pc=C3(1,1,1+1))
+  !call libxsmm_smm_5_5_5(a=A3(1,1,2), b=B, c=C3(1,1,2),pa=A3(1,1,2+1), pb=B, pc=C3(1,1,2+1))
+  !call libxsmm_smm_5_5_5(a=A3(1,1,3), b=B, c=C3(1,1,3),pa=A3(1,1,3+1), pb=B, pc=C3(1,1,3+1))
+  !call libxsmm_smm_5_5_5(a=A3(1,1,4), b=B, c=C3(1,1,4),pa=A3(1,1,4+1), pb=B, pc=C3(1,1,4+1))
+  !call libxsmm_smm_5_5_5(a=A3(1,1,5), b=B, c=C3(1,1,5),pa=A3(1,1,5), pb=B, pc=C3(1,1,5))
   return
 #endif
 
   ! matrix-matrix multiplication
   do k = 1,n3
     do j = 1,n2
+
+#ifdef USE_HANDOPT
+
 !DIR$ IVDEP
+#if defined __INTEL_COMPILER
 !DIR$ SIMD
+#endif
+      do i = 1,n1
+        C1(i,j,k) =  A1(i,1,k) * B(1,j) &
+                   + A1(i,2,k) * B(2,j) &
+                   + A1(i,3,k) * B(3,j) &
+                   + A1(i,4,k) * B(4,j) &
+                   + A1(i,5,k) * B(5,j)
+      enddo
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
+      do i = 1,n1
+        C2(i,j,k) =  A2(i,1,k) * B(1,j) &
+                   + A2(i,2,k) * B(2,j) &
+                   + A2(i,3,k) * B(3,j) &
+                   + A2(i,4,k) * B(4,j) &
+                   + A2(i,5,k) * B(5,j)
+      enddo
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
+      do i = 1,n1
+        C3(i,j,k) =  A3(i,1,k) * B(1,j) &
+                   + A3(i,2,k) * B(2,j) &
+                   + A3(i,3,k) * B(3,j) &
+                   + A3(i,4,k) * B(4,j) &
+                   + A3(i,5,k) * B(5,j)
+      enddo
+
+#else
+
+!DIR$ IVDEP
+#if defined __INTEL_COMPILER
+!DIR$ SIMD
+#endif
       do i = 1,n1
         C1(i,j,k) =  A1(i,1,k) * B(1,j) &
                    + A1(i,2,k) * B(2,j) &
@@ -778,128 +912,13 @@
                    + A3(i,4,k) * B(4,j) &
                    + A3(i,5,k) * B(5,j)
       enddo
+
+#endif
+
     enddo
   enddo
 
   end subroutine mxm5_3comp_3dmat_singleB
-
-
-!--------------------------------------------------------------------------------------------
-
-#ifdef DANIEL_TEST_LOOP
-
-! loops over single x/y/z-component
-! test if cache utilization is better
-
-  subroutine mxm5_3comp_singleA_1(A,n1,B,C,n3)
-  use constants_solver, only: CUSTOM_REAL
-#ifdef USE_XSMM
-  use my_libxsmm, only: libxsmm_smm_5_25_5
-#endif
-  implicit none
-  integer,intent(in) :: n1,n3
-  real(kind=CUSTOM_REAL),dimension(n1,5),intent(in) :: A
-  real(kind=CUSTOM_REAL),dimension(5,n3),intent(in) :: B
-  real(kind=CUSTOM_REAL),dimension(n1,n3),intent(out) :: C
-  ! local parameters
-  integer :: i,j
-#ifdef USE_XSMM
-  ! matrix-matrix multiplication C = alpha A * B + beta C
-  ! with A(n1,n2) 5x5-matrix, B(n2,n3) 5x25-matrix and C(n1,n3) 5x25-matrix
-  ! static version using MNK="5 25, 5" ALPHA=1 BETA=0
-  call libxsmm_smm_5_25_5(a=A, b=B, c=C)
-  return
-#endif
-  ! matrix-matrix multiplication
-  do j = 1,n3
-!dir$ ivdep
-    do i = 1,n1
-      C(i,j) =  A(i,1) * B(1,j) &
-              + A(i,2) * B(2,j) &
-              + A(i,3) * B(3,j) &
-              + A(i,4) * B(4,j) &
-              + A(i,5) * B(5,j)
-    enddo
-  enddo
-
-  end subroutine mxm5_3comp_singleA_1
-
-
-  subroutine mxm5_3comp_singleB_1(A,n1,B,C,n3)
-  use constants_solver, only: CUSTOM_REAL
-#ifdef USE_XSMM
-  use my_libxsmm, only: libxsmm_smm_25_5_5
-#endif
-  implicit none
-  integer,intent(in) :: n1,n3
-  real(kind=CUSTOM_REAL),dimension(n1,5),intent(in) :: A
-  real(kind=CUSTOM_REAL),dimension(5,n3),intent(in) :: B
-  real(kind=CUSTOM_REAL),dimension(n1,n3),intent(out) :: C
-  ! local parameters
-  integer :: i,j
-#ifdef USE_XSMM
-  ! matrix-matrix multiplication C = alpha A * B + beta C
-  ! with A(n1,n2) 25x5-matrix, B(n2,n3) 5x5-matrix and C(n1,n3) 25x5-matrix
-  ! static version
-  call libxsmm_smm_25_5_5(a=A, b=B, c=C)
-  return
-#endif
-  ! matrix-matrix multiplication
-  do j = 1,n3
-!dir$ ivdep
-    do i = 1,n1
-      C(i,j) =  A(i,1) * B(1,j) &
-              + A(i,2) * B(2,j) &
-              + A(i,3) * B(3,j) &
-              + A(i,4) * B(4,j) &
-              + A(i,5) * B(5,j)
-    enddo
-  enddo
-  end subroutine mxm5_3comp_singleB_1
-
-
-  subroutine mxm5_3comp_3dmat_singleB_1(A,n1,B,n2,C,n3)
-  use constants_solver, only: CUSTOM_REAL
-#if defined(XSMM_FORCE_EVEN_IF_SLOWER) || ( defined(XSMM) && defined(__MIC__) )
-  use my_libxsmm, only: libxsmm_smm_5_5_5
-#endif
-  implicit none
-  integer,intent(in) :: n1,n2,n3
-  real(kind=CUSTOM_REAL),dimension(n1,5,n3),intent(in) :: A
-  real(kind=CUSTOM_REAL),dimension(5,n2),intent(in) :: B
-  real(kind=CUSTOM_REAL),dimension(n1,n2,n3),intent(out) :: C
-  ! local parameters
-  integer :: i,j,k
-#if defined(XSMM_FORCE_EVEN_IF_SLOWER) || ( defined(XSMM) && defined(__MIC__) )
-  ! matrix-matrix multiplication C = alpha A * B + beta C
-  ! with A(n1,n2,n4) 5x5x5-matrix, B(n2,n3) 5x5-matrix and C(n1,n3,n4) 5x5x5-matrix
-  call libxsmm_smm_5_5_5(a=A(1,1,1), b=B, c=C(1,1,1))
-  call libxsmm_smm_5_5_5(a=A(1,1,2), b=B, c=C(1,1,2))
-  call libxsmm_smm_5_5_5(a=A(1,1,3), b=B, c=C(1,1,3))
-  call libxsmm_smm_5_5_5(a=A(1,1,4), b=B, c=C(1,1,4))
-  call libxsmm_smm_5_5_5(a=A(1,1,5), b=B, c=C(1,1,5))
-  return
-#endif
-  ! matrix-matrix multiplication
-  do k = 1,n3
-    do j = 1,n2
-!dir$ ivdep
-      do i = 1,n1
-        C(i,j,k) =  A(i,1,k) * B(1,j) &
-                  + A(i,2,k) * B(2,j) &
-                  + A(i,3,k) * B(3,j) &
-                  + A(i,4,k) * B(4,j) &
-                  + A(i,5,k) * B(5,j)
-      enddo
-    enddo
-  enddo
-  end subroutine mxm5_3comp_3dmat_singleB_1
-#endif
-
-
-!--------------------------------------------------------------------------------------------
-
-
 
   end subroutine compute_forces_crust_mantle_Dev
 

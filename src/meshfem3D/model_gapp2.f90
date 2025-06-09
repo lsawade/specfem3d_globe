@@ -35,13 +35,17 @@
 
 
   module gapp2_mantle_model_constants
-    ! data file resolution
-    integer, parameter :: ma=288,mo=576,mr=32,mr1=64
-    integer :: no,na,nnr,nr1
-    real :: dela,delo
-    ! allocatable model arrays
-    real,dimension(:),allocatable :: dep,dep1,vp1
-    real,dimension(:,:,:),allocatable :: vp3
+
+  implicit none
+
+  ! data file resolution
+  integer, parameter :: ma = 288,mo = 576,mr = 32,mr1 = 64
+  integer :: no,na,nnr,nr1
+  real :: dela,delo
+  ! allocatable model arrays
+  real,dimension(:),allocatable :: dep,dep1,vp1
+  real,dimension(:,:,:),allocatable :: vp3
+
   end module gapp2_mantle_model_constants
 
 !
@@ -224,7 +228,7 @@
   ! longitude
   if (phi < 0.0d0) phi = phi + 2.*PI
   io = int(phi / dphi) + 1
-  if (io > no) io=io-no
+  if (io > no) io = io-no
 
   ! velocity and density perturbations
   dvp = vp3(ia,io,id)/100.d0

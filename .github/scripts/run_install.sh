@@ -18,6 +18,65 @@ sudo apt-get install -yq --no-install-recommends gfortran g++ openmpi-bin libope
 if [[ $? -ne 0 ]]; then exit 1; fi
 echo
 
+# parallel hdf5
+if [ "${HDF5}" == "true" ]; then
+  echo
+  echo "HDF5 installation:"
+  echo
+  sudo apt-get install -yq --no-install-recommends libhdf5-mpi-dev
+  ## checks installation paths
+  #echo
+  #dpkg -L libhdf5-mpi-dev
+  #echo
+  #dpkg -L libhdf5-openmpi-dev
+  #echo
+  #echo "hdf5 module paths:"
+  #find /usr/ -iname 'hdf5.mod'
+  #echo "hdf5 library paths:"
+  #find /usr/ -iname 'libhdf5hl_fortran*'
+  #echo
+fi
+
+## NetCDF
+if [ "${NETCDF}" == "true" ]; then
+  echo
+  echo "NETCDF installation:"
+  echo
+  # installs fortran netcdf
+  sudo apt-get install -yq --no-install-recommends libnetcdff-dev
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  echo; echo "done netCDF"; echo
+fi
+
+## PETSc
+if [ "${PETSC}" == "true" ]; then
+  echo
+  echo "PETSc installation:"
+  echo
+  # requires gfortran version 10 as default
+  #mv -v /usr/local/bin/gfortran /usr/local/bin/gfortran-9
+  #sudo update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-10 60
+  #sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 60
+  # installs petsc
+  sudo apt-get install -yq --no-install-recommends petsc-dev
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  echo; echo "done PETSc"; echo
+fi
+
+## HIP
+if [ "${HIP}" == "true" ]; then
+  echo
+  echo "HIP additionals installation:"
+  echo
+  sudo apt-get install -yq --no-install-recommends libtbb-dev
+fi
+
+# checks exit code
+if [[ $? -ne 0 ]]; then exit 1; fi
+echo
+
 # python3 pip upgrade might complain: "ERROR: launchpadlib 1.10.13 requires testresources"
 sudo apt-get install -yq --no-install-recommends python3-testresources
 # checks exit code
@@ -59,6 +118,53 @@ gfortran --version
 echo "mpif90 --version"
 mpif90 --version
 echo
+
+## ADIOS2
+if [ "${ADIOS2}" == "true" ]; then
+  echo
+  echo "ADIOS2 installation:"
+  echo
+  # installs cmake wget
+  sudo apt-get install -yq --no-install-recommends cmake wget
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  # uses /opt as installation directory
+  mkdir -p /opt; cd /opt
+  # download source
+  wget https://github.com/ornladios/ADIOS2/archive/refs/tags/v2.10.1.tar.gz
+  tar zxf v2.10.1.tar.gz
+  cd ADIOS2-2.10.1/
+  # build source
+  mkdir -p build; cd build/
+  CC=gcc CXX=g++ FC=gfortran cmake -DADIOS2_USE_Fortran=ON \
+    -DADIOS2_USE_HDF5=OFF -DADIOS2_BUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF \
+    -DCMAKE_INSTALL_PREFIX=/opt/ADIOS2 ../
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  make -j4
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  make install
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  # environment for directory
+  echo "ADIOS2_DIR=/opt/ADIOS2" >> $GITHUB_ENV
+  echo; echo "done ADIOS2"; echo
+fi
+
+## EMC model
+if [ "${EMC_MODEL}" == "true" ]; then
+  echo
+  echo "EMC model installation:"
+  echo
+  echo "current dir: `pwd`"
+  cd DATA/IRIS_EMC/
+  wget --quiet --tries=3 https://ds.iris.edu/files/products/emc/emc-files/Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
+  ln -s Alaska.JointInversion-RF+Vph+HV-1.Berg.2020-nc4.nc model.nc
+  cd ../../
+fi
 
 # MPI
 # github actions uses for Linux virtual machines a 2-core CPU environment
@@ -115,8 +221,6 @@ echo "OMPI_MCA_rmaps_base_inherit=1" >> $GITHUB_ENV
 
 # exports for xterm output (for make tests)
 echo "TERM=xterm" >> $GITHUB_ENV
-
-
 
 echo
 echo "exports:"

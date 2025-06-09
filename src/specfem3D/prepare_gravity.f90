@@ -34,6 +34,9 @@
   use specfem_par_crustmantle
   use specfem_par_outercore
   use specfem_par_innercore
+  use specfem_par_full_gravity
+
+  use siem_math_library, only: compute_g_gradg,compute_g_gradg_elliptical
 
   implicit none
 
@@ -56,12 +59,27 @@
   integer :: int_radius,idummy,nspl_gravity,iglob,ier
   integer :: index_fluid
 
+  ! full gravity
+  double precision,dimension(:),allocatable :: g_rad
+  double precision :: dotrho
+  double precision :: gvec(NDIM),gradg(6)
+  ! ellipticity spline
+  integer :: nspl2
+  double precision,dimension(NR_DENSITY) :: rspl2,e_spline,e_spline2,eta_spline,eta_spline2
+  ! table
+  double precision :: eps,eta
+  double precision,dimension(:),allocatable :: eps_rad,eta_rad,dotrho_rad
+  ! rotation rate
+  double precision :: omega,twothirdOmega2
+  double precision,parameter :: two_third = 2.d0/3.d0
+
   ! debugging
   logical, parameter :: DEBUG = .false.
 
   ! minimum radius in inner core (to avoid zero radius)
   double precision, parameter :: MINIMUM_RADIUS_INNER_CORE = 100.d0 ! in m
 
+  ! user output
   if (myrank == 0) then
     write(IMAIN,*) "preparing gravity arrays"
     call flush_IMAIN()
@@ -86,6 +104,13 @@
   if (ier /= 0) stop 'Error allocating gravity_grad_ln_density_dr array'
   gravity_pre_store_outer_core(:,:) = 0._CUSTOM_REAL
 
+  ! for full gravity
+  if (FULL_GRAVITY_VAL) then
+    allocate(gravity_rho_g_over_kappa_outer_core(NGLOB_OUTER_CORE),stat=ier)
+    if (ier /= 0) stop 'Error allocating gravity_rho_g_over_kappa_outer_core array'
+    gravity_rho_g_over_kappa_outer_core(:) = 0._CUSTOM_REAL
+  endif
+
   ! helper arrays
   allocate(r(NRAD_GRAVITY), &
            rspl_gravity(NR_DENSITY), &
@@ -105,11 +130,15 @@
 
   ! non-dimensionalizes sampling point locations
   do int_radius = 1,NRAD_GRAVITY
-    ! old: assuming R_PLANET_KM = R_EARTH_KM = 6371.d0, ranges from 1/10 * 1/R_PLANET_KM ~ 1.e-5 to 70000/10 * 1/R_PLANET ~ 1.09
-    !      r(int_radius) = dble(int_radius) / (R_PLANET_KM * 10.d0)
-    !
-    ! setting sampling points up to range_max
-    r(int_radius) = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
+    ! sets radius value
+    if (USE_OLD_VERSION_FORMAT) then
+      ! old version increments in 1/10 equals steps of 100 m (see constants.h: NRAD_GRAVITY = 70000)
+      ! old: assuming R_PLANET_KM = R_EARTH_KM = 6371.d0, ranges from 1/10 * 1/R_PLANET_KM ~ 1.e-5 to 70000/10 * 1/R_PLANET ~ 1.09
+      r(int_radius) = dble(int_radius) / (R_PLANET_KM * 10.d0)
+    else
+      ! setting sampling points up to range_max
+      r(int_radius) = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
+    endif
 
     ! r in range [1.4e-5,1.001]
     !
@@ -122,6 +151,25 @@
     !       -> int_radius = r * NRAD_GRAVITY / range_max
     !       for example: r = RCMB/R_PLANET  -> int_radius = RCMB/R_PLANET * NRAD_GRAVITY / range_max
   enddo
+
+  ! for full gravity
+  if (FULL_GRAVITY_VAL) then
+    ! gravity kernels need g values and grad(g)
+    if (SIMULATION_TYPE == 3) then
+      ! note: this setup might not be needed if one takes gxl,.. and Hxxl,.. directly
+      !       and store them as g_cm and gradg_cm arrays
+      allocate(g_rad(NRAD_GRAVITY))
+      ! prepare ellipticity splines for epsilon and eta values
+      if (ELLIPTICITY_VAL) then
+        allocate(eps_rad(NRAD_GRAVITY),eta_rad(NRAD_GRAVITY),dotrho_rad(NRAD_GRAVITY))
+        ! gets ellipticity & eta splines
+        call make_ellipticity2(nspl2,rspl2,e_spline,e_spline2,eta_spline,eta_spline2)
+        ! rotation rate omega
+        omega = TWO_PI / (HOURS_PER_DAY * SECONDS_PER_HOUR)    ! rotation rate in rad/sec
+        twothirdOmega2 = two_third * omega*omega / (PI*GRAV*RHOAV)
+      endif
+    endif
+  endif
 
   ! store g, rho and dg/dr=dg using normalized radius in lookup table every 100 m
   ! get density and velocity from PREM model using dummy doubling flag
@@ -160,35 +208,78 @@
       minus_deriv_gravity_table(int_radius) = - dg
       density_table(int_radius) = rho
       minus_rho_g_over_kappa_fluid(int_radius) = - g / vp**2     ! for fluid: vp**2 = kappa/rho
+
+      ! for full gravity
+      if (FULL_GRAVITY_VAL) then
+        ! gravity kernels need g values and grad(g)
+        if (SIMULATION_TYPE == 3) then
+          ! note: this setup might not be needed if one takes gxl,.. and Hxxl,.. directly
+          !       and store them as g_cm and gradg_cm arrays
+          ! store table data
+          g_rad(int_radius) = g
+          if (ELLIPTICITY_VAL) then
+            ! spline evaluations for epsilon and eta
+            call spline_evaluation(rspl2,e_spline,e_spline2,nspl2,radius,eps)
+            call spline_evaluation(rspl2,eta_spline,eta_spline2,nspl2,radius,eta)
+            ! store into table
+            eps_rad(int_radius) = eps
+            eta_rad(int_radius) = eta
+            dotrho_rad(int_radius) = drhodr
+          endif
+        endif
+      endif
     enddo
+
+    ! debug - file output
+    if (.false.) then
+      open(21,file='tmp_grav.dat',status='unknown')
+      write(21,*) "# int_radius  # radius  # rho  # minus_g  # minus_dg"
+      do int_radius = 1,NRAD_GRAVITY
+        radius = r(int_radius)
+        rho = density_table(int_radius)
+        minus_g = minus_gravity_table(int_radius)
+        minus_dg = minus_deriv_gravity_table(int_radius)
+        write(21,*) int_radius,radius,rho,minus_g,minus_dg
+      enddo
+      close(21)
+    endif
 
     ! make sure fluid array is only assigned in outer core between 1222 and 3478 km
     ! lookup table is defined every 100 m
     do int_radius = 1,NRAD_GRAVITY
-      radius_km = r(int_radius) * R_PLANET_KM
+      ! radius in km
+      if (USE_OLD_VERSION_FORMAT) then
+        radius_km = dble(int_radius) / 10.d0
+      else
+        radius_km = r(int_radius) * R_PLANET_KM
+      endif
+
       ! upper limit for fluid core
       if (radius_km > RCMB/1000.d0 - 3.d0) then
         ! gets index for fluid
-        !
-        ! old: based on int_radius = r * R_PLANET/1000 * 10.d0 = (RCMB/1000 - 3)/R_PLANET_KM * R_PLANET/1000 * 10.d0
-        !                                                      = (RCMB/1000 - 3) * 10.d0
-        !index_fluid = nint((RCMB/1000.d0 - 3.d0)*10.d0)
-        !
-        ! new: based on int_radius = r * NRAD_GRAVITY / range_max   (with r being non-dimensionalized between [0,1.001])
-        index_fluid = nint( (RCMB/1000.d0 - 3.d0)/R_PLANET_KM * NRAD_GRAVITY / range_max)
+        if (USE_OLD_VERSION_FORMAT) then
+          ! old: based on int_radius = r * R_PLANET/1000 * 10.d0 = (RCMB/1000 - 3)/R_PLANET_KM * R_PLANET/1000 * 10.d0
+          !                                                      = (RCMB/1000 - 3) * 10.d0
+          index_fluid = nint((RCMB/1000.d0 - 3.d0)*10.d0)
+        else
+          ! new: based on int_radius = r * NRAD_GRAVITY / range_max   (with r being non-dimensionalized between [0,1.001])
+          index_fluid = nint( (RCMB/1000.d0 - 3.d0)/R_PLANET_KM * NRAD_GRAVITY / range_max)
+        endif
         ! stays with fluid properties
         minus_rho_g_over_kappa_fluid(int_radius) = minus_rho_g_over_kappa_fluid(index_fluid)
       endif
+
       ! lower limit for fluid core
       if (radius_km < RICB/1000.d0 + 3.d0) then
         ! gets index for fluid
-        !
-        ! old: based on int_radius = r * R_PLANET/1000 * 10.d0 = (RICB/1000 + 3)/R_PLANET_KM * R_PLANET/1000 * 10.d0
-        !                                                      = (RICB/1000 + 3) * 10.d0
-        !index_fluid = nint((RICB/1000.d0 + 3.d0)*10.d0)
-        !
-        ! new: based on int_radius = r * NRAD_GRAVITY / range_max   (with r being non-dimensionalized between [0,1.001])
-        index_fluid = nint( (RICB/1000.d0 + 3.d0)/R_PLANET_KM * NRAD_GRAVITY / range_max)
+        if (USE_OLD_VERSION_FORMAT) then
+          ! old: based on int_radius = r * R_PLANET/1000 * 10.d0 = (RICB/1000 + 3)/R_PLANET_KM * R_PLANET/1000 * 10.d0
+          !                                                      = (RICB/1000 + 3) * 10.d0
+          index_fluid = nint((RICB/1000.d0 + 3.d0)*10.d0)
+        else
+          ! new: based on int_radius = r * NRAD_GRAVITY / range_max   (with r being non-dimensionalized between [0,1.001])
+          index_fluid = nint( (RICB/1000.d0 + 3.d0)/R_PLANET_KM * NRAD_GRAVITY / range_max)
+        endif
         ! stays with fluid properties
         minus_rho_g_over_kappa_fluid(int_radius) = minus_rho_g_over_kappa_fluid(index_fluid)
       endif
@@ -218,16 +309,23 @@
       ! note: the gravity spline evaluation is done for a perfectly spherical model, thus we remove the ellipicity in case.
       !       however, due to topograpy the radius r might still be > 1.0
       r_table = radius
-      if (ELLIPTICITY) call revert_ellipticity_rtheta(r_table,theta,nspl,rspl,ellipicity_spline,ellipicity_spline2)
+      if (ELLIPTICITY) &
+        call revert_ellipticity_rtheta(r_table,theta,nspl_ellip,rspl_ellip,ellipicity_spline,ellipicity_spline2)
 
       ! integrated and multiply by rho / Kappa
-      ! old: int_radius = nint(10.d0 * radius * R_PLANET_KM)
-      !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
-      ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
-      int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      if (USE_OLD_VERSION_FORMAT) then
+        ! old: int_radius = nint(10.d0 * radius * R_PLANET_KM)
+        !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
+        int_radius = nint(radius * R_PLANET_KM * 10.d0)
+      else
+        ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
+        int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      endif
+
       ! limits range
       if (int_radius < 1) int_radius = 1
       if (int_radius > NRAD_GRAVITY) int_radius = NRAD_GRAVITY
+
       ! debug
       if (DEBUG) then
         if (myrank == 0) print *,'debug: prepare gravity radius = ',radius,r_table,'r = ',r(int_radius),int_radius
@@ -236,12 +334,40 @@
       fac = minus_rho_g_over_kappa_fluid(int_radius)
 
       ! gravitational acceleration (integrated and multiply by rho / Kappa) in Cartesian coordinates
-      gxl = dsin(theta) * dcos(phi) * fac
-      gyl = dsin(theta) * dsin(phi) * fac
-      gzl = dcos(theta) * fac
+      gxl = (dsin(theta) * dcos(phi)) * fac
+      gyl = (dsin(theta) * dsin(phi)) * fac
+      gzl = (dcos(theta)) * fac
       gravity_pre_store_outer_core(1,iglob) = real(gxl,kind=CUSTOM_REAL)
       gravity_pre_store_outer_core(2,iglob) = real(gyl,kind=CUSTOM_REAL)
       gravity_pre_store_outer_core(3,iglob) = real(gzl,kind=CUSTOM_REAL)
+
+      ! for full gravity contribution in compute forces
+      if (FULL_GRAVITY_VAL) then
+        ! store factor rho_g_over_kappa
+        gravity_rho_g_over_kappa_outer_core(iglob) = real(fac,kind=CUSTOM_REAL)
+
+        ! gravity kernels need g values and grad(g)
+        ! outer core kernel not implemented yet...
+        !if (SIMULATION_TYPE == 3) then
+        !  ! get g in outer core
+        !  g = g_rad(int_radius)
+        !  rho = density_table(int_radius)
+        !  if (ELLIPTICITY_VAL) then
+        !    ! w/ ellipticity
+        !    dotrho = dotrho_rad(int_radius)
+        !    eps = eps_rad(int_radius)
+        !    eta = eta_rad(int_radius)
+        !    ! compute g
+        !    call compute_g_gradg_elliptical(NDIM,radius,theta,phi,rho,dotrho,g,eps,eta,twothirdOmega2,gvec)
+        !  else
+        !    ! no ellipticity
+        !    ! compute g
+        !    call compute_g_gradg(NDIM,radius,theta,phi,rho,g,gvec)
+        !  endif
+        !  ! in outer core we need only g
+        !  g_oc(:,iglob) = real(gvec(:),kind=CUSTOM_REAL)
+        !endif
+      endif
     enddo
 
     ! debug
@@ -299,16 +425,23 @@
       ! note: the gravity spline evaluation is done for a perfectly spherical model, thus we remove the ellipicity in case.
       !       however, due to topograpy the radius r might still be > 1.0
       r_table = radius
-      if (ELLIPTICITY) call revert_ellipticity_rtheta(r_table,theta,nspl,rspl,ellipicity_spline,ellipicity_spline2)
+      if (ELLIPTICITY) &
+        call revert_ellipticity_rtheta(r_table,theta,nspl_ellip,rspl_ellip,ellipicity_spline,ellipicity_spline2)
 
       ! radius index
-      ! old: int_radius = nint(10.d0 * radius * R_PLANET_KM)
-      !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
-      ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
-      int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      if (USE_OLD_VERSION_FORMAT) then
+        ! old: int_radius = nint(10.d0 * radius * R_PLANET_KM)
+        !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
+        int_radius = nint(radius * R_PLANET_KM * 10.d0)
+      else
+        ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
+        int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      endif
+
       ! limits range
       if (int_radius < 1) int_radius = 1
       if (int_radius > NRAD_GRAVITY) int_radius = NRAD_GRAVITY
+
       ! debug
       if (DEBUG) then
         if (myrank == 0) print *,'debug: prepare no gravity radius = ',radius,r_table,'r = ',r(int_radius),int_radius
@@ -318,9 +451,9 @@
       fac = d_ln_density_dr_table(int_radius)
 
       ! gradient of d ln(rho)/dr in Cartesian coordinates
-      gxl = dsin(theta) * dcos(phi) * fac
-      gyl = dsin(theta) * dsin(phi) * fac
-      gzl = dcos(theta) * fac
+      gxl = (dsin(theta) * dcos(phi)) * fac
+      gyl = (dsin(theta) * dsin(phi)) * fac
+      gzl = (dcos(theta)) * fac
       gravity_pre_store_outer_core(1,iglob) = real(gxl,kind=CUSTOM_REAL)
       gravity_pre_store_outer_core(2,iglob) = real(gyl,kind=CUSTOM_REAL)
       gravity_pre_store_outer_core(3,iglob) = real(gzl,kind=CUSTOM_REAL)
@@ -351,6 +484,35 @@
     gravity_pre_store_crust_mantle(:,:) = 0._CUSTOM_REAL
     gravity_H_crust_mantle(:,:) = 0._CUSTOM_REAL
 
+    ! for full gravity
+    if (FULL_GRAVITY_VAL) then
+      allocate(gravity_rho_crust_mantle(NGLOB_CRUST_MANTLE),stat=ier)
+      if (ier /= 0) stop 'Error allocating gravity rho array for crust/mantle'
+      gravity_rho_crust_mantle(:) = 0._CUSTOM_REAL
+
+      ! gravity kernels need g values and grad(g)
+      if (SIMULATION_TYPE == 3) then
+        ! for crust/mantle kernels
+        allocate(g_cm(NDIM,NGLOB_CRUST_MANTLE),stat=ier)
+        if (ier /= 0) stop 'Error allocating gravity g_cm array'
+        g_cm(:,:) = 0._CUSTOM_REAL
+        allocate(gradg_cm(6,NGLOB_CRUST_MANTLE),stat=ier)
+        if (ier /= 0) stop 'Error allocating gravity gradg_cm array'
+        gradg_cm(:,:) = 0._CUSTOM_REAL
+        ! for outer core kernels - not implemented yet
+        !allocate(g_oc(NDIM,NGLOB_OUTER_CORE),stat=ier)
+        !if (ier /= 0) stop 'Error allocating gravity g_oc array'
+        !g_oc(:,:) = 0._CUSTOM_REAL
+        ! for inner core kernels - not implemented yet
+        !allocate(g_ic(NDIM,NGLOB_INNER_CORE),stat=ier)
+        !if (ier /= 0) stop 'Error allocating gravity g_ic array'
+        !g_ic(:,:) = 0._CUSTOM_REAL
+        !allocate(gradg_ic(6,NGLOB_INNER_CORE),stat=ier)
+        !if (ier /= 0) stop 'Error allocating gravity grad_ic array'
+        !gradg_ic(:,:) = 0._CUSTOM_REAL
+      endif
+    endif
+
     do iglob = 1,NGLOB_CRUST_MANTLE
       ! use mesh coordinates to get theta and phi
       ! x y and z contain r theta and phi
@@ -375,13 +537,19 @@
       ! note: the gravity spline evaluation is done for a perfectly spherical model, thus we remove the ellipicity in case.
       !       however, due to topograpy the radius r might still be > 1.0
       r_table = radius
-      if (ELLIPTICITY) call revert_ellipticity_rtheta(r_table,theta,nspl,rspl,ellipicity_spline,ellipicity_spline2)
+      if (ELLIPTICITY) &
+        call revert_ellipticity_rtheta(r_table,theta,nspl_ellip,rspl_ellip,ellipicity_spline,ellipicity_spline2)
 
       ! for efficiency replace with lookup table every 100 m in radial direction
-      ! old: int_radius = nint(10.d0 * radius * R_PLANET_KM)
-      !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
-      ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
-      int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      if (USE_OLD_VERSION_FORMAT) then
+        ! old: int_radius = nint(10.d0 * radius * R_PLANET_KM)
+        !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
+        int_radius = nint(radius * R_PLANET_KM * 10.d0)
+      else
+        ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
+        int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      endif
+
       ! limits range
       if (int_radius < 1) int_radius = 1
       if (int_radius > NRAD_GRAVITY) int_radius = NRAD_GRAVITY
@@ -392,9 +560,9 @@
 
       ! Cartesian components of the gravitational acceleration
       ! multiplied by common factor rho
-      gxl = minus_g * sin_theta * cos_phi * rho
-      gyl = minus_g * sin_theta * sin_phi * rho
-      gzl = minus_g * cos_theta * rho
+      gxl = (minus_g * sin_theta * cos_phi) * rho
+      gyl = (minus_g * sin_theta * sin_phi) * rho
+      gzl = (minus_g * cos_theta) * rho
       gravity_pre_store_crust_mantle(1,iglob) = real(gxl,kind=CUSTOM_REAL)
       gravity_pre_store_crust_mantle(2,iglob) = real(gyl,kind=CUSTOM_REAL)
       gravity_pre_store_crust_mantle(3,iglob) = real(gzl,kind=CUSTOM_REAL)
@@ -419,6 +587,50 @@
       gravity_H_crust_mantle(4,iglob) = real(Hxyl,kind=CUSTOM_REAL)
       gravity_H_crust_mantle(5,iglob) = real(Hxzl,kind=CUSTOM_REAL)
       gravity_H_crust_mantle(6,iglob) = real(Hyzl,kind=CUSTOM_REAL)
+
+      ! for full gravity contribution in compute forces
+      if (FULL_GRAVITY_VAL) then
+        gravity_rho_crust_mantle(iglob) = real(rho,kind=CUSTOM_REAL)
+
+        ! gravity kernels need g values and grad(g)
+        if (SIMULATION_TYPE == 3) then
+          ! note: this setup might not be needed if one takes gxl,.. and Hxxl,.. directly
+          !       and store them as g_cm and gradg_cm arrays.
+          !       however, there is some difference between these two ways of calculating g and grad(g)
+          !       when ellipticity is turned on.
+          !
+          ! use pre-computed g vector (for consistency)
+          !g_cm(:,iglob) = gravity_pre_store_crust_mantle(:,iglob)/rho
+          !gradg(:) = gravity_H_crust_mantle(:,iglob)/rho
+          !
+          ! or re-compute g & grad(g)
+          !
+          ! get g in crust/mantle
+          g = g_rad(int_radius)
+          if (ELLIPTICITY_VAL) then
+            ! w/ ellipicity
+            dotrho = dotrho_rad(int_radius)
+            eps = eps_rad(int_radius)
+            eta = eta_rad(int_radius)
+            ! compute g
+            call compute_g_gradg_elliptical(NDIM,radius,theta,phi,rho,dotrho,g,eps,eta,twothirdOmega2,gvec,gradg)
+          else
+            ! no ellipticity
+            ! compute g
+            call compute_g_gradg(NDIM,radius,theta,phi,rho,g,gvec,gradg)
+          endif
+          ! store g vector & grad(g)
+          g_cm(:,iglob) = real(gvec(:),kind=CUSTOM_REAL)
+          gradg_cm(:,iglob) = real(gradg(:),kind=CUSTOM_REAL)
+
+          !debug - compare gvec with gxl,gyl,gzl divided by rho
+          !if (maxval(abs(gvec(:) - gravity_pre_store_crust_mantle(:,iglob)/rho)) > 7.e-5) &
+          !  print *,'debug: gvec ',gvec(:),'gxl/gyl/gzl',gravity_pre_store_crust_mantle(:,iglob)/rho,'rho',rho
+          !debug - compare gradg with Hxxl,.. divided by rho
+          !if (maxval(abs(gradg(:) - gravity_H_crust_mantle(:,iglob)/rho)) > 7.e-5) &
+          !  print *,'debug: gradg ',gradg(:),'Hxxl/..',gravity_H_crust_mantle(:,iglob)/rho,'rho',rho
+        endif
+      endif
     enddo
   else
     ! dummy allocation
@@ -426,7 +638,6 @@
              gravity_H_crust_mantle(6,1),stat=ier)
     if (ier /= 0) stop 'Error allocating gravity arrays for crust/mantle'
   endif
-
 
   ! inner core
   if (GRAVITY_VAL) then
@@ -436,6 +647,13 @@
     if (ier /= 0) stop 'Error allocating gravity arrays for inner core'
     gravity_pre_store_inner_core(:,:) = 0._CUSTOM_REAL
     gravity_H_inner_core(:,:) = 0._CUSTOM_REAL
+
+    ! for full gravity
+    if (FULL_GRAVITY_VAL) then
+      allocate(gravity_rho_inner_core(NGLOB_INNER_CORE),stat=ier)
+      if (ier /= 0) stop 'Error allocating gravity rho array for inner core'
+      gravity_rho_inner_core(:) = 0._CUSTOM_REAL
+    endif
 
     do iglob = 1,NGLOB_INNER_CORE
       ! use mesh coordinates to get theta and phi
@@ -465,14 +683,20 @@
       ! note: the gravity spline evaluation is done for a perfectly spherical model, thus we remove the ellipicity in case.
       !       however, due to topograpy the radius r might still be > 1.0
       r_table = radius
-      if (ELLIPTICITY) call revert_ellipticity_rtheta(r_table,theta,nspl,rspl,ellipicity_spline,ellipicity_spline2)
+      if (ELLIPTICITY) &
+        call revert_ellipticity_rtheta(r_table,theta,nspl_ellip,rspl_ellip,ellipicity_spline,ellipicity_spline2)
 
       ! for efficiency replace with lookup table every 100 m in radial direction
       ! make sure we never use zero for point exactly at the center of the Earth
-      ! old: int_radius = max(1,nint(10.d0 * radius * R_EARTH_KM))
-      !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
-      ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
-      int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      if (USE_OLD_VERSION_FORMAT) then
+        ! old: int_radius = max(1,nint(10.d0 * radius * R_EARTH_KM))
+        !      based on radius = dble(int_radius) / (R_PLANET_KM * 10.d0)
+        int_radius = nint(radius * R_EARTH_KM * 10.d0)
+      else
+        ! new: radius = dble(int_radius) / dble(NRAD_GRAVITY) * range_max
+        int_radius = nint( r_table / range_max * dble(NRAD_GRAVITY) )
+      endif
+
       ! limits range
       if (int_radius < 1) int_radius = 1
       if (int_radius > NRAD_GRAVITY) int_radius = NRAD_GRAVITY
@@ -483,9 +707,9 @@
 
       ! Cartesian components of the gravitational acceleration
       ! multiplied by common factor rho
-      gxl = minus_g * sin_theta * cos_phi * rho
-      gyl = minus_g * sin_theta * sin_phi * rho
-      gzl = minus_g * cos_theta * rho
+      gxl = (minus_g * sin_theta * cos_phi) * rho
+      gyl = (minus_g * sin_theta * sin_phi) * rho
+      gzl = (minus_g * cos_theta) * rho
 
       gravity_pre_store_inner_core(1,iglob) = real(gxl,kind=CUSTOM_REAL)
       gravity_pre_store_inner_core(2,iglob) = real(gyl,kind=CUSTOM_REAL)
@@ -511,6 +735,34 @@
       gravity_H_inner_core(4,iglob) = real(Hxyl,kind=CUSTOM_REAL)
       gravity_H_inner_core(5,iglob) = real(Hxzl,kind=CUSTOM_REAL)
       gravity_H_inner_core(6,iglob) = real(Hyzl,kind=CUSTOM_REAL)
+
+      ! for full gravity contribution in compute forces
+      if (FULL_GRAVITY_VAL) then
+        gravity_rho_inner_core(iglob) = real(rho,kind=CUSTOM_REAL)
+
+        ! gravity kernels need g values and grad(g)
+        ! inner core kernels not implemented yet...
+        !if (SIMULATION_TYPE == 3) then
+        !  ! get g in inner core
+        !  g = g_rad(int_radius)
+        !  rho = rho_rad(int_radius)
+        !  if (ELLIPTICITY_VAL) then
+        !    ! w/ ellipicity
+        !    dotrho = dotrho_rad(int_radius)
+        !    eps = eps_rad(int_radius)
+        !    eta = eta_rad(int_radius)
+        !    ! compute g
+        !    call compute_g_gradg_elliptical(NDIM,radius,theta,phi,rho,dotrho,g,eps,eta,twothirdOmega2,gvec,gradg)
+        !  else
+        !    ! no ellipticity
+        !    ! compute g
+        !    call compute_g_gradg(NDIM,radius,theta,phi,rho,g,gvec,gradg)
+        !  endif
+        !  ! store g vector & grad(g)
+        !  g_ic(:,iglob) = real(gvec(:),kind=CUSTOM_REAL)
+        !  gradg_ic(:,iglob) = real(gradg(:),kind=CUSTOM_REAL)
+        !endif
+      endif
     enddo
   else
     ! dummy allocation

@@ -44,6 +44,8 @@
 
   module model_full_sh_crust_par
 
+  implicit none
+
   ! three_d_mantle_model_constants
   integer, parameter :: NS_40 = 40
   integer, parameter :: NSH_40 = (NS_40+1)**2
@@ -379,6 +381,8 @@
 
 
   module model_full_sh_mantle_par
+
+  implicit none
 
   ! three_d_mantle_model_constants
   integer, parameter :: NK_20 = 20
@@ -1050,7 +1054,7 @@
 
   !   FILL IN THE LAST POINT WITH A LINEAR EXTRAPOLATION.
 9  J2 = J2+2
-  do J=1,3
+  do J = 1,3
     Q(J,J2) = YY(J)
   enddo
 
@@ -1082,15 +1086,13 @@
   subroutine add_topography_sh_mantle(xelm,yelm,zelm)
 
   use constants
-  use shared_parameters, only: R_PLANET
+  use shared_parameters, only: R_PLANET,ELLIPTICITY
 
   use meshfem_par, only: R220,R400,R670,R771
 
   implicit none
 
-  double precision :: xelm(NGNOD)
-  double precision :: yelm(NGNOD)
-  double precision :: zelm(NGNOD)
+  double precision, intent(inout) :: xelm(NGNOD),yelm(NGNOD),zelm(NGNOD)
 
   ! local parameters
   integer :: ia
@@ -1098,14 +1100,15 @@
   real(kind=4) :: topo410out,topo650out
   double precision :: topo410,topo650
 
-  double precision :: r,lat,lon,theta,phi
+  double precision :: r,lat,lon
   double precision :: gamma
   double precision :: x,y,z
 
   !statistics
   logical,parameter :: DEBUG_STATISTICS = .false.
-  real(kind=CUSTOM_REAL),save :: min_410 = HUGEVAL,max_410 = - HUGEVAL
-  real(kind=CUSTOM_REAL),save :: min_650 = HUGEVAL,max_650 = - HUGEVAL
+  real(kind=CUSTOM_REAL), parameter :: HUGEVAL_REAL = real(HUGEVAL,kind=CUSTOM_REAL)
+  real(kind=CUSTOM_REAL),save :: min_410 = HUGEVAL_REAL, max_410 = - HUGEVAL_REAL
+  real(kind=CUSTOM_REAL),save :: min_650 = HUGEVAL_REAL, max_650 = - HUGEVAL_REAL
   real(kind=CUSTOM_REAL) :: min_410_all,max_410_all
   real(kind=CUSTOM_REAL) :: min_650_all,max_650_all
 
@@ -1123,20 +1126,12 @@
     y = yelm(ia)
     z = zelm(ia)
 
-    if (USE_OLD_VERSION_5_1_5_FORMAT) then
-      ! convert to r theta phi
-      call xyz_2_rthetaphi_dble(x,y,z,r,theta,phi)
-      call reduce(theta,phi)
-      ! get colatitude and longitude in degrees
-      lat = 90.0 - theta * RADIANS_TO_DEGREES
-      lon = phi * RADIANS_TO_DEGREES
-    else
-      ! note: the topography on 410 and 650 is given in geographic colat/lon,
-      !       thus we need to convert geocentric colatitude to geographic colatitudes
-      !
-      ! converts geocentric coordinates x/y/z to geographic radius/latitude/longitude (in degrees)
-      call xyz_2_rlatlon_dble(x,y,z,r,lat,lon)
-    endif
+    ! note: the topography on 410 and 650 is given in geographic colat/lon,
+    !       thus we need to convert geocentric colatitude to geographic colatitudes
+    !
+    ! converts geocentric coordinates x/y/z to geographic radius/latitude/longitude (in degrees)
+    ! note: at this point, the mesh is still spherical (no need to correct latitude for ellipticity)
+    call xyz_2_rlatlon_dble(x,y,z,r,lat,lon,ELLIPTICITY)
 
     ! stretching occurs between 220 and 770
     if (r > R220/R_PLANET .or. r < R771/R_PLANET) cycle
@@ -1254,18 +1249,15 @@
 ! this is only a placeholder function, which is not used yet...user must supply the subtopo_cmb() routine
 
   use constants
-
-  use shared_parameters, only: R_PLANET,RCMB,RTOPDDOUBLEPRIME
+  use shared_parameters, only: R_PLANET,RCMB,RTOPDDOUBLEPRIME,ELLIPTICITY
 
   implicit none
 
-  double precision,intent(inout) :: xelm(NGNOD)
-  double precision,intent(inout) :: yelm(NGNOD)
-  double precision,intent(inout) :: zelm(NGNOD)
+  double precision,intent(inout) :: xelm(NGNOD),yelm(NGNOD),zelm(NGNOD)
 
   ! PREM reference values
-  double precision :: RTOPDDOUBLEPRIME_ = 3630000.d0
-  double precision :: RCMB_ = 3480000.d0
+  double precision, parameter :: RTOPDDOUBLEPRIME_ = 3630000.d0
+  double precision, parameter :: RCMB_ = 3480000.d0
 
   ! local parameters
   integer :: ia
@@ -1286,7 +1278,8 @@
     z = zelm(ia)
 
     ! converts geocentric coordinates x/y/z to geographic radius/latitude/longitude (in degrees)
-    call xyz_2_rlatlon_dble(x,y,z,r,lat,lon)
+    ! note: at this point, the mesh is still spherical (no need to correct latitude for ellipticity)
+    call xyz_2_rlatlon_dble(x,y,z,r,lat,lon,ELLIPTICITY)
 
     ! compute topography on CMB; routine subtopo_cmb needs to be supplied by the user
     call subtopo_sh_cmb(lat,lon,topocmb)

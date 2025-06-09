@@ -37,17 +37,29 @@
 
   use constants, only: CUSTOM_REAL
 
+  implicit none
+
   ! GLL model_variables
   type model_gll_qmu_variables
-    sequence
+    !TODO: check if `sequence` is needed
+    !
+    !      in principle, `sequence` is only needed to explicity map the memory structure, for example when
+    !      the variable like `MGLL_V` gets passed as a routine argument, making sure it gets accessed correctly.
+    !      however, here we don't pass the objects MGLL_V, MGLL_V_IC to routines, but only use the objects to store arrays
+    !      within this module.
+    !
+    !sequence
+
     ! tomographic iteration model on GLL points
     real(kind=CUSTOM_REAL),dimension(:,:,:,:),allocatable :: qmu_new
 
     ! number of elements (crust/mantle elements)
     integer :: nspec
 
-    integer :: dummy_pad ! padding 4 bytes to align the structure
+    ! in case we use `sequence` to align memory addresses
+    !integer :: dummy_pad ! padding 4 bytes to align the structure
   end type model_gll_qmu_variables
+
   type (model_gll_qmu_variables) :: MGLL_QMU_V
 
   end module model_gll_qmu_par
@@ -157,7 +169,7 @@
 
   call synchronize_all()
   if (myrank == 0) then
-    write(IMAIN,*)'  reading done'
+    write(IMAIN,*) '  reading done'
     write(IMAIN,*)
     call flush_IMAIN()
   endif

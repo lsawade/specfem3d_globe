@@ -37,6 +37,8 @@
   ! local parameters
   integer :: ispec2D,i,j,npoin
 
+  if (HDF5_ENABLED) return
+
   ! gets number of points on surface mesh
   npoin = 0
   do ispec2D = 1, NSPEC_TOP ! NSPEC2D_TOP(IREGION_CRUST_MANTLE)
@@ -186,14 +188,14 @@
         ! wavefield values
         if (MOVIE_VOLUME_TYPE == 5) then
           ! stores displacement
-          store_val_ux(ipoin) = displ_crust_mantle(1,iglob)*scale_displ
-          store_val_uy(ipoin) = displ_crust_mantle(2,iglob)*scale_displ
-          store_val_uz(ipoin) = displ_crust_mantle(3,iglob)*scale_displ
+          store_val_ux(ipoin) = displ_crust_mantle(1,iglob) * real(scale_displ,kind=CUSTOM_REAL)
+          store_val_uy(ipoin) = displ_crust_mantle(2,iglob) * real(scale_displ,kind=CUSTOM_REAL)
+          store_val_uz(ipoin) = displ_crust_mantle(3,iglob) * real(scale_displ,kind=CUSTOM_REAL)
         else
           ! stores velocity
-          store_val_ux(ipoin) = veloc_crust_mantle(1,iglob)*scale_veloc
-          store_val_uy(ipoin) = veloc_crust_mantle(2,iglob)*scale_veloc
-          store_val_uz(ipoin) = veloc_crust_mantle(3,iglob)*scale_veloc
+          store_val_ux(ipoin) = veloc_crust_mantle(1,iglob) * real(scale_veloc,kind=CUSTOM_REAL)
+          store_val_uy(ipoin) = veloc_crust_mantle(2,iglob) * real(scale_veloc,kind=CUSTOM_REAL)
+          store_val_uz(ipoin) = veloc_crust_mantle(3,iglob) * real(scale_veloc,kind=CUSTOM_REAL)
         endif
 
       enddo

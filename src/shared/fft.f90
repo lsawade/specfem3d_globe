@@ -40,12 +40,12 @@
 
   integer,intent(in) :: npow
 
-  complex(kind=CUSTOM_CMPLX),dimension(*) :: xi
+  complex(kind=CUSTOM_CMPLX),dimension(*),intent(inout) :: xi
   real(kind=CUSTOM_REAL),intent(in) :: zign,dtt
 
-!! DK DK here is the hardwired maximum size of the array
-!! DK DK Aug 2016: if this routine is called many times (for different mesh points at which the SEM is coupled with FK)
-!! DK DK Aug 2016: this should be moved to the calling program and precomputed once and for all
+! here is the hardwired maximum size of the array
+! Aug 2016: if this routine is called many times (for different mesh points at which the SEM is coupled with FK)
+! Aug 2016: this should be moved to the calling program and precomputed once and for all
   real(kind=CUSTOM_REAL),intent(in) :: mpow(30)
 
   ! local parameters
@@ -56,11 +56,12 @@
 
   real(kind=CUSTOM_REAL), parameter :: PI = acos(-1.0)
 
-!! DK DK added this sanity check
+  ! added this sanity check
   if (npow > 30) stop 'Error: FTT routine has an hardwired maximum of 30 levels'
-!! DK DK in any case the line below imposes a maximum of 31, otherwise the integer 2**n will overflow
+  ! in any case the line below imposes a maximum of 31, otherwise the integer 2**n will overflow
 
   lx = 2**npow
+  flx = lx
 
   do l = 1,npow
 
@@ -69,6 +70,7 @@
     lbhalf = lblock/2
 
     k = 0
+    ii = 0
 
     do iblock = 1,nblock
 
@@ -92,16 +94,17 @@
 
       do i = 2,npow
         ii = i
-        if (k < mpow(i)) goto 4
-        k = k-mpow(i)
+        if (k < int(mpow(i))) goto 4
+        k = k - int(mpow(i))
       enddo
 
-    4 k = k+mpow(ii)
+    4 k = k + int(mpow(ii))
 
     enddo
   enddo
 
   k = 0
+  ii = 0
 
   do j = 1,lx
     if (k < j) goto 5
@@ -112,11 +115,11 @@
 
 5   do i = 1,npow
       ii = i
-      if (k < mpow(i)) goto 7
-      k = k-mpow(i)
+      if (k < int(mpow(i))) goto 7
+      k = k - int(mpow(i))
     enddo
 
-7   k = k+mpow(ii)
+7   k = k + int(mpow(ii))
   enddo
 
   ! final steps deal with dt factors
@@ -127,7 +130,7 @@
     ! REVERSE FFT
     flx = flx*dtt
     inv_of_flx = 1._CUSTOM_REAL / flx
-!! DK DK Aug 2016: changed to multiplication by the precomputed inverse to make the routine faster
+! Aug 2016: changed to multiplication by the precomputed inverse to make the routine faster
 !       xi(1:lx) = xi(1:lx) / flx         ! division by dt
     xi(1:lx) = xi(1:lx) * inv_of_flx  ! division by dt
   endif
@@ -151,13 +154,13 @@
   integer,intent(in) :: npow
   real(kind=CUSTOM_REAL),intent(in)  :: dtt,zign
 
-  complex(kind=CUSTOM_CMPLX) :: s(*)
-  real(kind=CUSTOM_REAL) :: r(*)       ! note that this is real, not double precision
+  complex(kind=CUSTOM_CMPLX),intent(inout) :: s(*)
+  real(kind=CUSTOM_REAL),intent(inout) :: r(*)       ! note that this is real, not double precision
 
-!! DK DK here is the hardwired maximum size of the array
-!! DK DK Aug 2016: if this routine is called many times (for different mesh points at which the SEM is coupled with FK)
-!! DK DK Aug 2016: this should be moved to the calling program and precomputed once and for all
-  real(kind=CUSTOM_REAL) :: mpow(30)
+! here is the hardwired maximum size of the array
+! Aug 2016: if this routine is called many times (for different mesh points at which the SEM is coupled with FK)
+! Aug 2016: this should be moved to the calling program and precomputed once and for all
+  real(kind=CUSTOM_REAL), intent(inout) :: mpow(30)
 
   ! local parameters
   integer :: nsmp, nhalf
@@ -169,7 +172,7 @@
 
   call FFT(npow,s,zign,dtt,mpow)    ! Fourier transform
 
-  r(1:nsmp) = real(s(1:nsmp))       ! take the real part
+  r(1:nsmp) = real(s(1:nsmp),kind=CUSTOM_REAL)       ! take the real part
 
   end subroutine FFTinv
 
@@ -183,7 +186,7 @@
 
   integer, parameter :: CUSTOM_CMPLX = 8
 
-  complex(kind=CUSTOM_CMPLX) :: s(*)
+  complex(kind=CUSTOM_CMPLX),intent(inout) :: s(*)
   integer, intent(in) :: np2
 
   ! local parameters
@@ -193,7 +196,7 @@
   n1 = np2 + 1
 
   s(n1) = 0.0
-  s(1)  = cmplx(real(s(1)),0.0)
+  s(1)  = cmplx(real(s(1)),0.0,kind=CUSTOM_CMPLX)
 
   do i = 1,np2
     s(np2+i) = conjg(s(np2+2-i))

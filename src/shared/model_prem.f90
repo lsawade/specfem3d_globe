@@ -74,7 +74,7 @@
   double precision, parameter :: PREM_RCMB = 3480000.d0             !   2891 km depth
   ! note: SPECFEM versions up to 8.0 (Aug, 2021) used an inner core radius of 1221 km;
   !       based on Table 1 in Dziewonski&Anderson's PREM paper, the inner core radius is at 1221.5 km
-  !double precision, parameter :: PREM_RICB = 1221000.d0            ! old versions
+  double precision, parameter :: PREM_RICB_OLD = 1221000.d0            ! old versions
   double precision, parameter :: PREM_RICB = 1221500.d0
 
   ! PREM2 additional radii for modifications
@@ -114,6 +114,7 @@
 
   ! local parameters
   double precision :: r,scaleval
+  double precision :: ROCEAN,RMIDDLE_CRUST,RMOHO,R80,R220,R400,R600,R670,R771,RTOPDDOUBLEPRIME,RCMB,RICB
 
 ! compute real physical radius in meters
   r = x * R_PLANET
@@ -123,11 +124,49 @@
 
 ! note: using stop statements, not exit_mpi() calls to avoid the need for MPI libraries when linking xcreate_header_file
 
- if (check_doubling_flag) then
+  ! default setting
+  ROCEAN = PREM_ROCEAN
+  RMIDDLE_CRUST = PREM_RMIDDLE_CRUST
+  RMOHO = PREM_RMOHO
+  R80 = PREM_R80
+  R220 = PREM_R220
+  R400 = PREM_R400
+  R600 = PREM_R600
+  R670 = PREM_R670
+  R771 = PREM_R771
+  RTOPDDOUBLEPRIME = PREM_RTOPDDOUBLEPRIME
+  RCMB = PREM_RCMB
+  RICB = PREM_RICB
+
+  ! note: different versions use different radii when calling this routine
+  if (USE_OLD_VERSION_FORMAT) then
+    ! version compatibility with older versions 7.0 - 8.0
+    RICB = PREM_RICB_OLD
+
+    ! version compatibility with special case Berkeley model
+    ! note: old Berkeley implementation used radii different to PREM when calling this routine for gravity evaluation.
+    !       this was inconsistent with the the spline evaluation in the old make_gravity.f90.
+    !       the change here below is to re-introduce this inconsistency to match the old Berkeley model output.
+    !
+    !       new(er) versions use the "original" PREM model for calculating gravity (and ellipticity).
+    !       that is, gravity (acceleration g) and ellipticity (based on density model) is based on PREM, since we know that
+    !       PREM was constructed with corresponding constraints.
+    !       other reference models might better adapt to velocities, but might violate for example total mass constraints.
+    !       the different radii of the reference models are used for meshing purposes only.
+    !
+    if (REFERENCE_1D_MODEL == REFERENCE_MODEL_SEMUCB) then
+      RICB = PREM_RICB
+      RMOHO = 6341000.d0
+      R400 = 5961000.d0
+      R670 = 5721000.d0
+    endif
+  endif
+
+  if (check_doubling_flag) then
     !
     !--- inner core
     !
-    if (r >= 0.d0 .and. r < PREM_RICB) then
+    if (r >= 0.d0 .and. r < RICB) then
       if (idoubling /= IFLAG_INNER_CORE_NORMAL .and. &
          idoubling /= IFLAG_MIDDLE_CENTRAL_CUBE .and. &
          idoubling /= IFLAG_BOTTOM_CENTRAL_CUBE .and. &
@@ -137,31 +176,31 @@
     !
     !--- outer core
     !
-    else if (r > PREM_RICB .and. r < PREM_RCMB) then
+    else if (r > RICB .and. r < RCMB) then
       if (idoubling /= IFLAG_OUTER_CORE_NORMAL) &
         stop 'wrong doubling flag for outer core point in model_prem_iso()'
     !
     !--- D" at the base of the mantle
     !
-    else if (r > PREM_RCMB .and. r < PREM_RTOPDDOUBLEPRIME) then
+    else if (r > RCMB .and. r < RTOPDDOUBLEPRIME) then
       if (idoubling /= IFLAG_MANTLE_NORMAL) &
         stop 'wrong doubling flag for D" point in model_prem_iso()'
     !
     !--- mantle: from top of D" to d670
     !
-    else if (r > PREM_RTOPDDOUBLEPRIME .and. r < PREM_R670) then
+    else if (r > RTOPDDOUBLEPRIME .and. r < R670) then
       if (idoubling /= IFLAG_MANTLE_NORMAL) &
         stop 'wrong doubling flag for top D" to d670 point in model_prem_iso()'
     !
     !--- mantle: from d670 to d220
     !
-    else if (r > PREM_R670 .and. r < PREM_R220) then
+    else if (r > R670 .and. r < R220) then
       if (idoubling /= IFLAG_670_220) &
         stop 'wrong doubling flag for d670 to d220 point in model_prem_iso()'
     !
     !--- mantle and crust: from d220 to MOHO and then to surface
     !
-    else if (r > PREM_R220) then
+    else if (r > R220) then
       if (idoubling /= IFLAG_220_80 .and. idoubling /= IFLAG_80_MOHO .and. idoubling /= IFLAG_CRUST) &
         stop 'wrong doubling flag for d220 to Moho to surface point in model_prem_iso()'
     endif
@@ -171,7 +210,7 @@
 !
 !--- inner core
 !
-  if (r >= 0.d0 .and. r <= PREM_RICB) then
+  if (r >= 0.d0 .and. r <= RICB) then
     drhodr = -2.0d0*8.8381d0*x
     rho = 13.0885d0 - 8.8381d0*x*x
     if (REFERENCE_1D_MODEL == REFERENCE_MODEL_PREM2) then
@@ -193,7 +232,7 @@
 !
 !--- outer core
 !
-  else if (r > PREM_RICB .and. r <= PREM_RCMB) then
+  else if (r > RICB .and. r <= RCMB) then
     drhodr = -1.2638d0 - 2.0d0*3.6426d0*x - 3.0d0*5.5281d0*x*x
     rho = 12.5815d0 - 1.2638d0*x - 3.6426d0*x*x - 5.5281d0*x*x*x
     if (REFERENCE_1D_MODEL == REFERENCE_MODEL_PREM2) then
@@ -215,7 +254,7 @@
 !
 !--- D" at the base of the mantle
 !
-  else if (r > PREM_RCMB .and. r <= PREM_RTOPDDOUBLEPRIME) then
+  else if (r > RCMB .and. r <= RTOPDDOUBLEPRIME) then
     drhodr = -6.4761d0 + 2.0d0*5.5283d0*x - 3.0d0*3.0807d0*x*x
     rho = 7.9565d0 - 6.4761d0*x + 5.5283d0*x*x - 3.0807d0*x*x*x
     if (REFERENCE_1D_MODEL == REFERENCE_MODEL_PREM2) then
@@ -231,7 +270,7 @@
 !
 !--- mantle: from top of D" to d670
 !
-  else if (r > PREM_RTOPDDOUBLEPRIME .and. r <= PREM_R771) then
+  else if (r > RTOPDDOUBLEPRIME .and. r <= R771) then
     drhodr = -6.4761d0 + 2.0d0*5.5283d0*x - 3.0d0*3.0807d0*x*x
     rho = 7.9565d0 - 6.4761d0*x + 5.5283d0*x*x - 3.0807d0*x*x*x
     if (REFERENCE_1D_MODEL == REFERENCE_MODEL_PREM2) then
@@ -250,7 +289,7 @@
     vs = 11.1671d0 - 13.7818d0*x + 17.4575d0*x*x - 9.2777d0*x*x*x
     Qmu = 312.0d0
     Qkappa = 57827.0d0
-  else if (r > PREM_R771 .and. r <= PREM_R670) then
+  else if (r > R771 .and. r <= R670) then
     drhodr = -6.4761d0 + 2.0d0*5.5283d0*x - 3.0d0*3.0807d0*x*x
     rho = 7.9565d0 - 6.4761d0*x + 5.5283d0*x*x - 3.0807d0*x*x*x
     vp = 29.2766d0 - 23.6027d0*x + 5.5242d0*x*x - 2.5514d0*x*x*x
@@ -260,28 +299,28 @@
 !
 !--- mantle: above d670
 !
-  else if (r > PREM_R670 .and. r <= PREM_R600) then
+  else if (r > R670 .and. r <= R600) then
     drhodr = -1.4836d0
     rho = 5.3197d0 - 1.4836d0*x
     vp = 19.0957d0 - 9.8672d0*x
     vs = 9.9839d0 - 4.9324d0*x
     Qmu = 143.0d0
     Qkappa = 57827.0d0
-  else if (r > PREM_R600 .and. r <= PREM_R400) then
+  else if (r > R600 .and. r <= R400) then
     drhodr = -8.0298d0
     rho = 11.2494d0 - 8.0298d0*x
     vp = 39.7027d0 - 32.6166d0*x
     vs = 22.3512d0 - 18.5856d0*x
     Qmu = 143.0d0
     Qkappa = 57827.0d0
-  else if (r > PREM_R400 .and. r <= PREM_R220) then
+  else if (r > R400 .and. r <= R220) then
     drhodr = -3.8045d0
     rho = 7.1089d0 - 3.8045d0*x
     vp = 20.3926d0 - 12.2569d0*x
     vs = 8.9496d0 - 4.4597d0*x
     Qmu = 143.0d0
     Qkappa = 57827.0d0
-  else if (r > PREM_R220 .and. r <= PREM_R80) then
+  else if (r > R220 .and. r <= R80) then
     drhodr = 0.6924d0
     rho = 2.6910d0 + 0.6924d0*x
     vp = 4.1875d0 + 3.9382d0*x
@@ -291,7 +330,7 @@
   else
     if (CRUSTAL .and. .not. SUPPRESS_CRUSTAL_MESH) then
 ! fill with PREM mantle and later add CRUST2.0
-      if (r > PREM_R80) then
+      if (r > R80) then
         ! density/velocity from mantle just below moho
         drhodr = 0.6924d0
         rho = 2.6910d0 + 0.6924d0*x
@@ -303,7 +342,7 @@
       endif
     else
 ! use PREM crust
-      if (r > PREM_R80 .and. r <= PREM_RMOHO) then
+      if (r > R80 .and. r <= RMOHO) then
         drhodr = 0.6924d0
         rho = 2.6910d0 + 0.6924d0*x
         vp = 4.1875d0 + 3.9382d0*x
@@ -312,15 +351,15 @@
         Qkappa = 57827.0d0
 
       else if (SUPPRESS_CRUSTAL_MESH) then
-!! DK DK extend the Moho up to the surface instead of the crust
+        ! extend the Moho up to the surface instead of the crust
         drhodr = 0.6924d0
-        rho = 2.6910d0 + 0.6924d0*(PREM_RMOHO / R_PLANET)
-        vp = 4.1875d0 + 3.9382d0*(PREM_RMOHO / R_PLANET)
-        vs = 2.1519d0 + 2.3481d0*(PREM_RMOHO / R_PLANET)
+        rho = 2.6910d0 + 0.6924d0*(RMOHO / R_PLANET)
+        vp = 4.1875d0 + 3.9382d0*(RMOHO / R_PLANET)
+        vs = 2.1519d0 + 2.3481d0*(RMOHO / R_PLANET)
         Qmu = 600.0d0
         Qkappa = 57827.0d0
 
-      else if (r > PREM_RMOHO .and. r <= PREM_RMIDDLE_CRUST) then
+      else if (r > RMOHO .and. r <= RMIDDLE_CRUST) then
         drhodr = 0.0d0
         rho = 2.9d0
         vp = 6.8d0
@@ -328,7 +367,7 @@
         Qmu = 600.0d0
         Qkappa = 57827.0d0
 
-! same properties everywhere in PREM crust if we decide to define only one layer in the crust
+        ! same properties everywhere in PREM crust if we decide to define only one layer in the crust
         if (ONE_CRUST) then
           drhodr = 0.0d0
           rho = 2.6d0
@@ -338,7 +377,7 @@
           Qkappa = 57827.0d0
         endif
 
-      else if (r > PREM_RMIDDLE_CRUST .and. r <= PREM_ROCEAN) then
+      else if (r > RMIDDLE_CRUST .and. r <= ROCEAN) then
         drhodr = 0.0d0
         rho = 2.6d0
         vp = 5.8d0
@@ -346,7 +385,7 @@
         Qmu = 600.0d0
         Qkappa = 57827.0d0
 ! for density profile for gravity, we do not check that r <= R_PLANET
-      else if (r > PREM_ROCEAN) then
+      else if (r > ROCEAN) then
         drhodr = 0.0d0
         rho = 2.6d0
         vp = 5.8d0
@@ -394,6 +433,7 @@
   ! local parameters
   double precision :: r
   double precision :: scaleval
+  double precision :: RICB
 
 ! compute real physical radius in meters
   r = x * R_PLANET
@@ -401,11 +441,18 @@
 ! check flags to make sure we correctly honor the discontinuities
 ! we use strict inequalities since r has been slightly changed in mesher
 
+  ! version compatibility
+  if (USE_OLD_VERSION_FORMAT) then
+    RICB = PREM_RICB_OLD
+  else
+    RICB = PREM_RICB
+  endif
+
   if (check_doubling_flag) then
     !
     !--- inner core
     !
-    if (r >= 0.d0 .and. r < PREM_RICB) then
+    if (r >= 0.d0 .and. r < RICB) then
       if (idoubling /= IFLAG_INNER_CORE_NORMAL .and. &
          idoubling /= IFLAG_MIDDLE_CENTRAL_CUBE .and. &
          idoubling /= IFLAG_BOTTOM_CENTRAL_CUBE .and. &
@@ -415,7 +462,7 @@
     !
     !--- outer core
     !
-    else if (r > PREM_RICB .and. r < PREM_RCMB) then
+    else if (r > RICB .and. r < PREM_RCMB) then
       if (idoubling /= IFLAG_OUTER_CORE_NORMAL) &
         stop 'wrong doubling flag for outer core point in model_prem_aniso()'
     !
@@ -453,7 +500,7 @@
 !
 !--- inner core
 !
-  if (r >= 0.d0 .and. r <= PREM_RICB) then
+  if (r >= 0.d0 .and. r <= RICB) then
     rho = 13.0885d0 - 8.8381d0*x*x
     if (REFERENCE_1D_MODEL == REFERENCE_MODEL_PREM2) then
       ! PREM2
@@ -476,7 +523,7 @@
 !
 !--- outer core
 !
-  else if (r > PREM_RICB .and. r <= PREM_RCMB) then
+  else if (r > RICB .and. r <= PREM_RCMB) then
     rho = 12.5815d0 - 1.2638d0*x - 3.6426d0*x*x - 5.5281d0*x*x*x
     if (REFERENCE_1D_MODEL == REFERENCE_MODEL_PREM2) then
       ! PREM2
@@ -853,14 +900,22 @@
 
   ! local parameters
   double precision :: r
+  double precision :: RICB
 
   ! compute real physical radius in meters
   r = x * R_PLANET
 
+  ! version compatibility
+  if (USE_OLD_VERSION_FORMAT) then
+    RICB = PREM_RICB_OLD
+  else
+    RICB = PREM_RICB
+  endif
+
   ! calculates density according to radius
-  if (r <= PREM_RICB) then
+  if (r <= RICB) then
     rho = 13.0885d0 - 8.8381d0*x*x
-  else if (r > PREM_RICB .and. r <= PREM_RCMB) then
+  else if (r > RICB .and. r <= PREM_RCMB) then
     rho = 12.5815d0 - 1.2638d0*x - 3.6426d0*x*x - 5.5281d0*x*x*x
   else if (r > PREM_RCMB .and. r <= PREM_RTOPDDOUBLEPRIME) then
     rho = 7.9565d0 - 6.4761d0*x + 5.5283d0*x*x - 3.0807d0*x*x*x

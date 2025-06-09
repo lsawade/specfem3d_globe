@@ -27,6 +27,8 @@
 
   module constants
 
+  implicit none
+
   include "constants.h"
 
   ! proc number for MPI process
@@ -65,7 +67,7 @@
 
   logical :: RECEIVERS_CAN_BE_BURIED
   logical :: OUTPUT_SEISMOS_ASCII_TEXT,OUTPUT_SEISMOS_SAC_ALPHANUM,OUTPUT_SEISMOS_SAC_BINARY, &
-             OUTPUT_SEISMOS_ASDF,OUTPUT_SEISMOS_3D_ARRAY, &
+             OUTPUT_SEISMOS_ASDF,OUTPUT_SEISMOS_3D_ARRAY,OUTPUT_SEISMOS_HDF5, &
              ROTATE_SEISMOGRAMS_RT,WRITE_SEISMOGRAMS_BY_MAIN, &
              SAVE_ALL_SEISMOS_IN_ONE_FILE,USE_BINARY_FOR_LARGE_FILE,READ_ADJSRC_ASDF
 
@@ -105,6 +107,10 @@
   ! physical parameters
   logical :: ELLIPTICITY,GRAVITY,ROTATION,TOPOGRAPHY,OCEANS, &
              ATTENUATION
+
+  ! full gravity support
+  logical :: FULL_GRAVITY = .false.
+  integer :: POISSON_SOLVER = 0   ! 0 == builtin / 1 == PETSc solver
 
   ! regional mesh cut-off
   logical :: REGIONAL_MESH_CUTOFF
@@ -210,6 +216,26 @@
   logical :: SHIFT_SIMULTANEOUS_RUNS = .false.
   double precision :: FILESYSTEM_IO_BANDWIDTH = 0.d0
 
+  ! HDF5 file i/o
+  logical :: HDF5_ENABLED    = .false. ! for all databases i/o in hdf5
+  logical :: HDF5_FOR_MOVIES = .false. ! for movies (shakemap, surface movies, volume movies)
+
+  ! HDF5 IO server
+  ! number of io dedicated nodes
+  integer :: HDF5_IO_NODES = 0
+
+  ! HDF5 IO mode (collective or independent)
+  logical :: H5_COL = .true.
+
+  ! flag for io-dedicated/compute node.
+  logical :: IO_storage_task = .false.
+  logical :: IO_compute_task = .true.
+
+  ! UCB Source time function parameters
+  logical :: STF_IS_UCB_HEAVISIDE = .false.  ! source-time function is a UCB-style filtered heaviside
+  double precision :: UCB_SOURCE_T1 = 400.d0, UCB_SOURCE_T2 = 250.d0, UCB_SOURCE_T3 = 53.d0, UCB_SOURCE_T4 = 40.d0
+  double precision :: UCB_TAU = 400.d0
+
   end module shared_input_parameters
 
 !
@@ -274,8 +300,12 @@
   ! radii of layers
   double precision :: ROCEAN,RMIDDLE_CRUST,RMOHO,R80,R120,R220,R400, &
                       R600,R670,R771,RTOPDDOUBLEPRIME,RCMB,RICB, &
-                      R_CENTRAL_CUBE, &
-                      RMOHO_FICTITIOUS_IN_MESHER,R80_FICTITIOUS_IN_MESHER
+                      R_CENTRAL_CUBE
+
+  ! infinite layer radius
+  double precision :: RINF
+
+  double precision :: RMOHO_FICTITIOUS_IN_MESHER,R80_FICTITIOUS_IN_MESHER
 
   ! densities
   double precision :: RHO_TOP_OC,RHO_BOTTOM_OC,RHO_OCEANS
@@ -291,6 +321,7 @@
              CRUSTAL,ONE_CRUST
   logical :: MODEL_3D_MANTLE_PERTUBATIONS,HETEROGEN_3D_MANTLE
   logical :: CEM_REQUEST,CEM_ACCEPT
+  logical :: EMC_MODEL
 
   logical :: MODEL_GLL
   integer :: MODEL_GLL_TYPE

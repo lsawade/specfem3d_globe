@@ -264,7 +264,7 @@
       MAX_ATTENUATION_PERIOD   = 750d0
       ! number of element layers in each mesh region
       NER_CRUST                = 3
-      NER_80_MOHO              = 2  ! 2 okay; setting w/ jacobian error: nex96, rmoho=28km, r80=130km, ner > 2
+      NER_80_MOHO              = 2  ! 2 okay; setting w/ jacobian error: nex96, rmoho = 28km, r80 = 130km, ner > 2
       NER_220_80               = 3
       NER_400_220              = 2
       NER_600_400              = 2
@@ -313,7 +313,7 @@
 
     else if (NEX_MAX*multiplication_factor <= 96) then
       ! time step
-      !! DK DK to handle a case that Zhinan Xie found to be unstable for NEX = 96 I reduce the time step to 90% of its value here
+      ! to handle a case that Zhinan Xie found to be unstable for NEX = 96 I reduce the time step to 90% of its value here
       DT                       = 0.252d0 * 0.90d0
       ! attenuation period range
       MIN_ATTENUATION_PERIOD   = 30.d0
@@ -863,6 +863,11 @@
     stop 'Invalid planet, timestep and layers not implemented yet'
   end select ! planet_type
 
+  ! Further reduce time step for FULL_GRAVITY
+  if (FULL_GRAVITY) then
+    if (THREE_D_MODEL > 0) DT = 0.7d0 * DT    ! 0.7 is an arbitrary value
+  endif
+
   ! the maximum CFL of LDDRK is significantly higher than that of the Newmark scheme,
   ! in a ratio that is theoretically 1.327 / 0.697 = 1.15 / 0.604 = 1.903 for a solid with Poisson's ratio = 0.25
   ! and for a fluid (see the manual of the 2D code, SPECFEM2D, Tables 4.1 and 4.2, and that ratio does not
@@ -944,7 +949,7 @@
 
   subroutine get_minimum_period_estimate()
 
-  use constants, only: NGLLX,PI,NPTS_PER_WAVELENGTH,REFERENCE_MODEL_CASE65TAY
+  use constants, only: NGLLX,PI,NPTS_PER_WAVELENGTH,REFERENCE_MODEL_CASE65TAY,USE_OLD_VERSION_FORMAT
 
   use shared_parameters, only: T_min_period,estimated_min_wavelength, &
     ANGULAR_WIDTH_XI_IN_DEGREES,ANGULAR_WIDTH_ETA_IN_DEGREES, &
@@ -1057,6 +1062,10 @@
   ! example Earth: radius 6371 km -> 2 * PI * R / 360 ~ 111.19 km
   deg2km = R_PLANET / 1000.d0 * 2.d0 * PI / 360.d0
 
+  ! for compatibility w/ older versions (7.0, 8.0,..)
+  ! (fixed value taken from old version auto_attenuation_periods())
+  if (USE_OLD_VERSION_FORMAT) deg2km = 111.00d0
+
   ! computes Min Period
   !
   ! width of element in km = (Angular width in degrees / NEX_MAX) * degrees to km
@@ -1069,7 +1078,7 @@
   tmp = tmp * dble(NPTS_PER_WAVELENGTH-1)
 
   ! minimum period resolved = (minimum wavelength) / V_min
-  tmp = tmp/S_VELOCITY_MIN
+  tmp = tmp / S_VELOCITY_MIN
 
   ! estimated minimum period resolved
   T_min_period = tmp
@@ -1078,3 +1087,33 @@
   estimated_min_wavelength = T_min_period * S_VELOCITY_MIN
 
   end subroutine get_minimum_period_estimate
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine band_instrument_code(DT,bic)
+
+! This subroutine is to choose the appropriate band and instrument codes for channel names of seismograms
+! based on the IRIS convention (first two letters of channel codes which were LH(Z/E/N) previously).
+! For consistency with observed data, we now use the IRIS convention for band codes (first letter in channel codes)of
+! SEM seismograms governed by their sampling rate.
+! Instrument code (second letter in channel codes) is fixed to "X" which is assigned by IRIS for synthetic seismograms.
+! See the manual for further explanations!
+! Ebru, November 2010
+
+  implicit none
+
+  double precision,intent(in) :: DT
+  character(len=2),intent(out) :: bic
+
+  bic = ''
+
+  if (1.0d0 <= DT)  bic = 'LX'
+  if (0.1d0 < DT .and. DT < 1.0d0) bic = 'MX'
+  if (0.0125d0 < DT .and. DT <= 0.1d0) bic = 'BX'
+  if (0.004d0 < DT .and. DT <= 0.0125d0) bic = 'HX'
+  if (0.001d0 < DT .and. DT <= 0.004d0) bic = 'CX'
+  if (DT <= 0.001d0) bic = 'FX'
+
+  end subroutine band_instrument_code

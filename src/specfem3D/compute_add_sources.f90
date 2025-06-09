@@ -38,7 +38,7 @@
   double precision :: stf
   real(kind=CUSTOM_REAL) :: stf_used
   ! for gpu
-  double precision, dimension(NSOURCES) :: stf_pre_compute
+  !double precision, dimension(NSOURCES) :: stf_pre_compute ! obsolete
 
   double precision, external :: get_stf_viscoelastic
 
@@ -51,7 +51,8 @@
     ! note: the LDDRK scheme updates displacement after the stiffness computations and
     !       after adding boundary/coupling/source terms.
     !       thus, at each time loop step it, displ(:) is still at (n) and not (n+1) like for the Newmark scheme
-    !       when entering this routine. we therefore at an additional -DT to have the corresponding timing for the source.
+    !       when entering this routine. we therefore at an additional -DT to have the corresponding timing
+    !       for the source.
     time_t = dble(it-1-1)*DT + dble(C_LDDRK(istage))*DT - t0
   else
     time_t = dble(it-1)*DT - t0
@@ -104,20 +105,19 @@
 
   else
     ! on GPU
-    ! prepares buffer with source time function values, to be copied onto GPU
-    do isource = 1,NSOURCES
-      ! sets current time for this source
-      timeval = time_t - tshift_src(isource)
-
-      ! determines source time function value
-      stf = get_stf_viscoelastic(timeval,isource,it)
-
-      ! stores current stf values
-      stf_pre_compute(isource) = stf
-    enddo
+    ! we avoid these copies as they synchronize streams and kernels by using local source time function arrays instead
+    !! prepares buffer with source time function values, to be copied onto GPU
+    !do isource = 1,NSOURCES
+    !  ! sets current time for this source
+    !  timeval = time_t - tshift_src(isource)
+    !  ! determines source time function value
+    !  stf = get_stf_viscoelastic(timeval,isource,it)
+    !  ! stores current stf values
+    !  stf_pre_compute(isource) = stf
+    !enddo
 
     ! adds sources: only implements SIMTYPE=1 and NOISE_TOM = 0
-    call compute_add_sources_gpu(Mesh_pointer,NSOURCES,stf_pre_compute)
+    call compute_add_sources_gpu(Mesh_pointer,it,istage)
   endif
 
   end subroutine compute_add_sources
@@ -215,7 +215,9 @@
           do i = 1,NGLLX
             iglob = ibool_crust_mantle(i,j,k,ispec)
 
-            hlagrange = hxir_adjstore(i,irec_local) * hetar_adjstore(j,irec_local) * hgammar_adjstore(k,irec_local)
+            hlagrange = real(hxir_adjstore(i,irec_local) &
+                           * hetar_adjstore(j,irec_local) &
+                           * hgammar_adjstore(k,irec_local),kind=CUSTOM_REAL)
 
             ! adds adjoint source acting at this time step (it):
             !
@@ -361,7 +363,7 @@
   double precision :: stf
   real(kind=CUSTOM_REAL) :: stf_used
   ! for gpu
-  double precision, dimension(NSOURCES) :: stf_pre_compute
+  !double precision, dimension(NSOURCES) :: stf_pre_compute ! obsolete
 
   double precision, external :: get_stf_viscoelastic
 
@@ -415,7 +417,8 @@
     ! note: the LDDRK scheme updates displacement after the stiffness computations and
     !       after adding boundary/coupling/source terms.
     !       thus, at each time loop step it, displ(:) is still at (n) and not (n+1) like for the Newmark scheme
-    !       when entering this routine. we therefore at an additional -DT to have the corresponding timing for the source.
+    !       when entering this routine. we therefore at an additional -DT to have the corresponding timing
+    !       for the source.
     if (UNDO_ATTENUATION) then
       ! stepping moves forward from snapshot position
       time_t = dble(NSTEP-it_tmp-1)*DT + dble(C_LDDRK(istage))*DT - t0
@@ -463,20 +466,19 @@
 
   else
     ! on GPU
-    ! prepares buffer with source time function values, to be copied onto GPU
-    do isource = 1,NSOURCES
-      ! sets current time for this source
-      timeval = time_t - tshift_src(isource)
-
-      ! determines source time function value
-      stf = get_stf_viscoelastic(timeval,isource,it_tmp)
-
-      ! stores current stf values
-      stf_pre_compute(isource) = stf
-    enddo
+    ! we avoid these copies as they synchronize streams and kernels by using local source time function arrays instead
+    !! prepares buffer with source time function values, to be copied onto GPU
+    !do isource = 1,NSOURCES
+    !  ! sets current time for this source
+    !  timeval = time_t - tshift_src(isource)
+    !  ! determines source time function value
+    !  stf = get_stf_viscoelastic(timeval,isource,it_tmp)
+    !  ! stores current stf values
+    !  stf_pre_compute(isource) = stf
+    !enddo
 
     ! adds sources: only implements SIMTYPE=3 (and NOISE_TOM = 0)
-    call compute_add_sources_backward_gpu(Mesh_pointer,NSOURCES,stf_pre_compute)
+    call compute_add_sources_backward_gpu(Mesh_pointer,it_tmp,istage)
   endif
 
   end subroutine compute_add_sources_backward
@@ -536,7 +538,7 @@
     ! moment-tensor
     ! Heaviside source time function
     if (USE_MONOCHROMATIC_CMT_SOURCE) then
-      f0 = 1.d0 / hdur(isource) ! using half duration as a FREQUENCY just to avoid changing CMTSOLUTION file format
+      f0 = 1.d0 / hdur(isource) ! using half duration as a PERIOD just to avoid changing CMTSOLUTION file format
       stf = comp_source_time_function_mono(time_source_dble,f0)
     else
       stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource),it_index)

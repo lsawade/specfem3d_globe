@@ -31,7 +31,7 @@
   use constants_solver
 
   use specfem_par, only: &
-    NTSTEP_BETWEEN_OUTPUT_SEISMOS, &
+    nlength_seismogram, &
     nrec_local,nu_rec,ispec_selected_rec,number_receiver_global, &
     scale_displ,hxir_store,hetar_store,hgammar_store
 
@@ -44,7 +44,7 @@
 
   integer,intent(in) :: seismo_current
 
-  real(kind=CUSTOM_REAL), dimension(NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),intent(out) :: &
+  real(kind=CUSTOM_REAL), dimension(NDIM,nrec_local,nlength_seismogram),intent(out) :: &
     seismograms
 
   ! local parameters
@@ -100,7 +100,6 @@
                                          eps_trace_over_3_crust_mantle, &
                                          epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
                                          epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle, &
-                                         it_adj_written, &
                                          moment_der,sloc_der,stshift_der,shdur_der, &
                                          seismograms)
 
@@ -110,7 +109,9 @@
     NSPEC_CRUST_MANTLE_STRAIN_ONLY,NSPEC_CRUST_MANTLE_STR_OR_ATT
 
   use specfem_par, only: &
-    NSTEP,NTSTEP_BETWEEN_OUTPUT_SEISMOS,UNDO_ATTENUATION, &
+    NSTEP,NTSTEP_BETWEEN_OUTPUT_SAMPLE, &
+    nlength_seismogram,seismo_current, &
+    UNDO_ATTENUATION, &
     nrec_local, &
     nu_source,Mxx,Myy,Mzz,Mxy,Mxz,Myz, &
     hxir_store,hpxir_store,hetar_store,hpetar_store,hgammar_store,hpgammar_store, &
@@ -125,6 +126,9 @@
     etax_crust_mantle,etay_crust_mantle,etaz_crust_mantle, &
     gammax_crust_mantle,gammay_crust_mantle,gammaz_crust_mantle
 
+  ! element compute routines
+  use mod_element_strain, only: compute_element_strain_undoatt_noDev
+
   implicit none
 
   real(kind=CUSTOM_REAL), dimension(NDIM,NGLOB_CRUST_MANTLE),intent(in) :: &
@@ -136,13 +140,11 @@
     epsilondev_xx_crust_mantle,epsilondev_yy_crust_mantle,epsilondev_xy_crust_mantle, &
     epsilondev_xz_crust_mantle,epsilondev_yz_crust_mantle
 
-  integer,intent(in) :: it_adj_written
-
   real(kind=CUSTOM_REAL), dimension(NDIM,NDIM,nrec_local),intent(inout) :: moment_der
   real(kind=CUSTOM_REAL), dimension(NDIM,nrec_local),intent(inout) :: sloc_der
   real(kind=CUSTOM_REAL), dimension(nrec_local),intent(inout) :: stshift_der, shdur_der
 
-  real(kind=CUSTOM_REAL), dimension(NDIM*NDIM,nrec_local,NTSTEP_BETWEEN_OUTPUT_SEISMOS),intent(out) :: &
+  real(kind=CUSTOM_REAL), dimension(NDIM*NDIM,nrec_local,nlength_seismogram),intent(out) :: &
     seismograms
 
   ! local parameters
@@ -248,14 +250,14 @@
     eps_loc_new(:,:) = matmul(matmul(nu_source(:,:,irec),eps_loc(:,:)), transpose(nu_source(:,:,irec)))
 
     ! distinguish between single and double precision for reals
-    seismograms(1,irec_local,it-it_adj_written) = real(eps_loc_new(1,1), kind=CUSTOM_REAL)
-    seismograms(2,irec_local,it-it_adj_written) = real(eps_loc_new(2,2), kind=CUSTOM_REAL)
-    seismograms(3,irec_local,it-it_adj_written) = real(eps_loc_new(3,3), kind=CUSTOM_REAL)
-    seismograms(4,irec_local,it-it_adj_written) = real(eps_loc_new(1,2), kind=CUSTOM_REAL)
-    seismograms(5,irec_local,it-it_adj_written) = real(eps_loc_new(1,3), kind=CUSTOM_REAL)
-    seismograms(6,irec_local,it-it_adj_written) = real(eps_loc_new(2,3), kind=CUSTOM_REAL)
+    seismograms(1,irec_local,seismo_current) = real(eps_loc_new(1,1), kind=CUSTOM_REAL)
+    seismograms(2,irec_local,seismo_current) = real(eps_loc_new(2,2), kind=CUSTOM_REAL)
+    seismograms(3,irec_local,seismo_current) = real(eps_loc_new(3,3), kind=CUSTOM_REAL)
+    seismograms(4,irec_local,seismo_current) = real(eps_loc_new(1,2), kind=CUSTOM_REAL)
+    seismograms(5,irec_local,seismo_current) = real(eps_loc_new(1,3), kind=CUSTOM_REAL)
+    seismograms(6,irec_local,seismo_current) = real(eps_loc_new(2,3), kind=CUSTOM_REAL)
 
-    seismograms(7:9,irec_local,it-it_adj_written) = real(scale_displ*(nu_source(:,1,irec)*uxd + &
+    seismograms(7:9,irec_local,seismo_current) = real(scale_displ*(nu_source(:,1,irec)*uxd + &
                                                                       nu_source(:,2,irec)*uyd + &
                                                                       nu_source(:,3,irec)*uzd), &
                                                                       kind=CUSTOM_REAL)
@@ -283,12 +285,15 @@
                             gammax_crust_mantle(1,1,1,ispec),gammay_crust_mantle(1,1,1,ispec),gammaz_crust_mantle(1,1,1,ispec))
 
     ! reverse time
-    timeval = dble(NSTEP-it)*DT-t0-tshift_src(irec)
+    timeval = dble(NSTEP-it) * DT - t0 - tshift_src(irec)
 
     ! gets source-time function value
-    stf = get_stf_viscoelastic(timeval,irec,it)
+    !#TODO: double-check if time at it or NSTEP-it+1
+    !       since adjoint simulation uses reversed adjoint sources, source time seems to correspond to NSTEP-(it-1)==NSTEP-it+1
+    !       therefore, when reading in an external STF, the index would be `NSTEP-it+1` rather than `it`
+    stf = get_stf_viscoelastic(timeval,irec,NSTEP-it+1)
 
-    stf_deltat = stf * deltat
+    stf_deltat = real(stf * deltat * NTSTEP_BETWEEN_OUTPUT_SAMPLE,kind=CUSTOM_REAL)
 
     ! moment derivatives
     moment_der(:,:,irec_local) = moment_der(:,:,irec_local) + eps_s(:,:) * stf_deltat
@@ -297,8 +302,9 @@
     sloc_der(:,irec_local) = sloc_der(:,irec_local) + eps_m_l_s(:) * stf_deltat
 
     ! derivatives for time shift and hduration
-    Kp_deltat= -1.0d0/sqrt(PI)/hdur_Gaussian(irec) * exp(-(timeval/hdur_Gaussian(irec))**2) * deltat * scale_t
-    Hp_deltat= timeval/hdur_Gaussian(irec) * Kp_deltat
+    Kp_deltat = real(-1.0d0/sqrt(PI)/hdur_Gaussian(irec) &
+                     * exp(-(timeval/hdur_Gaussian(irec))**2) * deltat * scale_t,kind=CUSTOM_REAL)
+    Hp_deltat = real(timeval/hdur_Gaussian(irec) * Kp_deltat,kind=CUSTOM_REAL)
 
     stshift_der(irec_local) = stshift_der(irec_local) + eps_m_s * Kp_deltat
     shdur_der(irec_local) = shdur_der(irec_local) + eps_m_s * Hp_deltat
@@ -405,6 +411,8 @@
   real(kind=CUSTOM_REAL) :: hlagrange
 
   real(kind=CUSTOM_REAL),dimension(NDIM,NDIM) :: eps_loc,eps_loc_new
+  real(kind=CUSTOM_REAL),dimension(NDIM,NDIM) :: eps_loc_rot
+
   real(kind=CUSTOM_REAL),dimension(NDIM,NDIM,NGLLX,NGLLY,NGLLZ) :: eps_array
   real(kind=CUSTOM_REAL),dimension(NDIM,NGLLX,NGLLY,NGLLZ) :: displ_elem
 
@@ -517,7 +525,7 @@
     do k = 1,NGLLZ
       do j = 1,NGLLY
         do i = 1,NGLLX
-          hlagrange = hxir(i)*hetar(j)*hgammar(k)
+          hlagrange = real(hxir(i)*hetar(j)*hgammar(k),kind=CUSTOM_REAL)
           eps_loc(1,1) = eps_loc(1,1) + eps_array(1,1,i,j,k)*hlagrange
           eps_loc(1,2) = eps_loc(1,2) + eps_array(1,2,i,j,k)*hlagrange
           eps_loc(1,3) = eps_loc(1,3) + eps_array(1,3,i,j,k)*hlagrange
@@ -550,7 +558,8 @@
     ! eps_xy -> eps_ne
     ! eps_xz -> eps_nz
     ! eps_yz -> eps_ez
-    eps_loc_new(:,:) = matmul(matmul(nu_rec(:,:,irec),eps_loc(:,:)), transpose(nu_rec(:,:,irec)))
+    eps_loc_rot(:,:) = real(matmul(nu_rec(:,:,irec),eps_loc(:,:)),kind=CUSTOM_REAL)
+    eps_loc_new(:,:) = real(matmul(eps_loc_rot(:,:), transpose(nu_rec(:,:,irec))),kind=CUSTOM_REAL)
 
     ! distinguish between single and double precision for reals
     !

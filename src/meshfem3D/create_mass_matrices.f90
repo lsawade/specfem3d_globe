@@ -56,8 +56,8 @@
   use regions_mesh_par2, only: &
     xixstore,xiystore,xizstore,etaxstore,etaystore,etazstore, &
     gammaxstore,gammaystore,gammazstore,rhostore,kappavstore, &
-    rmassx,rmassy,rmassz,b_rmassx,b_rmassy, &
-    nglob_xy
+    rmassx,rmassy,rmassz,b_rmassx,b_rmassy,rmass_ocean_load, &
+    nglob_xy,nglob_oceans
 
   implicit none
 
@@ -75,10 +75,61 @@
   ! local parameters
   double precision :: weight
   real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl,jacobianl
+  integer :: ispec,i,j,k,iglob,ier
 
-  integer :: ispec,i,j,k,iglob
+  ! initializes
+  nglob_xy = 0      ! for rmassx/rmassy
+  nglob_oceans = 0  ! for ocean load mass matrix
 
-  ! initializes matrices
+  ! if absorbing_conditions are not set or if NCHUNKS=6, only one mass matrix is needed
+  ! for the sake of performance, only "rmassz" array will be filled and "rmassx" & "rmassy" will be obsolete
+  if (NCHUNKS /= 6 .and. ABSORBING_CONDITIONS) then
+    ! crust/mantle region uses different rmassx/rmassy/rmassz for absorbing boundary
+    if (iregion_code == IREGION_CRUST_MANTLE) nglob_xy = nglob
+  endif
+
+  if (ROTATION .and. EXACT_MASS_MATRIX_FOR_ROTATION) then
+    ! rotation in solid domains uses different rmassx/rmassy/rmassz
+    if (iregion_code == IREGION_CRUST_MANTLE .or. &
+        iregion_code == IREGION_INNER_CORE) nglob_xy = nglob
+  endif
+
+  ! ocean load mass matrix
+  if (OCEANS) then
+    ! ocean load only applies in crust/mantle region
+    if (iregion_code == IREGION_CRUST_MANTLE) nglob_oceans = nglob
+  endif
+
+  ! allocates mass matrices in this slice (will be fully assembled in the solver)
+  allocate(rmassz(nglob),stat=ier)
+  if (ier /= 0) stop 'Error in allocate 22'
+  rmassz(:) = 0.0_CUSTOM_REAL
+
+  allocate(rmassx(nglob_xy), &
+           rmassy(nglob_xy), &
+           stat=ier)
+  if (ier /= 0) stop 'Error in allocate 21'
+  rmassx(:) = 0.0_CUSTOM_REAL
+  rmassy(:) = 0.0_CUSTOM_REAL
+
+  allocate(b_rmassx(nglob_xy), &
+           b_rmassy(nglob_xy),stat=ier)
+  if (ier /= 0) stop 'Error in allocate b_21'
+  b_rmassx(:) = 0.0_CUSTOM_REAL
+  b_rmassy(:) = 0.0_CUSTOM_REAL
+
+  ! allocates ocean load mass matrix as well if oceans
+  allocate(rmass_ocean_load(nglob_oceans),stat=ier)
+  if (ier /= 0) stop 'Error in allocate 22'
+  rmass_ocean_load(:) = 0.0_CUSTOM_REAL
+
+  ! checks if anything to do
+  if (iregion_code == IREGION_TRINFINITE .or. iregion_code == IREGION_INFINITE) return
+
+  ! check if anything to do (must have region domain points)
+  if (nglob == 0) return
+
+  ! setup matrices
   !
   ! in the case of Stacey boundary conditions, add C*delta/2 contribution to the mass matrix
   ! on the Stacey edges for the crust_mantle and outer_core regions but not for the inner_core region
@@ -89,17 +140,7 @@
   !
   ! Now also handle EXACT_MASS_MATRIX_FOR_ROTATION, which requires similar corrections
 
-  rmassx(:) = 0._CUSTOM_REAL
-  rmassy(:) = 0._CUSTOM_REAL
-  rmassz(:) = 0._CUSTOM_REAL
-
-  b_rmassx(:) = 0._CUSTOM_REAL
-  b_rmassy(:) = 0._CUSTOM_REAL
-
-!----------------------------------------------------------------
-
-! first create the main standard mass matrix with no corrections
-
+  ! first create the main standard mass matrix with no corrections
 ! openmp mesher
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec,i,j,k,iglob,weight, &
@@ -134,7 +175,6 @@
 
           ! definition depends if region is fluid or solid
           select case (iregion_code)
-
           case (IREGION_CRUST_MANTLE, IREGION_INNER_CORE)
             ! distinguish between single and double precision for reals
 !$OMP ATOMIC
@@ -143,7 +183,6 @@
 
           ! fluid in outer core
           case (IREGION_OUTER_CORE)
-
             !checks division
             if (kappavstore(i,j,k,ispec) <= 0.0_CUSTOM_REAL) stop 'Error invalid kappav in outer core mass matrix'
 
@@ -156,7 +195,7 @@
                         kind=CUSTOM_REAL)
 
           case default
-            call exit_MPI(myrank,'wrong region code')
+            call exit_MPI(myrank,'wrong region code in create_mass_matrix')
 
           end select
 
@@ -260,7 +299,7 @@
 
   ! user output
   if (myrank == 0) then
-    write(IMAIN,*) '    creates exact mass matrix for rotation'
+    write(IMAIN,*) '     creates exact mass matrix for rotation'
     call flush_IMAIN()
   endif
 
@@ -283,9 +322,7 @@
 
   ! definition depends if region is fluid or solid
   select case (iregion_code)
-
   case (IREGION_CRUST_MANTLE, IREGION_INNER_CORE)
-
 ! openmp mesher
 !$OMP PARALLEL DEFAULT(SHARED) &
 !$OMP PRIVATE(ispec,i,j,k,iglob,weight, &
@@ -339,8 +376,13 @@
 !$OMP ENDDO
 !$OMP END PARALLEL
 
-  end select
+  case (IREGION_OUTER_CORE)
+    ! nothing to do
+    continue
 
+  case default
+    call exit_MPI(myrank,'wrong region code in create_mass_matrices_rotation')
+  end select
 
   end subroutine create_mass_matrices_rotation
 
@@ -411,7 +453,7 @@
 
   ! user output
   if (myrank == 0) then
-    write(IMAIN,*) '    updates mass matrix with Stacey boundary corrections'
+    write(IMAIN,*) '     updates mass matrix with Stacey boundary corrections'
     call flush_IMAIN()
   endif
 
@@ -425,6 +467,13 @@
   ! adds contributions to mass matrix to stabilize Stacey conditions
   select case (iregion_code)
   case (IREGION_CRUST_MANTLE)
+
+    ! compatibility with old versions (6.x, 7.x)
+    if (USE_OLD_VERSION_FORMAT) then
+      ! note: this will override the rotation contributions added in case before this routine call
+      rmassx(:) = rmassz(:)
+      rmassy(:) = rmassz(:)
+    endif
 
     do iface = 1,num_abs_boundary_faces
 
@@ -465,7 +514,6 @@
     if (minval(rmassy(:)) <= 0.) call exit_MPI(myrank,'negative rmassy matrix term')
 
   case (IREGION_OUTER_CORE)
-
     do iface = 1,num_abs_boundary_faces
 
       ispec = abs_boundary_ispec(iface)
@@ -492,7 +540,7 @@
     continue
 
   case default
-    call exit_MPI(myrank,'wrong region code')
+    call exit_MPI(myrank,'wrong region code in create_mass_matrices_Stacey')
 
   end select
 
@@ -507,7 +555,8 @@
   use constants
 
   use meshfem_models_par, only: &
-    OCEANS,TOPOGRAPHY,ibathy_topo,CASE_3D
+    OCEANS,TOPOGRAPHY,ELLIPTICITY, &
+    ibathy_topo
 
   use meshfem_par, only: &
     myrank,RHO_OCEANS,nspec
@@ -531,8 +580,8 @@
   integer,intent(in) :: NSPEC2D_TOP
 
   ! local parameters
-  double precision :: x,y,z,r,theta,phi,weight
-  double precision :: lat,lon
+  double precision :: x,y,z,weight
+  double precision :: r,lat,lon
   double precision :: elevation,height_oceans
 
   integer :: ispec,i,j,k,iglob,ispec2D
@@ -542,27 +591,22 @@
   ! checks if anything to do
   if (.not. OCEANS) return
 
-  ! user output
-  if (myrank == 0) then
-    write(IMAIN,*) '    updates mass matrix with ocean load'
-    call flush_IMAIN()
-  endif
-
   ! initializes
   do_ocean_load = .false.
 
-  ! note: old version (5.1.5)
-  ! only for models where 3D crustal stretching was used (even without topography?)
-  if (USE_OLD_VERSION_5_1_5_FORMAT) then
-    if (CASE_3D) then
-      do_ocean_load = .true.
+  ! note: new version:
+  !       for 3D Earth with topography, compute local height of oceans
+  if (TOPOGRAPHY) do_ocean_load = .true.
+
+  ! user output
+  if (myrank == 0) then
+    write(IMAIN,*) '     updates mass matrix with ocean load'
+    if (do_ocean_load) then
+      write(IMAIN,*) '       using minimum ocean thickness: ',MINIMUM_THICKNESS_3D_OCEANS,'(m)'
+    else
+      write(IMAIN,*) '       using 1D ocean PREM thickness: ',THICKNESS_OCEANS_PREM * EARTH_R,'(m)'
     endif
-  else
-    ! note: new version:
-    ! for 3D Earth with topography, compute local height of oceans
-    if (TOPOGRAPHY) then
-      do_ocean_load = .true.
-    endif
+    call flush_IMAIN()
   endif
 
   ! create ocean load mass matrix for degrees of freedom at ocean bottom
@@ -573,7 +617,7 @@
 
 ! openmp mesher
 !$OMP PARALLEL DEFAULT(SHARED) &
-!$OMP PRIVATE(ispec2D,ispec,i,j,iglob,x,y,z,r,theta,phi,lat,lon,elevation,height_oceans,weight)
+!$OMP PRIVATE(ispec2D,ispec,i,j,iglob,x,y,z,r,lat,lon,elevation,height_oceans,weight)
 !$OMP DO
   do ispec2D = 1,NSPEC2D_TOP
 
@@ -595,36 +639,9 @@
           y = ystore(i,j,k,ispec)
           z = zstore(i,j,k,ispec)
 
-          ! map to latitude and longitude for bathymetry routine
-          ! slightly move points to avoid roundoff problem when exactly on the polar axis
-          call xyz_2_rthetaphi_dble(x,y,z,r,theta,phi)
-
-          if (.not. USE_OLD_VERSION_5_1_5_FORMAT) then
-            ! adds small margins
-            !! DK DK: added a test to only do this if we are on the axis
-            if (abs(theta) > 89.99d0) then
-              theta = theta + 0.0000001d0
-              phi = phi + 0.0000001d0
-            endif
-          endif
-
-          call reduce(theta,phi)
-
-          ! converts the geocentric colatitude to a geographic colatitude
-          ! note: bathymetry is given in geographic lat/lon
-          !       (i.e., latitude with respect to reference ellipsoid)
-          !       we will need convert the geocentric positions here to geographic ones
-          if (USE_OLD_VERSION_5_1_5_FORMAT) then
-            ! always converts
-            theta = PI_OVER_TWO - datan(1.006760466d0*dcos(theta)/dmax1(TINYVAL,dsin(theta)))
-          else
-            ! will take flag ASSUME_PERFECT_SPHERE into account
-            call geocentric_2_geographic_dble(theta,theta)
-          endif
-
-          ! get geographic latitude and longitude in degrees
-          lat = (PI_OVER_TWO-theta)*RADIANS_TO_DEGREES
-          lon = phi * RADIANS_TO_DEGREES
+          ! map to geographic latitude and longitude (in degrees) for bathymetry routine
+          ! note: at this point, the mesh can be elliptical, depending on the Par_file flag choosen
+          call xyz_2_rlatlon_dble(x,y,z,r,lat,lon,ELLIPTICITY)
 
           ! compute elevation at current point
           call get_topo_bathy(lat,lon,elevation,ibathy_topo)

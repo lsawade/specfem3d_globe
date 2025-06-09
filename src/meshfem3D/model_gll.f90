@@ -37,11 +37,21 @@
 
   use constants, only: CUSTOM_REAL
 
+  implicit none
+
   ! GLL model_variables
   type model_gll_variables
-    sequence
+    !TODO: check if `sequence` is needed
+    !
+    !      in principle, `sequence` is only needed to explicity map the memory structure, for example when
+    !      the variable like `MGLL_V` gets passed as a routine argument, making sure it gets accessed correctly.
+    !      however, here we don't pass the objects MGLL_V, MGLL_V_IC to routines, but only use the objects to store arrays
+    !      within this module.
+    !
+    !sequence
+
     ! tomographic iteration model on GLL points
-    double precision :: scale_velocity,scale_density,scale_GPa
+    real(kind=CUSTOM_REAL) :: scale_velocity,scale_density,scale_GPa
 
     ! isotropic model
     real(kind=CUSTOM_REAL),dimension(:,:,:,:),allocatable :: vs_new,vp_new,rho_new
@@ -54,7 +64,9 @@
 
     ! number of elements (crust/mantle elements)
     integer :: nspec
-    integer :: dummy_pad ! padding 4 bytes to align the structure
+
+    ! in case we use `sequence` to align memory addresses
+    !integer :: dummy_pad ! padding 4 bytes to align the structure
   end type model_gll_variables
 
   ! crust/mantle model
@@ -239,10 +251,11 @@
   ! scaling values
   ! (model velocities must be given as km/s)
   scaleval = dsqrt(PI*GRAV*RHOAV)
-  MGLL_V%scale_velocity = 1000.0d0/(R_PLANET*scaleval)
-  MGLL_V%scale_density  =  1000.0d0/RHOAV
+  MGLL_V%scale_velocity = real(1000.0d0/(R_PLANET*scaleval),kind=CUSTOM_REAL)
+  MGLL_V%scale_density  = real(1000.0d0/RHOAV,kind=CUSTOM_REAL)
   ! non-dimensionalize the elastic coefficients using the scale of GPa--[g/cm^3][(km/s)^2]
-  MGLL_V%scale_GPa      = 1.d0/( (RHOAV/1000.d0)*((R_PLANET*scaleval/1000.d0)**2) )  ! equal to scale_density * scale_velocity**2
+  ! equal to scale_density * scale_velocity**2
+  MGLL_V%scale_GPa      = real(1.d0/( (RHOAV/1000.d0)*((R_PLANET*scaleval/1000.d0)**2) ),kind=CUSTOM_REAL)
 
   select case(MGLL_TYPE)
   case (1)
@@ -288,8 +301,9 @@
       call flush_IMAIN()
     endif
     ! non-dimensionalizes
-    MGLL_V_IC%scale_velocity = 1000.0d0/(R_PLANET*scaleval)
-    MGLL_V_IC%scale_density  =  1000.0d0/RHOAV
+    MGLL_V_IC%scale_velocity = real(1000.0d0/(R_PLANET*scaleval),kind=CUSTOM_REAL)
+    MGLL_V_IC%scale_density  = real(1000.0d0/RHOAV,kind=CUSTOM_REAL)
+
     MGLL_V_IC%vp_new = MGLL_V_IC%vp_new * MGLL_V_IC%scale_velocity
     MGLL_V_IC%vs_new = MGLL_V_IC%vs_new * MGLL_V_IC%scale_velocity
     MGLL_V_IC%rho_new = MGLL_V_IC%rho_new * MGLL_V_IC%scale_density
@@ -385,7 +399,7 @@
 
   call synchronize_all()
   if (myrank == 0) then
-    write(IMAIN,*)'  reading done'
+    write(IMAIN,*) '  reading done'
     write(IMAIN,*)
     call flush_IMAIN()
   endif
@@ -427,7 +441,7 @@
   case (1)
     ! isotropic model
     if (rank == 0) then
-      write(IMAIN,*)'  reads isotropic model values: rho,vp,vs'
+      write(IMAIN,*) '  reads isotropic model values: rho,vp,vs'
       call flush_IMAIN()
     endif
 
@@ -454,7 +468,7 @@
   case (2)
     ! transverse isotropic model
     if (rank == 0) then
-      write(IMAIN,*)'  reads transversely isotropic model values: rho,vpv,vph,vsv,vsh,eta'
+      write(IMAIN,*) '  reads transversely isotropic model values: rho,vpv,vph,vsv,vsh,eta'
       call flush_IMAIN()
     endif
 
@@ -509,7 +523,7 @@
   case (3)
     ! azimuthal model
     if (rank == 0) then
-      write(IMAIN,*)'  reads azimuthal anisotropic model values: rho,vpv,vph,vsv,vsh,eta,Gc_prime,Gs_prime,mu0'
+      write(IMAIN,*) '  reads azimuthal anisotropic model values: rho,vpv,vph,vsv,vsh,eta,Gc_prime,Gs_prime,mu0'
       call flush_IMAIN()
     endif
 
@@ -965,7 +979,7 @@
     Gc = Gc_prime * mu0
     Gs = Gs_prime * mu0
 
-    !daniel debug:
+    ! debug
     ! test: ignore Gc,Gs contributions
     !Gc = 0.d0
     !Gs = 0.d0

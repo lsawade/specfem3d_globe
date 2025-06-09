@@ -25,32 +25,31 @@
 !
 !=====================================================================
 
-! Dimitri Komatitsch, July 2014, CNRS Marseille, France:
+! note by Dimitri Komatitsch, July 2014, CNRS Marseille, France:
 !
-! added the ability to run several calculations (several earthquakes)
-! in an embarrassingly-parallel fashion from within the same run;
+!   added the ability to run several calculations (several earthquakes)
+!   in an embarrassingly-parallel fashion from within the same run;
+!   this can be useful when using a very large supercomputer to compute
+!   many earthquakes in a catalog, in which case it can be better from
+!   a batch job submission point of view to start fewer and much larger jobs,
+!   each of them computing several earthquakes in parallel.
 !
-! this can be useful when using a very large supercomputer to compute
-! many earthquakes in a catalog, in which case it can be better from
-! a batch job submission point of view to start fewer and much larger jobs,
-! each of them computing several earthquakes in parallel.
+!   To turn that option on, set parameter NUMBER_OF_SIMULTANEOUS_RUNS to a value greater than 1 in the Par_file.
 !
-! To turn that option on, set parameter NUMBER_OF_SIMULTANEOUS_RUNS to a value greater than 1 in the Par_file.
+!   To implement that, we create NUMBER_OF_SIMULTANEOUS_RUNS MPI sub-communicators,
+!   each of them being labeled "my_local_mpi_comm_world", and we use them
+!   in all the routines in "src/shared/parallel.f90", except in MPI_ABORT() because in that case
+!   we need to kill the entire run.
 !
-! To implement that, we create NUMBER_OF_SIMULTANEOUS_RUNS MPI sub-communicators,
-! each of them being labeled "my_local_mpi_comm_world", and we use them
-! in all the routines in "src/shared/parallel.f90", except in MPI_ABORT() because in that case
-! we need to kill the entire run.
+!   When that option is on, of course the number of processor cores used to start
+!   the code in the batch system must be a multiple of NUMBER_OF_SIMULTANEOUS_RUNS,
+!   all the individual runs must use the same number of processor cores,
+!   which as usual is NPROC in the input file DATA/Par_file,
+!   and thus the total number of processor cores to request from the batch system
+!   should be NUMBER_OF_SIMULTANEOUS_RUNS * NPROC.
 !
-! When that option is on, of course the number of processor cores used to start
-! the code in the batch system must be a multiple of NUMBER_OF_SIMULTANEOUS_RUNS,
-! all the individual runs must use the same number of processor cores,
-! which as usual is NPROC in the input file DATA/Par_file,
-! and thus the total number of processor cores to request from the batch system
-! should be NUMBER_OF_SIMULTANEOUS_RUNS * NPROC.
-!
-! All the runs to perform must be placed in directories called run0001, run0002, run0003 and so on
-! (with exactly four digits).
+!   All the runs to perform must be placed in directories called run0001, run0002, run0003 and so on
+!   (with exactly four digits).
 
 !-------------------------------------------------------------------------------------------------
 !
@@ -66,7 +65,13 @@ module my_mpi
 
   implicit none
 
-  integer :: my_local_mpi_comm_world, my_local_mpi_comm_for_bcast
+  ! defines CUSTOM_MPI_TYPE for CUSTOM_REAL
+  include "precision.h"
+
+  ! my MPI group for simultaneous runs
+  integer :: my_local_mpi_comm_world
+  integer :: my_local_mpi_comm_for_bcast
+  integer :: my_local_mpi_comm_inter        ! MPI subgroup for hdf5 i/o server
 
 end module my_mpi
 
@@ -88,10 +93,10 @@ end module my_mpi
 
   ! initialize the MPI communicator and start the NPROCTOT MPI processes.
   call MPI_INIT(ier)
-  if (ier /= 0 ) stop 'Error initializing MPI'
+  if (ier /= 0) stop 'Error initializing MPI'
 
   call MPI_COMM_RANK(MPI_COMM_WORLD,myrank,ier)
-  if (ier /= 0 ) stop 'Error getting MPI rank'
+  if (ier /= 0) stop 'Error getting MPI rank'
 
   ! we need to make sure that NUMBER_OF_SIMULTANEOUS_RUNS and BROADCAST_SAME_MESH_AND_MODEL are read before calling world_split()
   ! thus read the parameter file
@@ -210,7 +215,7 @@ end module my_mpi
 
   ! synchronizes MPI processes
   call MPI_BARRIER(my_local_mpi_comm_world, ier)
-  if (ier /= 0 ) stop 'Error synchronize MPI processes'
+  if (ier /= 0) stop 'Error synchronize MPI processes'
 
   end subroutine synchronize_all
 
@@ -231,7 +236,7 @@ end module my_mpi
 
   ! synchronizes MPI processes
   call MPI_BARRIER(comm,ier)
-  if (ier /= 0 ) stop 'Error synchronize MPI processes for specified communicator'
+  if (ier /= 0) stop 'Error synchronize MPI processes for specified communicator'
 
   end subroutine synchronize_all_comm
 
@@ -414,8 +419,6 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
   integer :: countval
   real(kind=CUSTOM_REAL), dimension(countval) :: buffer
 
@@ -435,8 +438,6 @@ end module my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   real(kind=CUSTOM_REAL) :: buffer
 
@@ -659,8 +660,6 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
   integer :: countval
   ! by not specifying any dimensions for the buffer here we can use this routine for arrays of any number
   ! of indices, provided we call the routine using the first memory cell of that multidimensional array,
@@ -748,7 +747,7 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine max_all_i(sendbuf, recvbuf)
+  subroutine min_all_all_i(sendbuf, recvbuf)
 
   use my_mpi
 
@@ -757,60 +756,9 @@ end module my_mpi
   integer :: sendbuf, recvbuf
   integer :: ier
 
-  call MPI_REDUCE(sendbuf,recvbuf,1,MPI_INTEGER,MPI_MAX,0,my_local_mpi_comm_world,ier)
+  call MPI_ALLREDUCE(sendbuf,recvbuf,1,MPI_INTEGER,MPI_MIN,my_local_mpi_comm_world,ier)
 
-  end subroutine max_all_i
-
-!
-!-------------------------------------------------------------------------------------------------
-!
-
-  subroutine max_allreduce_i(buffer,countval)
-
-  use my_mpi
-
-  implicit none
-
-  integer :: countval
-  integer,dimension(countval),intent(inout) :: buffer
-
-  ! local parameters
-  integer :: ier
-  integer,dimension(countval) :: send
-
-  ! seems not to be supported on all kind of MPI implementations...
-  !! DK DK: yes, I confirm, using MPI_IN_PLACE is tricky
-  !! DK DK (see the answer at http://stackoverflow.com/questions/17741574/in-place-mpi-reduce-crashes-with-openmpi
-  !! DK DK      for how to use it right)
-  !call MPI_ALLREDUCE(MPI_IN_PLACE, buffer, countval, MPI_INTEGER, MPI_MAX, my_local_mpi_comm_world, ier)
-
-  send(:) = buffer(:)
-
-  call MPI_ALLREDUCE(send, buffer, countval, MPI_INTEGER, MPI_MAX, my_local_mpi_comm_world, ier)
-  if (ier /= 0 ) stop 'Allreduce to get max values failed.'
-
-  end subroutine max_allreduce_i
-
-!
-!-------------------------------------------------------------------------------------------------
-!
-
-  subroutine max_allreduce_singlei(val,recvval)
-
-  use my_mpi
-
-  implicit none
-
-  integer,intent(in) :: val
-  integer,intent(out) :: recvval
-
-  ! local parameters
-  integer :: ier
-
-  call MPI_ALLREDUCE(val, recvval, 1, MPI_INTEGER, MPI_MAX, my_local_mpi_comm_world, ier)
-  if (ier /= 0) stop 'Allreduce to get single max value failed.'
-
-  end subroutine max_allreduce_singlei
+  end subroutine min_all_all_i
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -822,8 +770,6 @@ end module my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   real(kind=CUSTOM_REAL) :: sendbuf, recvbuf
   integer :: ier
@@ -844,14 +790,98 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
-  real(kind=CUSTOM_REAL):: sendbuf, recvbuf
+  real(kind=CUSTOM_REAL) :: sendbuf, recvbuf
   integer :: ier
 
   call MPI_ALLREDUCE(sendbuf,recvbuf,1,CUSTOM_MPI_TYPE,MPI_MIN,my_local_mpi_comm_world,ier)
 
   end subroutine min_all_all_cr
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine min_all_all_dp(sendbuf, recvbuf)
+
+  use my_mpi
+
+  implicit none
+
+  double precision :: sendbuf, recvbuf
+  integer :: ier
+
+  call MPI_ALLREDUCE(sendbuf,recvbuf,1,MPI_DOUBLE_PRECISION,MPI_MIN,my_local_mpi_comm_world,ier)
+
+  end subroutine min_all_all_dp
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine max_all_i(sendbuf, recvbuf)
+
+  use my_mpi
+
+  implicit none
+
+  integer :: sendbuf, recvbuf
+  integer :: ier
+
+  call MPI_REDUCE(sendbuf,recvbuf,1,MPI_INTEGER,MPI_MAX,0,my_local_mpi_comm_world,ier)
+
+  end subroutine max_all_i
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine max_all_all_veci(buffer,countval)
+
+  use my_mpi
+
+  implicit none
+
+  integer :: countval
+  integer,dimension(countval),intent(inout) :: buffer
+
+  ! local parameters
+  integer :: ier
+  integer,dimension(countval) :: send
+
+  ! seems not to be supported on all kind of MPI implementations...
+  !! Dimitri: yes, I confirm, using MPI_IN_PLACE is tricky
+  !! (see the answer at http://stackoverflow.com/questions/17741574/in-place-mpi-reduce-crashes-with-openmpi
+  !!  for how to use it right)
+  !call MPI_ALLREDUCE(MPI_IN_PLACE, buffer, countval, MPI_INTEGER, MPI_MAX, my_local_mpi_comm_world, ier)
+
+  send(:) = buffer(:)
+
+  call MPI_ALLREDUCE(send, buffer, countval, MPI_INTEGER, MPI_MAX, my_local_mpi_comm_world, ier)
+  if (ier /= 0) stop 'Allreduce to get max values failed.'
+
+  end subroutine max_all_all_veci
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine max_all_all_i(val,recvval)
+
+  use my_mpi
+
+  implicit none
+
+  integer,intent(in) :: val
+  integer,intent(out) :: recvval
+
+  ! local parameters
+  integer :: ier
+
+  call MPI_ALLREDUCE(val, recvval, 1, MPI_INTEGER, MPI_MAX, my_local_mpi_comm_world, ier)
+  if (ier /= 0) stop 'Allreduce to get single max value failed.'
+
+  end subroutine max_all_all_i
+
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -864,8 +894,6 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
   real(kind=CUSTOM_REAL) :: sendbuf, recvbuf
   integer :: ier
 
@@ -877,34 +905,12 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine max_allreduce_cr(sendbuf, recvbuf)
-
-  use my_mpi
-  use constants, only: CUSTOM_REAL
-
-  implicit none
-
-  include "precision.h"
-
-  real(kind=CUSTOM_REAL) :: sendbuf, recvbuf
-  integer :: ier
-
-  call MPI_ALLREDUCE(sendbuf,recvbuf,1,CUSTOM_MPI_TYPE,MPI_MAX,my_local_mpi_comm_world,ier)
-
-  end subroutine max_allreduce_cr
-
-!
-!-------------------------------------------------------------------------------------------------
-!
-
   subroutine max_all_all_cr(sendbuf, recvbuf)
 
   use my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   real(kind=CUSTOM_REAL):: sendbuf, recvbuf
   integer :: ier
@@ -924,8 +930,18 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
-!  subroutine max_all_dp(sendbuf, recvbuf)
-!  end subroutine max_all_dp
+  subroutine max_all_dp(sendbuf, recvbuf)
+
+  use my_mpi
+
+  implicit none
+
+  double precision :: sendbuf, recvbuf
+  integer :: ier
+
+  call MPI_REDUCE(sendbuf,recvbuf,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,my_local_mpi_comm_world,ier)
+
+  end subroutine max_all_dp
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -981,8 +997,18 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
-!  subroutine sum_all_all_i(sendbuf, recvbuf)
-!  end subroutine sum_all_all_i
+  subroutine sum_all_all_i(sendbuf, recvbuf)
+
+  use my_mpi
+
+  implicit none
+
+  integer :: sendbuf, recvbuf
+  integer :: ier
+
+  call MPI_ALLREDUCE(sendbuf,recvbuf,1,MPI_INTEGER,MPI_SUM,my_local_mpi_comm_world,ier)
+
+  end subroutine sum_all_all_i
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -995,8 +1021,6 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
   real(kind=CUSTOM_REAL) :: sendbuf, recvbuf
   integer :: ier
 
@@ -1008,8 +1032,19 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
-!  subroutine sum_all_all_cr(sendbuf, recvbuf)
-!  end subroutine sum_all_all_cr
+  subroutine sum_all_all_cr(sendbuf, recvbuf)
+
+  use my_mpi
+  use constants, only: CUSTOM_REAL
+
+  implicit none
+
+  real(kind=CUSTOM_REAL) :: sendbuf, recvbuf
+  integer :: ier
+
+  call MPI_ALLREDUCE(sendbuf,recvbuf,1,CUSTOM_MPI_TYPE,MPI_SUM,my_local_mpi_comm_world,ier)
+
+  end subroutine sum_all_all_cr
 
 !
 !-------------------------------------------------------------------------------------------------
@@ -1070,8 +1105,6 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
   integer :: sendcount, dest, sendtag, req
   real(kind=CUSTOM_REAL), dimension(sendcount) :: sendbuf
 
@@ -1117,8 +1150,6 @@ end module my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   integer :: recvcount, dest, recvtag, req
   real(kind=CUSTOM_REAL), dimension(recvcount) :: recvbuf
@@ -1200,8 +1231,6 @@ end module my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   integer :: dest,recvtag
   integer :: recvcount
@@ -1400,8 +1429,6 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
   integer :: dest,sendtag
   integer :: sendcount
   real(kind=CUSTOM_REAL),dimension(sendcount):: sendbuf
@@ -1441,8 +1468,6 @@ end module my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   integer :: sendcount, recvcount, dest, sendtag, source, recvtag
   real(kind=CUSTOM_REAL), dimension(sendcount) :: sendbuf
@@ -1507,6 +1532,28 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
+  subroutine gather_all_all_i(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
+
+  use my_mpi
+
+  implicit none
+
+  integer :: sendcnt, recvcount, NPROC
+  integer, dimension(sendcnt) :: sendbuf
+  integer, dimension(recvcount,0:NPROC-1) :: recvbuf
+
+  integer :: ier
+
+  call MPI_ALLGATHER(sendbuf,sendcnt,MPI_INTEGER, &
+                     recvbuf,recvcount,MPI_INTEGER, &
+                     my_local_mpi_comm_world,ier)
+
+  end subroutine gather_all_all_i
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
   subroutine gather_all_singlei(sendbuf, recvbuf, NPROC)
 
   use my_mpi
@@ -1529,14 +1576,34 @@ end module my_mpi
 !-------------------------------------------------------------------------------------------------
 !
 
+  subroutine gather_all_all_singlei(sendbuf, recvbuf, NPROC)
+
+  use my_mpi
+
+  implicit none
+
+  integer :: NPROC
+  integer :: sendbuf
+  integer, dimension(0:NPROC-1) :: recvbuf
+
+  integer :: ier
+
+  call MPI_ALLGATHER(sendbuf,1,MPI_INTEGER, &
+                     recvbuf,1,MPI_INTEGER, &
+                     my_local_mpi_comm_world,ier)
+
+  end subroutine gather_all_all_singlei
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
   subroutine gather_all_cr(sendbuf, sendcnt, recvbuf, recvcount, NPROC)
 
   use my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   integer :: sendcnt, recvcount, NPROC
   real(kind=CUSTOM_REAL), dimension(sendcnt) :: sendbuf
@@ -1582,8 +1649,6 @@ end module my_mpi
 
   implicit none
 
-  include "precision.h"
-
   integer :: sendcnt,recvcounttot,NPROC
   integer, dimension(NPROC) :: recvcount,recvoffset
   integer, dimension(sendcnt) :: sendbuf
@@ -1607,8 +1672,6 @@ end module my_mpi
   use constants, only: CUSTOM_REAL
 
   implicit none
-
-  include "precision.h"
 
   integer :: sendcnt,recvcounttot,NPROC
   integer, dimension(NPROC) :: recvcount,recvoffset
@@ -1761,7 +1824,7 @@ end module my_mpi
   integer :: ier
 
   call MPI_COMM_SIZE(my_local_mpi_comm_world,sizeval,ier)
-  if (ier /= 0 ) stop 'Error getting MPI world size'
+  if (ier /= 0) stop 'Error getting MPI world size'
 
   end subroutine world_size
 
@@ -1782,7 +1845,7 @@ end module my_mpi
   integer :: ier
 
   call MPI_COMM_SIZE(comm,sizeval,ier)
-  if (ier /= 0 ) stop 'Error getting MPI world size'
+  if (ier /= 0) stop 'Error getting MPI world size'
 
   end subroutine world_size_comm
 
@@ -1802,7 +1865,7 @@ end module my_mpi
   integer :: ier
 
   call MPI_COMM_RANK(my_local_mpi_comm_world,rank,ier)
-  if (ier /= 0 ) stop 'Error getting MPI rank'
+  if (ier /= 0) stop 'Error getting MPI rank'
 
   end subroutine world_rank
 
@@ -1823,7 +1886,7 @@ end module my_mpi
   integer :: ier
 
   call MPI_COMM_RANK(comm,rank,ier)
-  if (ier /= 0 ) stop 'Error getting MPI rank'
+  if (ier /= 0) stop 'Error getting MPI rank'
 
   end subroutine world_rank_comm
 
@@ -1851,7 +1914,7 @@ end module my_mpi
   ! instead, a duplicate of a user-specified communicator should always be used."
 
   call MPI_COMM_DUP(my_local_mpi_comm_world,comm,ier)
-  if (ier /= 0 ) stop 'Error duplicating my_local_mpi_comm_world communicator'
+  if (ier /= 0) stop 'Error duplicating my_local_mpi_comm_world communicator'
 
   end subroutine world_duplicate
 
@@ -1920,7 +1983,7 @@ end module my_mpi
   integer :: ier
 
   call MPI_Comm_free(comm,ier)
-  if (ier /= 0 ) stop 'Error freeing MPI communicator'
+  if (ier /= 0) stop 'Error freeing MPI communicator'
 
   end subroutine world_comm_free
 
