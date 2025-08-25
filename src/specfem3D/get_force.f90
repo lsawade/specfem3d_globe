@@ -240,6 +240,27 @@
 
   close(IIN)
 
+  ! checks half-duration
+  do isource = 1,NSOURCES
+    ! half-duration is the dominant frequency of the source
+    ! for point forces using a Ricker source time function
+    ! null half-duration indicates a very low-frequency source
+    if (hdur(isource) < TINYVAL) hdur(isource) = TINYVAL
+  enddo
+
+  ! check (tilted) force source direction vector
+  do isource = 1,NSOURCES
+    length = sqrt( comp_dir_vect_source_E(isource)**2 &
+                 + comp_dir_vect_source_N(isource)**2 &
+                 + comp_dir_vect_source_Z_UP(isource)**2 )
+
+    if (length < TINYVAL) then
+      print *, 'normal length: ', length
+      print *, 'isource: ',isource
+      stop 'Error set force point normal length, make sure all forces have a non-zero direction vector'
+    endif
+  enddo
+
   ! Sets tshift_force to zero to initiate the simulation!
   if (NSOURCES == 1) then
     min_tshift_src_original = t_shift(1)
@@ -248,25 +269,6 @@
     min_tshift_src_original = minval(t_shift)
     tshift_src(1:NSOURCES) = t_shift(1:NSOURCES) - min_tshift_src_original
   endif
-
-  do isource = 1,NSOURCES
-    ! checks half-duration
-    ! half-duration is the dominant frequency of the source
-    ! point forces use a Ricker source time function
-    ! null half-duration indicates a very low-frequency source
-    ! (see constants.h: TINYVAL = 1.d-9 )
-    if (hdur(isource) < TINYVAL) hdur(isource) = TINYVAL
-
-    ! check (tilted) force source direction vector
-    length = sqrt( comp_dir_vect_source_E(isource)**2 &
-                 + comp_dir_vect_source_N(isource)**2 &
-                 + comp_dir_vect_source_Z_UP(isource)**2 )
-    if (length < TINYVAL) then
-      print *, 'normal length: ', length
-      print *, 'isource: ',isource
-      stop 'Error set force point normal length, make sure all forces have a non-zero direction vector'
-    endif
-  enddo
 
   ! scale and non-dimensionalize the factor_force_source
   ! factor_force_source in FORCESOLUTION file is in Newton
