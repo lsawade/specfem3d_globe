@@ -105,7 +105,7 @@
     ! info
     if (REGIONAL_MESH_CUTOFF) then
       print *,'**************'
-      print *,'Warning: REGIONAL_MESH_CUTOFF is not supported for global simulations (NCHUNKS==6), will turn it off for now...'
+      print *,'Warning: REGIONAL_MESH_CUTOFF is not supported for global simulations (NCHUNKS == 6), will turn it off for now...'
       print *,'**************'
     endif
     REGIONAL_MESH_CUTOFF = .false.

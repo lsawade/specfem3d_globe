@@ -27,7 +27,7 @@ replace_file_content = False
 fortran_file_extensions = ['.fh', '.f90', '.F90', '.fh.in']
 
 # Define the list of file extensions to be processed as general formatting
-general_file_extensions = ['.bash', '.c', '.cpp','.csh','.cu','.h','.h.in','.pl','.tex','.txt','.sh','.rb', '.md']
+general_file_extensions = ['.bash', '.c', '.cpp','.csh','.cu','.h','.h.in','.pl','.tex','.txt','.sh','.rb', '.md', '.log']
 
 # Define the list of directories to be excluded (these are mostly submodules included in the source repositories)
 exclude_dirs = ['.git', 'm4', './utils/ADJOINT_TOMOGRAPHY_TOOLS/flexwin', './src/inverse_problem_for_source/pyCMT3D']
