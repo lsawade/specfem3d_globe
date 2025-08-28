@@ -315,8 +315,13 @@
              CRUSTAL,ONE_CRUST
   logical :: MODEL_3D_MANTLE_PERTUBATIONS,HETEROGEN_3D_MANTLE
   logical :: CEM_REQUEST,CEM_ACCEPT
-  logical :: EMC_MODEL
 
+  ! EMC models
+  logical :: EMC_MODEL
+  logical :: EMC_MODEL_TISO        ! using tiso parameterization (vpv,vph,vsv,vsh,eta) from EMC model
+  logical :: EMC_MODEL_QMU         ! using attenuation (Qmu) from EMC model
+
+  ! GLL models
   logical :: MODEL_GLL
   integer :: MODEL_GLL_TYPE
 
