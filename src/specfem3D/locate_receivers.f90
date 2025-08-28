@@ -603,7 +603,7 @@
   if (myrank == 0) then
     tCPU = wtime() - time_start
     write(IMAIN,*)
-    write(IMAIN,*) 'Elapsed time for receiver detection in seconds = ',tCPU
+    write(IMAIN,*) 'Elapsed time for receiver detection in seconds = ',sngl(tCPU)
     write(IMAIN,*)
     write(IMAIN,*) 'End of receiver detection - done'
     write(IMAIN,*)

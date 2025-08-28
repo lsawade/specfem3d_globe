@@ -191,7 +191,7 @@ jobs:
         #sudo -E apt-cache pkgnames intel | grep intel-oneapi
         #echo ""
         echo "installing packages intel oneapi:"
-        sudo apt-get install -y intel-oneapi-compiler-fortran-2023.2.2 intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic-2023.2.2 intel-oneapi-mpi intel-oneapi-mpi-devel
+        sudo apt-get install -y intel-oneapi-compiler-fortran-2023.2.2 intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic-2023.2.2 intel-oneapi-mpi-2021.14 intel-oneapi-mpi-devel-2021.14
         echo ""
 
     - name: compiler infos
@@ -268,6 +268,116 @@ jobs:
     - name: configure
       run: |
         ./configure FC=ifort CC=icc MPIFC=mpiifort
+
+    - name: make
+      run: |
+        make -j2 all
+        make clean
+
+    # note: fails with -ftrapuv flag due to MPI issue on virtual nodes
+    - name: make tests
+      run: |
+        make tests
+
+  linuxCheck-Intel-ifx:
+    name: Test Intel ifx on ubuntu-latest
+    runs-on: ubuntu-latest
+    needs: changesCheck
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache Intel oneapi packages
+      id: cache-intel-oneapi-ifx
+      uses: actions/cache@v4
+      with:
+        path: /opt/intel/oneapi
+        key: install-${{ runner.os }}-ifx-all
+
+    - name: Install packages
+      if: steps.cache-intel-oneapi-ifx.outputs.cache-hit != 'true'
+      run: |
+        # new way
+        wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | gpg --dearmor | sudo tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+        echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | sudo tee /etc/apt/sources.list.d/oneAPI.list
+        echo ""
+        sudo apt-get update
+        echo ""
+        # info
+        #sudo -E apt-cache pkgnames intel | grep intel-oneapi
+        #echo ""
+        echo "installing packages intel oneapi:"
+        sudo apt-get install -y intel-oneapi-compiler-fortran intel-oneapi-compiler-dpcpp-cpp intel-oneapi-mpi intel-oneapi-mpi-devel
+        echo ""
+
+    - name: compiler infos
+      run: |
+        echo ""
+        source /opt/intel/oneapi/setvars.sh
+        echo ""
+        echo "compiler versions:"
+        echo "icx --version"
+        which icx
+        icx --version
+        echo ""
+        echo "ifx --version"
+        which ifx
+        ifx --version
+        echo ""
+        echo "mpiifx --version"
+        which mpiifx
+        mpiifx --version
+        echo ""
+        echo "mpif90 --version"
+        which mpif90
+        mpif90 --version
+        echo ""
+        # infos
+        which ifx
+        which icx
+        which mpiifx
+        echo "mpirun:"
+        which mpirun
+        echo ""
+        # intel setup for running tests
+        echo ""
+        echo "replacing mpif90 with mpiifx link:"
+        sudo ln -sf $(which mpiifx) $(which mpif90)
+        mpif90 --version
+        echo ""
+        # debug
+        #export I_MPI_DEBUG=5,pid,host
+        #export I_MPI_LIBRARY_KIND=debug
+        # remove -ftrapuv which leads to issues for running tests
+        sed -i "s/-ftrapuv//g" flags.guess
+        # environment setting
+        export TERM=xterm
+        # export info
+        echo "exports:"
+        export
+        echo ""
+        echo ""
+        printenv >> $GITHUB_ENV
+        echo "CXX=icx" >> $GITHUB_ENV
+        echo "CC=icx" >> $GITHUB_ENV
+        echo "FC=ifx" >> $GITHUB_ENV
+        echo ""
+
+    - name: configure debug
+      run: |
+        set +e # revert the default `set -e`
+        ./configure --enable-debug FC=ifx CC=icx MPIFC=mpiifx
+        if [[ $? -ne 0 ]]; then echo "configuration failed:"; cat config.log; echo ""; echo "exiting..."; exit 1; fi
+
+    - name: make debug
+      run: |
+        make -j2 all
+        make -j2 all --always-make
+        make clean
+
+    - name: configure
+      run: |
+        ./configure FC=ifx CC=icx MPIFC=mpiifx
 
     - name: make
       run: |

@@ -348,7 +348,6 @@
         endif
 
         ! reads in adjoint source trace
-        !read(IIN_ADJ,*,iostat=ier) junk, adj_src(icomp,itime-index_start+1)
         read(IIN_ADJ,*,iostat=ier) junk, adj_src(icomp,index_i)
 
         if (ier /= 0) then

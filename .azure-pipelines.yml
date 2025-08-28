@@ -84,26 +84,8 @@ jobs:
     displayName: 'Run checks'
 
 - job: compilation_default
-  # ubuntu-latest: ubuntu-22.04 w/ GCC 11
+  # ubuntu-latest: ubuntu-24.04 w/ GCC 13.3
   displayName: 'Compilation Default GCC'
-  steps:
-  - template: .azure-pipelines/install-template.yml
-    parameters:
-      CUDA: false
-  - template: .azure-pipelines/configure-template.yml
-    parameters:
-      TESTFLAGS: '--enable-vectorization'
-      CUDA: false
-      BUILD: true
-
-- job: compilation_default_gcc9
-  displayName: 'Compilation Default GCC 9'
-  pool:
-    vmImage: 'ubuntu-20.04'
-  variables:
-    CC: gcc-9
-    CXX: g++-9
-    FC: gfortran-9
   steps:
   - template: .azure-pipelines/install-template.yml
     parameters:
@@ -117,7 +99,7 @@ jobs:
 - job: compilation_default_gcc10
   displayName: 'Compilation Default GCC 10'
   pool:
-    vmImage: 'ubuntu-20.04'
+    vmImage: 'ubuntu-22.04'
   variables:
     CC: gcc-10
     CXX: g++-10
@@ -132,29 +114,28 @@ jobs:
       CUDA: false
       BUILD: true
 
-- job: compilation_CUDA11_gcc9
-  displayName: 'Compilation CUDA 11 GCC 9'
+- job: compilation_default_gcc11
+  displayName: 'Compilation Default GCC 11'
   pool:
-    vmImage: 'ubuntu-20.04'
+    vmImage: 'ubuntu-22.04'
   variables:
-    CC: gcc-9
-    CXX: g++-9
-    FC: gfortran-9
+    CC: gcc-11
+    CXX: g++-11
+    FC: gfortran-11
   steps:
   - template: .azure-pipelines/install-template.yml
     parameters:
-      CUDA: true
-      CUDA_V: '11.4'
+      CUDA: false
   - template: .azure-pipelines/configure-template.yml
     parameters:
-      TESTFLAGS: '--enable-vectorization --with-cuda=cuda10'
-      CUDA: true
+      TESTFLAGS: '--enable-vectorization'
+      CUDA: false
       BUILD: true
 
 - job: compilation_CUDA11_gcc10
   displayName: 'Compilation CUDA 11 GCC 10'
   pool:
-    vmImage: 'ubuntu-20.04'
+    vmImage: 'ubuntu-22.04'
   variables:
     CC: gcc-10
     CXX: g++-10
@@ -163,21 +144,40 @@ jobs:
   - template: .azure-pipelines/install-template.yml
     parameters:
       CUDA: true
-      CUDA_V: '11.4'
+      CUDA_V: '11.7'
   - template: .azure-pipelines/configure-template.yml
     parameters:
       TESTFLAGS: '--enable-vectorization --with-cuda=cuda11'
       CUDA: true
       BUILD: true
 
-- job: compilation_CUDA12
-  displayName: 'Compilation CUDA 12 GCC 10'
+- job: compilation_CUDA11_gcc11
+  displayName: 'Compilation CUDA 11 GCC 11'
   pool:
-    vmImage: 'ubuntu-20.04'
+    vmImage: 'ubuntu-22.04'
   variables:
-    CC: gcc-10
-    CXX: g++-10
-    FC: gfortran-10
+    CC: gcc-11
+    CXX: g++-11
+    FC: gfortran-11
+  steps:
+  - template: .azure-pipelines/install-template.yml
+    parameters:
+      CUDA: true
+      CUDA_V: '11.7'
+  - template: .azure-pipelines/configure-template.yml
+    parameters:
+      TESTFLAGS: '--enable-vectorization --with-cuda=cuda10'
+      CUDA: true
+      BUILD: true
+
+- job: compilation_CUDA12
+  displayName: 'Compilation CUDA 12 GCC 12'
+  pool:
+    vmImage: 'ubuntu-22.04'
+  variables:
+    CC: gcc-12
+    CXX: g++-12
+    FC: gfortran-12
   steps:
   - template: .azure-pipelines/install-template.yml
     parameters:
@@ -190,12 +190,12 @@ jobs:
       BUILD: true
 
 - job: compilation_CUDA12_latest
-  displayName: 'Compilation CUDA 12'
+  displayName: 'Compilation CUDA 12 latest'
   steps:
   - template: .azure-pipelines/install-template.yml
     parameters:
       CUDA: true
-      CUDA_V: '12.1'
+      CUDA_V: '12.9'
   - template: .azure-pipelines/configure-template.yml
     parameters:
       TESTFLAGS: '--enable-vectorization --with-cuda=cuda12'
