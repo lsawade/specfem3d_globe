@@ -282,11 +282,16 @@ e.g., on titan enable environment CRAY_CUDA_MPS=1 to use a single GPU with multi
     }else{
       printf("  canMapHostMemory: FALSE\n");
     }
+#if CUDA_VERSION < 13000 || (defined (__CUDACC_VER_MAJOR__) && (__CUDACC_VER_MAJOR__ < 13))
     if(deviceProp.deviceOverlap){
       printf("  deviceOverlap: TRUE\n");
     }else{
       printf("  deviceOverlap: FALSE\n");
     }
+#else
+    // CUDA version >= 13, deviceOverlap deprecated, replaced by asyncEngineCount
+    printf("  asyncEngineCount: %d\n", deviceProp.asyncEngineCount);
+#endif
     fflush(stdout);
 
 
