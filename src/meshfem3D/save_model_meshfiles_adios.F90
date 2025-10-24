@@ -44,7 +44,7 @@
 
   use meshfem_models_par, only: &
     TRANSVERSE_ISOTROPY,ATTENUATION, &
-    ATTENUATION_3D,ATTENUATION_1D_WITH_3D_STORAGE, &
+    ATTENUATION_3D,ATTENUATION_3D_BERKELEY,ATTENUATION_1D_WITH_3D_STORAGE, &
     ANISOTROPIC_3D_MANTLE
 
   use regions_mesh_par2, only: &
@@ -334,7 +334,7 @@
     allocate(temp_store_Qmu(NGLLX,NGLLY,NGLLZ,nspec),stat=ier)
     if (ier /= 0) stop 'Error allocating temp qmu array'
 
-    if (ATTENUATION_3D .or. ATTENUATION_1D_WITH_3D_STORAGE) then
+    if (ATTENUATION_3D .or. ATTENUATION_3D_BERKELEY .or. ATTENUATION_1D_WITH_3D_STORAGE) then
       ! attenuation arrays are fully 3D
       temp_store_Qmu(:,:,:,:) = Qmu_store(:,:,:,:)
     else

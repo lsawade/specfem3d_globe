@@ -211,7 +211,11 @@
     endif
     if (ATTENUATION) then
       write(IMAIN,*) '  incorporating attenuation using ',N_SLS,' standard linear solids'
-      if (ATTENUATION_3D) write(IMAIN,*) '  using 3D attenuation model'
+      if (ATTENUATION_3D) then
+        write(IMAIN,*) '  using 3D attenuation model'
+      else if (ATTENUATION_3D_BERKELEY) then
+        write(IMAIN,*) '  using 3D Berkeley attenuation model'
+      endif
     else
       write(IMAIN,*) '  no attenuation'
     endif
@@ -382,10 +386,12 @@
       write(*,*) 'NSPEC_INNER_CORE:', NSPEC_REGIONS(IREGION_INNER_CORE), NSPEC_INNER_CORE
       call exit_MPI(myrank,'Error in compiled parameters, please recompile solver 3')
   endif
-  if (ATTENUATION_3D .neqv. ATTENUATION_3D_VAL) then
-      if (myrank == 0) write(IMAIN,*) 'ATTENUATION_3D:',ATTENUATION_3D,ATTENUATION_3D_VAL
-      write(*,*) 'ATTENUATION_3D:', ATTENUATION_3D, ATTENUATION_3D_VAL
-      call exit_MPI(myrank,'Error in compiled parameters ATTENUATION_3D, please recompile solver')
+  if (ATTENUATION_3D .or. ATTENUATION_3D_BERKELEY) then
+      if (ATTENUATION_3D .neqv. ATTENUATION_3D_VAL .and. ATTENUATION_3D_BERKELEY .neqv. ATTENUATION_3D_VAL) then
+      if (myrank == 0) write(IMAIN,*) 'ATTENUATION_3D:',ATTENUATION_3D,ATTENUATION_3D_BERKELEY
+        write(*,*) 'ATTENUATION_3D:',ATTENUATION_3D,ATTENUATION_3D_BERKELEY,'ATTENUATION_3D_VAL:',ATTENUATION_3D_VAL
+        call exit_MPI(myrank,'Error in compiled parameters ATTENUATION_3D, please recompile solver')
+      endif
   endif
   if (NCHUNKS /= NCHUNKS_VAL) then
       if (myrank == 0) write(IMAIN,*) 'NCHUNKS:',NCHUNKS,NCHUNKS_VAL

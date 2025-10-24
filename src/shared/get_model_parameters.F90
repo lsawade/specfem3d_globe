@@ -56,7 +56,7 @@
     REFERENCE_1D_MODEL,REFERENCE_CRUSTAL_MODEL, &
     THREE_D_MODEL,THREE_D_MODEL_IC, &
     MODEL_GLL,MODEL_GLL_TYPE, &
-    ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE,ATTENUATION_3D, &
+    ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE,ATTENUATION_3D,ATTENUATION_3D_BERKELEY, &
     ATTENUATION_GLL, CASE_3D,CRUSTAL,HETEROGEN_3D_MANTLE, &
     HONOR_1D_SPHERICAL_MOHO, MODEL_3D_MANTLE_PERTUBATIONS, &
     ONE_CRUST, TRANSVERSE_ISOTROPY, OCEANS,TOPOGRAPHY, &
@@ -266,6 +266,7 @@
 
   ! uses 1D attenuation model by default
   ATTENUATION_3D = .false.
+  ATTENUATION_3D_BERKELEY = .false.
 
   ! no crustal mesh stretching and 3D crust models by default
   CASE_3D = .false.
@@ -795,6 +796,18 @@
     ONE_CRUST = .true.
     TRANSVERSE_ISOTROPY = .true.                  ! uses tiso parameterization
     MODEL_3D_MANTLE_PERTUBATIONS = .true.         ! uses 3d mantle perturbations
+    THREE_D_MODEL = THREE_D_MODEL_BERKELEY
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_SEMUCB   ! uses berkeley 1D reference
+    REFERENCE_CRUSTAL_MODEL = ICRUST_BERKELEY     ! uses berkeley crust
+
+  case('semucb_a3d_3dq')
+    ! SEMUCB Berkeley model with 3D Q model added
+    CASE_3D = .true.                              ! moho stretching
+    CRUSTAL = .true.                              ! berkeley crustal model will be used
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .true.                  ! uses tiso parameterization
+    ATTENUATION_3D_BERKELEY = .true.              ! uses 3D attenuation model
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.         ! uses 3d mantle perturbations (elastic)
     THREE_D_MODEL = THREE_D_MODEL_BERKELEY
     REFERENCE_1D_MODEL = REFERENCE_MODEL_SEMUCB   ! uses berkeley 1D reference
     REFERENCE_CRUSTAL_MODEL = ICRUST_BERKELEY     ! uses berkeley crust

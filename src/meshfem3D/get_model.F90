@@ -47,7 +47,7 @@
 
   use meshfem_models_par, only: &
     ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE, &
-    ATTENUATION,ATTENUATION_3D,ATTENUATION_1D_WITH_3D_STORAGE, &
+    ATTENUATION,ATTENUATION_3D,ATTENUATION_3D_BERKELEY,ATTENUATION_1D_WITH_3D_STORAGE, &
     CEM_ACCEPT,CRUSTAL
 
   use regions_mesh_par2, only: &
@@ -239,10 +239,11 @@
         !
         !note:  only Qmu attenuation considered, Qkappa attenuation not used so far...
         if (ATTENUATION) then
-          call meshfem3D_models_getatten_val(idoubling,r_prem,theta,phi, &
+          call meshfem3D_models_getatten_val(iregion_code,idoubling, &
+                                             r_prem,theta,phi, &
                                              ispec, i, j, k, &
                                              tau_e,tau_s, &
-                                             moho,Qmu,Qkappa,elem_in_crust)
+                                             moho,Qmu,Qkappa,elem_in_crust,rho)
         endif
 
         ! define elastic parameters in the model
@@ -318,13 +319,12 @@
 
         ! stores attenuation arrays
         if (ATTENUATION) then
-          if (ATTENUATION_3D .or. ATTENUATION_1D_WITH_3D_STORAGE) then
+          if (ATTENUATION_3D .or. ATTENUATION_3D_BERKELEY .or. ATTENUATION_1D_WITH_3D_STORAGE) then
             ! distinguish between single and double precision for reals
             do i_sls = 1,N_SLS
               tau_e_store(i,j,k,i_sls,ispec) = real(tau_e(i_sls), kind=CUSTOM_REAL)
             enddo
             Qmu_store(i,j,k,ispec) = real(Qmu, kind=CUSTOM_REAL)
-
           else
             ! single node per element
             ! distinguish between single and double precision for reals
@@ -335,7 +335,6 @@
               enddo
               Qmu_store(1,1,1,ispec) = real(Qmu, kind=CUSTOM_REAL)
             endif
-
           endif
         endif
 

@@ -37,7 +37,7 @@
   integer, parameter :: nparam_i = 51
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 79
+  integer, parameter :: nparam_l = 80
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 42
@@ -83,7 +83,8 @@
     bcast_logical = (/ &
             TRANSVERSE_ISOTROPY,ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE, &
             CRUSTAL,ELLIPTICITY,GRAVITY,ONE_CRUST,ROTATION,MODEL_3D_MANTLE_PERTUBATIONS,HETEROGEN_3D_MANTLE, &
-            TOPOGRAPHY,OCEANS,MOVIE_SURFACE,MOVIE_VOLUME,ATTENUATION_3D, ATTENUATION_GLL, &
+            TOPOGRAPHY,OCEANS,MOVIE_SURFACE,MOVIE_VOLUME, &
+            ATTENUATION_3D,ATTENUATION_GLL, &
             RECEIVERS_CAN_BE_BURIED,PRINT_SOURCE_TIME_FUNCTION, &
             SAVE_MESH_FILES,ATTENUATION, &
             ABSORBING_CONDITIONS,INCLUDE_CENTRAL_CUBE,INFLATE_CENTRAL_CUBE,SAVE_FORWARD,CASE_3D, &
@@ -113,7 +114,8 @@
             REGIONAL_MESH_CUTOFF,REGIONAL_MESH_ADD_2ND_DOUBLING, &
             EMC_MODEL,EMC_MODEL_TISO,EMC_MODEL_QMU, &
             FULL_GRAVITY, &
-            HDF5_ENABLED, HDF5_FOR_MOVIES, OUTPUT_SEISMOS_HDF5 /)
+            HDF5_ENABLED, HDF5_FOR_MOVIES, OUTPUT_SEISMOS_HDF5, &
+            ATTENUATION_3D_BERKELEY /)
 
     bcast_double_precision = (/ &
             DT, &
@@ -368,6 +370,7 @@
     HDF5_ENABLED = bcast_logical(77)
     HDF5_FOR_MOVIES = bcast_logical(78)
     OUTPUT_SEISMOS_HDF5 = bcast_logical(79)
+    ATTENUATION_3D_BERKELEY = bcast_logical(80)
 
     ! double precisions
     DT = bcast_double_precision(1)

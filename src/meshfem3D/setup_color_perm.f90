@@ -1454,7 +1454,7 @@
   use meshfem_models_par, only: &
     TRANSVERSE_ISOTROPY,HETEROGEN_3D_MANTLE,ANISOTROPIC_3D_MANTLE, &
     ANISOTROPIC_INNER_CORE,ATTENUATION, &
-    ATTENUATION_3D,ATTENUATION_1D_WITH_3D_STORAGE
+    ATTENUATION_3D,ATTENUATION_3D_BERKELEY,ATTENUATION_1D_WITH_3D_STORAGE
 
   use meshfem_par, only: &
     ABSORBING_CONDITIONS,NCHUNKS,NSPEC2D_TOP,NSPEC2D_BOTTOM
@@ -1582,7 +1582,7 @@
 
   ! attenuation arrays
   if (ATTENUATION) then
-    if (ATTENUATION_3D .or. ATTENUATION_1D_WITH_3D_STORAGE) then
+    if (ATTENUATION_3D .or. ATTENUATION_3D_BERKELEY .or. ATTENUATION_1D_WITH_3D_STORAGE) then
       allocate(temp_array_real(NGLLX,NGLLY,NGLLZ,nspec))
       allocate(temp_array_real_sls(NGLLX,NGLLY,NGLLZ,N_SLS,nspec))
       call permute_elements_real(Qmu_store,temp_array_real,perm,nspec)

@@ -586,6 +586,7 @@ xwrite_profile_OBJECTS += \
 	$O/model_aniso_inner_core.check.o \
 	$O/model_aniso_mantle.check.o \
 	$O/model_atten3D_QRFSI12.check.o \
+	$O/model_atten3D_berkeley.check.o \
 	$O/model_attenuation_gll.check.o \
 	$O/model_attenuation.check.o \
 	$O/model_berkeley.check.o \
