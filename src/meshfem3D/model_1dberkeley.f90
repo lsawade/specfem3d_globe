@@ -63,7 +63,7 @@ module model_1dberkeley_par
     Mref_V_Qmu_berkeley
 
   ! Berkeley 1D model
-  character (len=100) :: berkeley_file_model1D = trim(A3d_folder) // 'model1D.dat'
+  character(len=*), parameter :: berkeley_file_model1D = trim(A3d_folder) // 'model1D.dat'
 
   ! moho layer index
   integer :: moho1D_layer_index = -1

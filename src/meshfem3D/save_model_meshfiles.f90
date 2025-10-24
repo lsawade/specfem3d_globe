@@ -36,7 +36,8 @@
   use meshfem_par, only: nspec,iregion_code
 
   use meshfem_models_par, only: &
-    TRANSVERSE_ISOTROPY,ATTENUATION,ATTENUATION_3D,ATTENUATION_1D_WITH_3D_STORAGE, &
+    TRANSVERSE_ISOTROPY,ATTENUATION, &
+    ATTENUATION_3D,ATTENUATION_3D_BERKELEY,ATTENUATION_1D_WITH_3D_STORAGE, &
     HETEROGEN_3D_MANTLE,ANISOTROPIC_3D_MANTLE
 
   use regions_mesh_par2, only: &
@@ -178,7 +179,7 @@
   ! shear attenuation
   if (ATTENUATION) then
     ! saves Qmu_store to full CUSTOM_REAL array
-    if (ATTENUATION_3D .or. ATTENUATION_1D_WITH_3D_STORAGE) then
+    if (ATTENUATION_3D .or. ATTENUATION_3D_BERKELEY .or. ATTENUATION_1D_WITH_3D_STORAGE) then
       ! attenuation arrays are fully 3D
       temp_store(:,:,:,:) = Qmu_store(:,:,:,:)
     else

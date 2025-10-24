@@ -381,7 +381,7 @@
   if (ATTENUATION) then
     ! to save a huge amount of memory, when 3D attenuation is off it is sufficient to save a single point
     ! per spectral element because the Q attenuation factor is then constant per layer of the geological model
-    if (ATTENUATION_3D .or. ATTENUATION_1D_WITH_3D_STORAGE) then
+    if (ATTENUATION_3D .or. ATTENUATION_3D_BERKELEY .or. ATTENUATION_1D_WITH_3D_STORAGE) then
       ATT1 = NGLLX
       ATT2 = NGLLY
       ATT3 = NGLLZ

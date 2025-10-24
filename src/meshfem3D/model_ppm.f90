@@ -817,7 +817,7 @@
       ! or
       !if (ANISOTROPIC_3D_MANTLE .and. iregion_code == IREGION_CRUST_MANTLE) then
       ! or
-      !if (ATTENUATION .and. ATTENUATION_3D) then
+      !if (ATTENUATION .and. (ATTENUATION_3D .or. ATTENUATION_3D_BERKELEY)) then
       ! one should add the c**store and tau_* arrays here as well
     endif
     ! every process broadcasts its info

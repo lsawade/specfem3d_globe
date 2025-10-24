@@ -687,6 +687,7 @@
     if (ATTENUATION) then
       write(IMAIN,*) '  incorporating attenuation using ',N_SLS,' standard linear solids'
       if (ATTENUATION_3D) write(IMAIN,*) '  using 3D attenuation model'
+      if (ATTENUATION_3D_BERKELEY) write(IMAIN,*) '  using 3D Berkeley attenuation model'
     else
       write(IMAIN,*) '  no attenuation'
     endif
@@ -999,10 +1000,11 @@
   !
   !note:  only Qmu attenuation considered, Qkappa attenuation not used so far...
   if (ATTENUATION) then
-    call meshfem3D_models_getatten_val(idoubling,r_prem,theta,phi, &
+    call meshfem3D_models_getatten_val(iregion_code,idoubling, &
+                                       r_prem,theta,phi, &
                                        ispec, i, j, k, &
                                        tau_e,tau_s, &
-                                       moho,Qmu,Qkappa,elem_in_crust)
+                                       moho,Qmu,Qkappa,elem_in_crust,rho)
   endif
 !> end GET_MODEL
 

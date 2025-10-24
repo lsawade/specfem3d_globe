@@ -32,7 +32,7 @@
   include "constants.h"
 
   ! proc number for MPI process
-  integer :: myrank
+  integer :: myrank = 0
 
   ! a negative initial value is a convention that indicates that groups
   ! (i.e. sub-communicators, one per run) are off by default
@@ -325,8 +325,10 @@
   logical :: MODEL_GLL
   integer :: MODEL_GLL_TYPE
 
-  logical :: ATTENUATION_3D
-  logical :: ATTENUATION_GLL
+  logical :: ATTENUATION_3D = .false.
+  logical :: ATTENUATION_3D_BERKELEY = .false.
+  logical :: ATTENUATION_GLL = .false.
+
   logical :: INCLUDE_CENTRAL_CUBE,INFLATE_CENTRAL_CUBE
 
   ! this is used in UTILS/estimate_best_values_runs.f90 only, to estimate memory use

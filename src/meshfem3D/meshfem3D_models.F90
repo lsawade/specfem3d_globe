@@ -81,6 +81,9 @@
     else if (ATTENUATION_3D) then
       ! Colleen's model defined originally between 24.4km and 650km
       call model_atten3D_QRFSI12_broadcast()
+    else if (ATTENUATION_3D_BERKELEY) then
+      ! Berkeley 3D attenuation model
+      call model_atten3D_berkeley_broadcast()
     else
       ! sets up attenuation coefficients according to the chosen, "pure" 1D model
       ! (including their 1D-crustal profiles)
@@ -1647,10 +1650,12 @@
 !-------------------------------------------------------------------------------------------------
 !
 
-  subroutine meshfem3D_models_getatten_val(idoubling,r_prem,theta,phi, &
+  subroutine meshfem3D_models_getatten_val(iregion_code,idoubling, &
+                                           r_prem,theta,phi, &
                                            ispec, i, j, k, &
                                            tau_e,tau_s, &
-                                           moho,Qmu,Qkappa,elem_in_crust)
+                                           moho,Qmu,Qkappa, &
+                                           elem_in_crust,rho)
 
 ! sets attenuation values tau_e and Qmu for a given point
 !
@@ -1667,7 +1672,7 @@
 
   implicit none
 
-  integer,intent(in) :: idoubling
+  integer,intent(in) :: iregion_code,idoubling
 
   double precision,intent(in) :: r_prem
   double precision,intent(in) :: theta,phi
@@ -1681,11 +1686,11 @@
   double precision, dimension(N_SLS),intent(inout) :: tau_s, tau_e
 
   logical,intent(in) :: elem_in_crust
+  double precision, intent(in) :: rho
 
   ! local parameters
   double precision :: theta_degrees,phi_degrees
   double precision :: r_used
-
   ! geographical values
   double precision :: dist, theta_c, phi_c, dist_c, edge, sponge
 
@@ -1705,6 +1710,7 @@
     call model_attenuation_gll(ispec, i, j, k, Qmu)
 
   else if (ATTENUATION_3D) then
+    ! 3D attenuation model
     ! used for models: s362ani_3DQ, s362iso_3DQ, 3D_attenuation, SPiRal
 
     ! gets spherical coordinates in degrees
@@ -1713,7 +1719,7 @@
 
     ! in case models incorporate a 3D crust, attenuation values for mantle
     ! get expanded up to surface, and for the crustal points Qmu for PREM crust is imposed
-    r_used = r_prem*R_PLANET_KM
+    r_used = r_prem * R_PLANET_KM
     if (CRUSTAL) then
       if (r_prem > (ONE-moho) .or. elem_in_crust) then
         ! points in actual crust: puts point radius into prem crust
@@ -1728,8 +1734,19 @@
     ! gets value according to radius/theta/phi location and idoubling flag
     call model_atten3D_QRFSI12(r_used,theta_degrees,phi_degrees,Qmu,idoubling)
 
-  else
+  else if (ATTENUATION_3D_BERKELEY) then
+    ! 3D Berkeley attenuation model
+    if (elem_in_crust) then
+      ! fixes Q for crust
+      Qmu = 300.0d0
+      Qkappa = 99900.d0  !  not used so far...
+    else
+      r_used = r_prem
+      call model_atten3D_berkeley(r_used,theta,phi,rho,Qkappa,Qmu,iregion_code,CRUSTAL)
+    endif
 
+  else
+    ! default 1D reference (attenuation) model
     select case (REFERENCE_1D_MODEL)
 
       ! case (REFERENCE_MODEL_PREM,REFERENCE_MODEL_PREM2)

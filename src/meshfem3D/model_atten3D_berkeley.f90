@@ -26,9 +26,8 @@
 !=====================================================================
 
 !--------------------------------------------------------------------------------------------------
-! SEMUCB - WM1
-!
-! A global radially anisotropic shear-wave speed model developed by French & Romanowicz [2014].
+! SEMUCB - WM1 (elastic part)
+!! A global radially anisotropic shear-wave speed model developed by French & Romanowicz [2014].
 !
 ! reference:
 !   Whole-mantle radially anisotropic shear velocity structure from spectral-element waveform tomography
@@ -38,20 +37,25 @@
 !
 ! note: uses 1D Berkeley model as reference model together with a smooth crustal model
 !--------------------------------------------------------------------------------------------------
-
-
+! anelastic 3D model: SEMUCB-UMQ
+! H. Karaoglu and B. Romanowicz
+!  Geophysical Journal International,  2018
+!
 !--------------------------------------------------------------------------------------------------
 ! Berkeley 3D model data
 !--------------------------------------------------------------------------------------------------
 
-module model_berkeley_par
+module model_atten3D_berkeley_par
 
-  use constants, only: A3d_folder  ! Berkeley A3d model folder
+  use constants, only: A3d_folder
 
   implicit none
 
+  ! attenuation model folder
+  character(len=*), parameter :: A3dq_folder = trim(A3d_folder) // "3DQ/"     ! folder "DATA/SEMUCB_A3d/3DQ/"
+
   ! spline arrays
-  !double precision, dimension(:), allocatable :: aknot,oknot,aknot2,oknot2    ! old: only for getdel()
+  !double precision, dimension(:), allocatable :: aknot,oknot,aknot2,oknot2    ! old: only for getdelq()
   double precision, dimension(:,:), allocatable :: knot_coeff,knot_coeff2
 
   double precision, dimension(:), allocatable :: mdl
@@ -76,17 +80,17 @@ module model_berkeley_par
   double precision, dimension(:), allocatable :: work_dh
   integer, dimension(:), allocatable :: work_kindex
 
-end module model_berkeley_par
+end module model_atten3D_berkeley_par
 
 !
 !--------------------------------------------------------------------------------------------------
 !
 
-  subroutine model_berkeley_broadcast()
+  subroutine model_atten3D_berkeley_broadcast()
 
 ! standard routine to setup model
 
-  use model_berkeley_par
+  use model_atten3D_berkeley_par
   use constants, only: myrank,IMAIN,EARTH_R_KM,PI
 
   implicit none
@@ -94,19 +98,19 @@ end module model_berkeley_par
   integer,parameter :: unit1 = 51,unit2 = 52
   integer :: dum2,i,j,k,n,mdim,ier
   integer :: size_work,size_knots
-  double precision, dimension(:), allocatable :: aknot,oknot,aknot2,oknot2  ! temporary for reading
+  double precision, dimension(:), allocatable :: aknot,oknot !,aknot2,oknot2  ! temporary for reading
   double precision :: theta,phi
   character :: trash
 
-  character(len=*), parameter :: A3d_dat            = trim(A3d_folder) // 'A3d.dat'
-  character(len=*), parameter :: hknots_dat         = trim(A3d_folder) // 'hknots.dat'
-  character(len=*), parameter :: hknots2_dat        = trim(A3d_folder) // 'hknots2.dat'
+  character(len=*), parameter :: A3dQ_dat    = trim(A3dq_folder) // 'A3d_Q.dat'
+  character(len=*), parameter :: hknotsq_dat = trim(A3dq_folder) // 'hknotsq.dat'
+  !character(len=*), parameter :: hknots2_dat = trim(A3dq_folder) // 'hknots2.dat'
 
   double precision, parameter :: deg2rad = PI / 180.d0
 
   ! user info
   if (myrank == 0) then
-    write(IMAIN,*) 'broadcast model: SEMUCB Berkeley'
+    write(IMAIN,*) 'broadcast model: SEMUCB-3DQ Berkeley'
     call flush_IMAIN()
   endif
 
@@ -128,19 +132,21 @@ end module model_berkeley_par
   call bcast_all_singledp(moho1D_radius)
 
   !
-  ! reads 3D model
+  ! reads 3D attenuation model
   !
   if (myrank == 0) then
     ! spline knots
-    open(unit1,file=trim(hknots_dat),status='old',iostat=ier)
+    open(unit1,file=trim(hknotsq_dat),status='old',iostat=ier)
     if (ier /= 0) then
-      print *,'Error opening file: ',trim(hknots_dat)
-      stop 'Error opening file hknots.dat'
+      print *,'Error opening file: ',trim(hknotsq_dat)
+      stop 'Error opening file hknotsq.dat'
     endif
 
     read(unit1,*) nknotA2(1)
 
+    ! checks if already setup
     if (allocated(oknot) .or. allocated(aknot) .or. allocated(level)) then
+      ! user info
       print *,'[model_berkeley_broadcast] A3d already initiated'
       return
     endif
@@ -156,41 +162,41 @@ end module model_berkeley_par
     enddo
     close(unit1)
 
-    inquire(file=trim(hknots2_dat),exist=hknots2_exist)
+!   inquire(file=trim(hknots2_dat),exist=hknots2_exist)
 
-    if (hknots2_exist) then
-      open(unit1,file=trim(hknots2_dat),status='old',iostat=ier)
-      if (ier /= 0) then
-        print *,'Error opening file: ',trim(hknots2_dat)
-        stop 'Error opening file hknots2.dat'
-      endif
+!   if (hknots2_exist) then
+!     open(unit1,file=trim(hknots2_dat),status='old',iostat=ier)
+!     if (ier /= 0) then
+!       print *,'Error opening file: ',trim(hknots2_dat)
+!       stop 'Error opening file hknots2.dat'
+!     endif
 
-      read(unit1,*) nknotA2(2)
+!     read(unit1,*) nknotA2(2)
 
-      if (allocated(oknot2) .or. allocated(aknot2) .or. allocated(level2)) then
-        print *,'[model_berkeley_broadcast] A3d hnots2 already initiated'
-        return
-      endif
+!     if (allocated(oknot2) .or. allocated(aknot2) .or. allocated(level2)) then
+!       print *,'[model_berkeley_broadcast] A3d hnots2 already initiated'
+!       return
+!     endif
 
-      allocate(oknot2(nknotA2(2)),aknot2(nknotA2(2)),level2(nknotA2(2)),stat=ier)
-      if (ier /= 0) stop 'Error allocating oknot2,.. arrays'
-      oknot2(:) = 0.d0
-      aknot2(:) = 0.d0
-      level2(:) = 0
+!     allocate(oknot2(nknotA2(2)),aknot2(nknotA2(2)),level2(nknotA2(2)),stat=ier)
+!     if (ier /= 0) stop 'Error allocating oknot2,.. arrays'
+!     oknot2(:) = 0.d0
+!     aknot2(:) = 0.d0
+!     level2(:) = 0
 
-      do i = 1,nknotA2(2)
-        read(unit1,*) oknot2(i),aknot2(i),level2(i)
-      enddo
-      close(unit1)
-    else
-      nknotA2(2) = nknotA2(1)
-    endif
+!     do i = 1,nknotA2(2)
+!       read(unit1,*) oknot2(i),aknot2(i),level2(i)
+!     enddo
+!     close(unit1)
+!   else
+!     nknotA2(2) = nknotA2(1)
+!   endif
 
     !open model file and read in model
-    open(unit2,file=trim(A3d_dat),status='old',iostat=ier)
+    open(unit2,file=trim(A3dQ_dat),status='old',iostat=ier)
     if (ier /= 0) then
-      print *,'Error opening file: ',trim(A3d_dat)
-      stop 'Error opening file A3d.dat'
+      print *,'Error opening file: ',trim(A3dQ_dat)
+      stop 'Error opening file A3d_Q.dat'
     endif
 
     read(unit2,*) npar
@@ -215,7 +221,7 @@ end module model_berkeley_par
         nknotA2(i) = dum2
         if (nknotA2(i) /= nknotA2(2)) stop 'Param 3 and 4 need the same A2 splines than param 2'
       else if (dum2 /= nknotA2(i)) then
-        stop 'Inconsistent hknots.dat and A3d.dat'
+        stop 'Inconsistent hknots.dat and A3d_Q.dat'
       endif
       if (i == 2 .and. nknotA2(i) /= nknotA2(1)) then
         unconformal = .true.
@@ -243,7 +249,7 @@ end module model_berkeley_par
     read(unit2,*) (kntrad(i),i=1,nknotA1(1))
 
     ! takes spacings between spline radii
-    ! (used for spline evaluations fspl(..) in spl_A3d.c, see routine fill_hh_A3d())
+    ! (used for spline evaluations fspl(..) in spl__A3d.c, see routine fill_hh_A3d())
     do i = 1,nknotA1(1)-1
       kntrad_hh(i) = kntrad(i+1) - kntrad(i)
     enddo
@@ -297,19 +303,19 @@ end module model_berkeley_par
 
   call bcast_all_singlel(hknots2_exist)
 
-  if (hknots2_exist) then
-    call bcast_all_singlei(nknotA2(2))
+!  if (hknots2_exist) then
+!    call bcast_all_singlei(nknotA2(2))
 
-    if (.not. allocated(oknot2)) allocate(oknot2(nknotA2(2)))
-    if (.not. allocated(aknot2)) allocate(aknot2(nknotA2(2)))
-    if (.not. allocated(level2)) allocate(level2(nknotA2(2)))
+!    if (.not. allocated(oknot2)) allocate(oknot2(nknotA2(2)))
+!    if (.not. allocated(aknot2)) allocate(aknot2(nknotA2(2)))
+!    if (.not. allocated(level2)) allocate(level2(nknotA2(2)))
 
-    call bcast_all_i(level2,nknotA2(2))
-    call bcast_all_dp(oknot2,nknotA2(2))
-    call bcast_all_dp(aknot2,nknotA2(2))
-  else
-    nknotA2(2) = nknotA2(1)
-  endif
+!    call bcast_all_i(level2,nknotA2(2))
+!    call bcast_all_dp(oknot2,nknotA2(2))
+!    call bcast_all_dp(aknot2,nknotA2(2))
+!  else
+!    nknotA2(2) = nknotA2(1)
+!  endif
 
   call bcast_all_singlei(npar)
   NBPARAM = npar
@@ -344,7 +350,7 @@ end module model_berkeley_par
   work_kindex(:) = 0
 
   ! great-circle distance evaluations between GLL point position theta/phi and knot position
-  ! pre-compute knot position coefficients for getdel_pre()
+  ! pre-compute knot position coefficients for getdelq_preq()
   size_knots = nknotA2(1)
   allocate(knot_coeff(3,size_knots),stat=ier)
   if (ier /= 0) stop 'Error allocating knot_coeff array for Berkeley model'
@@ -360,45 +366,48 @@ end module model_berkeley_par
   ! free unneeded arrays
   deallocate(aknot,oknot)
 
-  if (hknots2_exist) then
-    size_knots = nknotA2(2)
-    allocate(knot_coeff2(3,size_knots),stat=ier)
-    if (ier /= 0) stop 'Error allocating knot_coeff2 array for Berkeley model'
-    knot_coeff2(:,:) = 0.d0
-    do i = 1,size_knots
-      ! knot position colat/lon in rad
-      theta = (90.d0 - aknot2(i)) * deg2rad
-      phi = oknot2(i) * deg2rad
-      knot_coeff2(1,i) = sin(theta)
-      knot_coeff2(2,i) = cos(theta)
-      knot_coeff2(3,i) = phi
-    enddo
+! if (hknots2_exist) then
+!   size_knots = nknotA2(2)
+!   allocate(knot_coeff2(3,size_knots),stat=ier)
+!   if (ier /= 0) stop 'Error allocating knot_coeff2 array for Berkeley model'
+!   knot_coeff2(:,:) = 0.d0
+!   do i = 1,size_knots
+!     ! knot position colat/lon in rad
+!     theta = (90.d0 - aknot2(i)) * deg2rad
+!     phi = oknot2(i) * deg2rad
+!     knot_coeff2(1,i) = sin(theta)
+!     knot_coeff2(2,i) = cos(theta)
+!     knot_coeff2(3,i) = phi
+!   enddo
     ! free unneeded arrays
-    deallocate(aknot2,oknot2)
-  endif
+!   deallocate(aknot2,oknot2)
+! endif
 
-  end subroutine model_berkeley_broadcast
+  end subroutine model_atten3D_berkeley_broadcast
 
 
 !
 !--------------------------------------------------------------------------------------------------
 !
 
-  subroutine model_berkeley_shsv(r,theta,phi,vpv_ref,vph_ref,vsv_ref,vsh_ref,rho_ref, &
-                                 dvsh,dvsv,dvph,dvpv,drho,eta_aniso,iregion_code,CRUSTAL)
+  subroutine model_atten3D_berkeley(r,theta,phi,rho_ref,Qkappa,Qmu,iregion_code,CRUSTAL)
+
+!  reads perturbations in attenuation dq and returns absolute Qkappa,Qmu (Qkappa stays 1D)
 
 ! returns isotropic vs, vp, and rho assuming scaling dlnVs/dlnVp=2 dlnVs/dlnrho=3
 ! also returns anisotropic parameters xi,fi,eta,Gc,Gs,Hc,Hs,Bc,Bs if ifanis=1
 
-  use model_berkeley_par
+  use model_atten3D_berkeley_par
   use constants
 
   implicit none
 
-  double precision, intent(in) :: r,theta,phi
-  double precision, intent(in) :: vpv_ref,vph_ref,vsv_ref,vsh_ref,rho_ref
-  double precision, intent(out) :: dvsv,dvsh,dvpv,dvph,drho
-  double precision, intent(inout) :: eta_aniso
+  double precision, intent(in) :: r,theta,phi,rho_ref
+! double precision, intent(out) :: dq
+  double precision, intent(inout) :: Qmu,Qkappa
+!  double precision, intent(in) :: vpv_ref,vph_ref,vsv_ref,vsh_ref,rho_ref
+! double precision, intent(out) :: dvsv,dvsh,dvpv,dvph,drho
+! double precision, intent(inout) :: eta_aniso
 
   integer, intent(in) :: iregion_code
   logical, intent(in) :: CRUSTAL
@@ -406,17 +415,19 @@ end module model_berkeley_par
   ! local parameters
   double precision :: x,rho1d,vpv1d,vph1d,vsv1d,vsh1d,eta1d,Qmu1d,Qkappa1d
 
-  double precision :: vs,vp,rho   ! Qs
-  double precision :: xi,fi,eta,Gc,Gs
-  double precision :: fi_inv
+! double precision :: vs,vp,rho   ! Qs
+! double precision :: xi,fi,eta,Gc,Gs
+  double precision :: xi,fi
+! double precision :: fi_inv
+  double precision :: dq
 
-  integer :: jump,effnknot,i,j,k
+  integer :: jump,effnknot,i,j !,k
   integer :: nknots_horiz,nknots_radial
   !integer, dimension(:), allocatable :: kindex
 
-  double precision :: del,dr,dv
-  double precision :: AA,CC,FF,LL,NN
-  double precision :: eta1,adel1,r_
+  double precision :: del,dr,r_
+! double precision :: AA,CC,FF,LL,NN
+! double precision :: eta1,adel1,r_
 
   ! knot great-circle distances for different spline levels
   !double precision, dimension(8), parameter :: adel = (/63.4, 31.7, 15.8, 7.9, 3.95, 1.98, 0.99/)
@@ -427,11 +438,11 @@ end module model_berkeley_par
   !double precision :: lat,lon  ! unused
 
   double precision :: sin_theta0,cos_theta0
-  double precision :: vsv,vsh,vpv,vph,scaleval
-  double precision :: aa1, bb1
+! double precision :: vsv,vsh,vpv,vph,scaleval
+! double precision :: aa1, bb1
 
-  double precision,external :: getdel_pre
-  double precision,external :: spbsp
+  double precision,external :: getdelq_preq
+  double precision,external :: spbspq
 
   !double precision, parameter :: rad2deg = 180.d0/PI
 
@@ -439,11 +450,14 @@ end module model_berkeley_par
   double precision, parameter :: TOL_RHO_WATER = 1200.d0 / EARTH_RHOAV   ! non-dimensionalized
 
   ! initializes model perturbations
-  dvsv = 0.d0
-  dvsh = 0.d0
-  dvpv = 0.d0
-  dvph = 0.d0
-  drho = 0.d0
+! dvsv = 0.d0
+! dvsh = 0.d0
+! dvpv = 0.d0
+! dvph = 0.d0
+! drho = 0.d0
+  dq   = 0.d0
+  Qmu1d = Qmu
+  Qkappa1d = Qkappa
 
   xi = 1.d0
   fi = 1.d0
@@ -456,29 +470,34 @@ end module model_berkeley_par
   !        stop 'A3d_full: ifanis_berk inconsistent'
   !endif
 
+  ! no 3D Q in crust for now
+
   ! limits radius to stay below 1D moho depth
   ! note: r is non-dimensionalized/normalized input radius between [0,1]
   if (r > moho1D_radius) then
     r_ = moho1D_radius  ! * EARTH_R_KM
     ! re-evaluate reference 1D model values for this updated radius
-    call model_1dberkeley(r_,rho1d,vpv1d,vph1d,vsv1d,vsh1d,eta1d,Qkappa1d,Qmu1d,iregion_code,CRUSTAL)
+    call model_1dberkeley(r_,rho1d,vpv1d,vph1d,vsv1d,vsh1d,eta1d,Qkappa,Qmu,iregion_code,CRUSTAL)
   else
     r_ = r              ! * EARTH_R_KM
     ! reference model values already setup prior to this routine call
-    vpv1d = vpv_ref
-    vph1d = vph_ref
-    vsv1d = vsv_ref
-    vsh1d = vsh_ref
+!   vpv1d = vpv_ref
+!   vph1d = vph_ref
+!   vsv1d = vsv_ref
+!   vsh1d = vsh_ref
     rho1d = rho_ref
-    eta1d = eta_aniso
-    Qkappa1d = 9999.d0  ! unused
-    Qmu1d = 9999.d0     ! unused
+!   eta1d = eta_aniso
+    Qkappa1d = Qkappa
+    Qmu1d = Qmu
   endif
-
+! print *,'before fix r_,Qmu,Qkappa Qmu1d Qkappa1d',r_*EARTH_R_KM,Qmu,Qkappa,Qmu1d,Qkappa1d
   ! non-dimensionalized radius
   x = r_                ! / EARTH_R_KM
 
   if (USE_OLD_VERSION_FORMAT) then
+    !debug
+    !print *,"debug: model_atten3D_berkeley: using old version format - I am in this part"
+
     ! old version by mistake compares non-dimensionalized rho1d with density value 1200.d0
     ! thus, this will always be evaluated since rho1d is much smaller than that.
     if (rho1d < 1200.d0) then
@@ -503,52 +522,19 @@ end module model_berkeley_par
       call model_1dberkeley(x,rho1d,vpv1d,vph1d,vsv1d,vsh1d,eta1d,Qkappa1d,Qmu1d,iregion_code,CRUSTAL)
     endif
   endif
+  !debug
+  !print *,'after fix r_,Qmu,Qkappa,Qmu1d,Qkappa1d',r_*EARTH_R_KM,Qmu,Qkappa,Qmu1d,Qkappa1d
 
   ! below use r_ as radius in km
   r_ = r_ * EARTH_R_KM
 
-  ! re-dimensionalizes 1d model values
-  scaleval = EARTH_R * dsqrt(PI*GRAV*EARTH_RHOAV)
-
-  rho1d = rho1d * EARTH_RHOAV
-  vpv1d = vpv1d * scaleval
-  vph1d = vph1d * scaleval
-  vsv1d = vsv1d * scaleval
-  vsh1d = vsh1d * scaleval
-
-  rho = rho1d
-  AA  = vph1d*vph1d * rho
-  CC  = vpv1d*vpv1d * rho
-  LL  = vsv1d*vsv1d * rho
-  NN  = vsh1d*vsh1d * rho
-  FF  = eta1d * (AA - 2.d0 * LL)
-
-  ! unused
-  !Qs  = Qmu1d
-  !call get_1Dmodel_TI(AA,CC,FF,LL,NN,rho,Qs,r_*1000.d0)
-  !if (rho < 1200.d0)   call get_1Dmodel_TI(AA,CC,FF,LL,NN,rho,Qs,6367999.d0)   ! No water in RegSEM please
-
-  eta1 = FF / (AA - 2.d0 * LL)
-
-  ! Voigt average
-  vp = sqrt((3.d0 * CC + (8.d0 + 4.d0 * eta1) * AA + 8.d0 * (1.d0 - eta1) * LL) / (15.d0 * rho))
-  vs = sqrt((CC + (1.d0 - 2.d0 * eta1) * AA + (6.d0 + 4.d0 * eta1) * LL + 5.d0 * NN) / (15.d0 * rho))
-
-  eta = eta1
-  xi = NN / LL
-  fi = CC / AA
-
-  ! point lat/lon in degrees for getdel()
-  !lat = 90.d0 - rad2deg * theta
-  !lon = rad2deg * phi
-
-  ! coefficients for getdel_pre()
+  ! coefficients for getdelq_preq()
   sin_theta0 = sin(theta)
   cos_theta0 = cos(theta)
 
-  ! Vs perturbation
+  ! Qs perturbation
   if (r_ > kntrad(nknotA1(1)) .or. r_ < kntrad(1)) then
-    dv = 0.d0
+    dq = 0.d0
   else
     jump = 0
 
@@ -562,203 +548,44 @@ end module model_berkeley_par
 
     do i = 1,nknots_horiz
       ! gets great-circle distance between position theta/phi and knot
-      !old: del = getdel(lat,lon,aknot(i),oknot(i))
-      del = getdel_pre(sin_theta0,cos_theta0,phi,knot_coeff(1,i),knot_coeff(2,i),knot_coeff(3,i))
+      !old: del = getdelq(lat,lon,aknot(i),oknot(i))
+      del = getdelq_preq(sin_theta0,cos_theta0,phi,knot_coeff(1,i),knot_coeff(2,i),knot_coeff(3,i))
 
       if (del <= adel(level(i)) * 2.d0) then
         effnknot = effnknot+1
         work_kindex(effnknot) = i
-        work_dh(effnknot) = spbsp(del,adel(level(i)))
+        work_dh(effnknot) = spbspq(del,adel(level(i)))
       endif
     enddo
 
-    dv = 0.d0
+    dq = 0.d0
     do i = 1,nknots_radial
       ! spline value
       call fspl(i,nknots_radial,kntrad,kntrad_hh,r_,dr)
 
       do j = 1,effnknot
-        dv = dv + dr * work_dh(j) * mdl(jump + work_kindex(j) + nknots_horiz * (i-1))
+        dq = dq + dr * work_dh(j) * mdl(jump + work_kindex(j) + nknots_horiz * (i-1))
       enddo
     enddo
     !deallocate(dh,kindex)
   endif
+ ! endif ! if below moho
 
-  ! Scaling
-  vs = vs + dv * vs
-  vp = vp + 0.5d0 * dv * vp
-  rho = rho + 0.33333d0 * dv * rho
+! convert to absolute values of Qmu
+! model SEMUCB_UMQ is given in dqmu =10*d(1/(2*qmu) in a3d format
+! so that Q3D = Qmu1d+ dq/5.
 
-  ! Perturbation of other parameters
-  ! note: default in A3d.dat is npar == 2
-  if (npar == 2) then
-    ! xi perturbation (dv)
-    if (r_ > kntrad(nknotA1(2)) .or. r_ < kntrad(1)) then
-      dv = 0.d0
-    else
-      jump = jump + nknotA1(1) * nknotA2(1)
+  Qmu = Qmu1d - dq/5. * Qmu1d*Qmu1d
 
-      work_dh(:) = 0.d0
-      work_kindex(:) = 0
-      effnknot = 0
+!  print *,'r qmu1d qmu',r_,Qmu1d,Qmu
 
-      nknots_horiz = nknotA2(2)
-      nknots_radial = nknotA1(2)
-
-      if (unconformal) then
-        ! unconformal grid
-        do i = 1,nknots_horiz
-          ! gets great-circle distance between position theta/phi and knot
-          !old: del = getdel(lat,lon,aknot2(i),oknot2(i))
-          del = getdel_pre(sin_theta0,cos_theta0,phi,knot_coeff2(1,i),knot_coeff2(2,i),knot_coeff2(3,i))
-
-          adel1 = adel(level2(i))
-          if (del <= adel1 * 2.d0) then
-            effnknot = effnknot + 1
-            work_kindex(effnknot) = i
-            work_dh(effnknot) = spbsp(del,adel1)
-          endif
-        enddo
-      else
-        ! conformal grid
-        do i = 1,nknots_horiz
-          ! gets great-circle distance between position theta/phi and knot
-          !old: del = getdel(lat,lon,aknot(i),oknot(i))
-          del = getdel_pre(sin_theta0,cos_theta0,phi,knot_coeff(1,i),knot_coeff(2,i),knot_coeff(3,i))
-
-          adel1 = adel(level(i))
-          if (del <= adel1 * 2.d0) then
-            effnknot = effnknot + 1
-            work_kindex(effnknot) = i
-            work_dh(effnknot) = spbsp(del,adel1)
-          endif
-        enddo
-      endif
-
-      dv = 0.d0
-      do i = 1,nknots_radial
-        ! spline value
-        call fspl(i,nknots_radial,kntrad,kntrad_hh,r_,dr)
-
-        do j = 1,effnknot
-          dv = dv + dr * work_dh(j) * mdl(jump + work_kindex(j) + nknots_horiz * (i-1))
-        enddo
-      enddo
-    endif
-
-    ! npar == k == 2
-    xi = xi + dv * xi
-    fi = fi - 1.5d0 * dv * fi
-    eta = eta - 2.5d0 * dv * eta
-  else if (npar > 2) then
-    ! npar > 2
-    do k = 2,npar
-      if (r_ > kntrad(nknotA1(k)) .or. r_ < kntrad(1)) then
-        dv = 0.d0
-      else
-        jump = jump + nknotA1(k-1)*nknotA2(k-1)
-
-        !allocate(dh(nknotA2(k)),kindex(nknotA2(k)))
-        work_dh(:) = 0.d0
-        work_kindex(:) = 0
-
-        effnknot = 0
-        do i = 1,nknotA2(k)
-          if (unconformal) then
-            ! gets great-circle distance between position theta/phi and knot
-            !old: del = getdel(lat,lon,aknot2(i),oknot2(i))
-            del = getdel_pre(sin_theta0,cos_theta0,phi,knot_coeff2(1,i),knot_coeff2(2,i),knot_coeff2(3,i))
-            adel1 = adel(level2(i))
-          else
-            ! gets great-circle distance between position theta/phi and knot
-            !old: del = getdel(lat,lon,aknot(i),oknot(i))
-            del = getdel_pre(sin_theta0,cos_theta0,phi,knot_coeff(1,i),knot_coeff(2,i),knot_coeff(3,i))
-            adel1 = adel(level(i))
-          endif
-
-          if (del <= adel1 * 2.d0) then
-            effnknot = effnknot+1
-            work_kindex(effnknot) = i
-            work_dh(effnknot) = spbsp(del,adel1)
-          endif
-        enddo
-
-        dv = 0.d0
-        do i = 1,nknotA1(k)
-          ! spline value
-          call fspl(i,nknotA1(k),kntrad,kntrad_hh,r_,dr)
-
-          do j = 1,effnknot
-            dv = dv + dr * work_dh(j) * mdl(jump + work_kindex(j) + nknotA2(k) * (i-1))
-          enddo
-        enddo
-        !deallocate(dh,kindex)
-      endif
-
-      if (k == 2) then
-        xi = xi + dv * xi
-        fi = fi - 1.5d0 * dv * fi
-        eta = eta - 2.5d0 * dv * eta
-      else if (k == 3) then
-        Gc = dv
-      else if (k == 4) then
-        Gs = dv
-      endif
-      ! Here we can add a scaling to get Hc, Hs, Bc and Bs
-    enddo
-  else
-    ! no other parameters
-    dv = 0.d0
-  endif
-
-  ! ============= commented by < FM> on Feb 3, 2020 =====
-  !vsv = sqrt(3.d0/(xi+2.d0))*vs
-  !vsh = sqrt(xi)*vsv
-  !vph = sqrt(5.d0/(fi+4.d0))*vp
-  !vpv = sqrt(fi)*vph
-  !rho = rho
-
-  ! ====================================================
-  ! New conversion relationships < FM> - Feb 3, 2020
-  ! Auxiliar values
-  fi_inv = 1.d0 / fi
-
-  aa1 = 3.d0 + ( 8.d0 + 4.d0 * eta ) * fi_inv
-  bb1 = 1.d0 + ( 1.d0 - 2.d0 * eta ) * fi_inv
-  vsv = sqrt( 15.d0 * (vp*vp * bb1 - vs*vs * aa1) / &
-              (8.d0 * (1.d0-eta) * bb1 - (6.d0 + 4.d0 * eta + 5.d0 * xi) * aa1 ) )
-  vsh = sqrt( xi ) * vsv
-  vpv = sqrt( (15.d0 * vp*vp - 8.d0 * (1.d0-eta) * vsv*vsv ) / &
-              (3.d0 + ( 8.d0 + 4.d0 * eta ) * fi_inv ) )
-  vph = vpv * sqrt( fi_inv )
-  rho = rho
-  ! ===================================================
-
-  ! perturbations
-  if (vsv1d == 0.d0) then
-    dvsv = 0.d0
-  else
-    dvsv = vsv / vsv1d - 1.d0
-  endif
-  if (vsh1d == 0.d0) then
-    dvsh = 0.d0
-  else
-    dvsh = vsh / vsh1d - 1.d0
-  endif
-
-  dvpv = vpv / vpv1d - 1.d0
-  dvph = vph / vph1d - 1.d0
-
-  drho  = rho / rho1d - 1.d0
-  eta_aniso = eta
-
-  end subroutine model_berkeley_shsv
+  end subroutine model_atten3D_berkeley
 
 !
 !--------------------------------------------------------------------------------------------------
 !
 
-  double precision function getdel_pre(sin_theta0,cos_theta0,phi0,sin_theta,cos_theta,phi)
+  double precision function getdelq_preq(sin_theta0,cos_theta0,phi0,sin_theta,cos_theta,phi)
 
   use constants, only: PI
 
@@ -775,15 +602,15 @@ end module model_berkeley_par
   if (abs(a) > 1.d0) a = sign(1.d0,a) * 1.d0
 
   ! great-circle distance in degrees
-  getdel_pre = rad2deg * acos(a)
+  getdelq_preq = rad2deg * acos(a)
 
-  end function getdel_pre
+  end function getdelq_preq
 
 !
 !--------------------------------------------------------------------------------------------------
 !
 
-  double precision function getdel(a0,o0,a,o)
+  double precision function getdelq(a0,o0,a,o)
 
   use constants, only: PI
 
@@ -815,15 +642,15 @@ end module model_berkeley_par
   if (arg > 1.d0) arg = 1.d0
   if (arg < -1.d0) arg = -1.d0
 
-  getdel = rad2deg * acos(arg)
+  getdelq = rad2deg * acos(arg)
 
-  end function getdel
+  end function getdelq
 
 !
 !--------------------------------------------------------------------------------------------------
 !
 
-  double precision function spbsp(hdel,ahdel)
+  double precision function spbspq(hdel,ahdel)
 
   implicit none
   double precision,intent(in) :: hdel,ahdel
@@ -834,18 +661,18 @@ end module model_berkeley_par
   ratio = hdel / ahdel
 
   if (hdel < ahdel) then
-    spbsp = (0.75d0 * ratio - 1.5d0) * ratio * ratio + 1.d0
+    spbspq = (0.75d0 * ratio - 1.5d0) * ratio * ratio + 1.d0
   else if (hdel <= ahdel * 2.d0) then
     two_minus_ratio = 2.d0 - ratio
     if (two_minus_ratio < 0.d0) then
-      spbsp = 0.d0
+      spbspq = 0.d0
     else
-      spbsp = 0.25d0 * two_minus_ratio * two_minus_ratio * two_minus_ratio
+      spbspq = 0.25d0 * two_minus_ratio * two_minus_ratio * two_minus_ratio
     endif
-    !if (spbsp < 0.d0) spbsp = 0.d0    ! spbsp is negative if two_minus_ratio is negative
+    !if (spbspq < 0.d0) spbsp = 0.d0    ! spbsp is negative if two_minus_ratio is negative
   else
-    spbsp = 0.d0
+    spbspq = 0.d0
   endif
 
-  end function spbsp
+  end function spbspq
 
