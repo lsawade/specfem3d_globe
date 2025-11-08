@@ -768,25 +768,23 @@
       select case(force_stf(isource))
       case (0)
         ! Gaussian source time function
-        t0 = min(t0,1.5d0 * (tshift_src(isource) - hdur(isource)))
+        t0 = min(t0,(tshift_src(isource) - 1.5d0 * hdur(isource)))
       case (1)
         ! Ricker source time function
-        t0 = min(t0,1.2d0 * (tshift_src(isource) - 1.0d0/hdur(isource)))
+        t0 = min(t0,(tshift_src(isource) - 1.2d0 * 1.0d0/hdur(isource)))
       case (2)
         ! Heaviside
-        t0 = min(t0,1.5d0 * (tshift_src(isource) - hdur(isource)))
+        t0 = min(t0,(tshift_src(isource) - 1.5d0 * hdur(isource)))
       case (3)
         ! Monochromatic
         t0 = 0.d0
       case (4)
         ! Gaussian source time function by Meschede et al. (2011)
-        t0 = min(t0,1.5d0 * (tshift_src(isource) - hdur(isource)))
+        t0 = min(t0,(tshift_src(isource) - 1.5d0 * hdur(isource)))
       case default
         stop 'unsupported force_stf value!'
       end select
     enddo
-    ! start time defined as positive value, will be subtracted
-    t0 = - t0
   else
     ! moment tensors
     if (USE_MONOCHROMATIC_CMT_SOURCE) then
@@ -794,9 +792,12 @@
       t0 = 0.d0
     else
       ! (based on Heaviside functions)
-      t0 = - 1.5d0 * minval( tshift_src(:) - hdur(:) )
+      t0 = minval( tshift_src(:) - 1.5d0 * hdur(:) )
     endif
   endif
+
+  ! start time defined as positive value, will be subtracted
+  t0 = - t0
 
   ! uses an external file for source time function, which starts at time 0.0
   if (EXTERNAL_SOURCE_TIME_FUNCTION) then
