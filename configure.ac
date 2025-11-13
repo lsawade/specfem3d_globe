@@ -9,7 +9,7 @@ dnl You must have recent versions of Autoconf and Automake installed.
 ############################################################
 
 AC_PREREQ([2.72])
-AC_INIT([Specfem3D_Globe],[m4_normalize(m4_include(VERSION))],[see the wiki],[Specfem3DGlobe])
+AC_INIT([SPECFEM3D Globe],[m4_normalize(m4_include(VERSION))],[see the wiki],[Specfem3DGlobe])
 AC_CONFIG_SRCDIR([src/specfem3D/specfem3D.F90])
 
 AC_CONFIG_HEADERS([setup/config.h])
@@ -1000,8 +1000,8 @@ AS_IF([test x"$want_hdf5" != xno], [
 AS_BOX([git version info])
 CIG_PKG_GIT(SPECFEM3D_GLOBE)
 
-AC_DEFINE_UNQUOTED([SPECFEM3D_GLOBE_VERSION], ["$PACKAGE_VERSION"], [Define SPECFEM3D_GLOBE version])
-#AC_DEFINE_UNQUOTED([SPECFEM3D_GLOBE_DOI], ["10.5281/zenodo.xxxxx"], [Define SPECFEM3D_GLOBE doi])
+AC_DEFINE_UNQUOTED([SPECFEM3D_GLOBE_VERSION], ["$PACKAGE_VERSION"], [Define SPECFEM3D Globe version])
+#AC_DEFINE_UNQUOTED([SPECFEM3D_GLOBE_DOI], ["10.5281/zenodo.xxxxx"], [Define SPECFEM3D Globe doi])
 
 AS_IF([test x"$SPECFEM3D_GLOBE_RELEASE_VERSION" = x0],[
   AC_MSG_NOTICE([building from git repository])

@@ -1,7 +1,7 @@
 \chapter{Noise Cross-correlation Simulations}
 
 
-The new version of SPECFEM3D\_GLOBE includes functionality for seismic noise tomography.
+The new version of SPECFEM3D Globe includes functionality for seismic noise tomography.
 Users are recommended to familiarize themselves first with the procedures for running regular earthquake
 simulations (Chapters \ref{cha:Running-the-Mesher}--\ref{cha:Regional-Simulations}) and
 adjoint simulations (Chapter \ref{cha:Adjoint-Simulations}).
@@ -30,7 +30,7 @@ region of our interests in \texttt{DATA/STATIONS}, so we have to get rid of them
 
 
 \texttt{DATA/Par\_file} also requires careful attention.
-New to this version of SPECFEM3D\_GLOBE, a parameter called \texttt{NOISE\_TOMOGRAPHY} has been added that specifies the type of simulation to be run.
+New to this version of SPECFEM3D Globe, a parameter called \texttt{NOISE\_TOMOGRAPHY} has been added that specifies the type of simulation to be run.
 \texttt{NOISE\_TOMOGRAPHY} is an integer with possible values 0, 1, 2 and 3.
 For example, when \texttt{NOISE\_TOMOGRAPHY} equals 0, a regular earthquake simulation will be run.
 When \texttt{NOISE\_TOMOGRAPHY} is equal to 1/2/3, you are about to run
@@ -119,7 +119,7 @@ In Matlab, simply run:
 NOISE_TOMOGRAPHY(NSTEP, dt, Tmin, Tmax, NOISE_MODEL)
 \end{verbatim}
 
-\texttt{NSTEP} and \texttt{dt} have been given when compiling the specfem3D source code;
+\texttt{NSTEP} and \texttt{dt} have been given when compiling the SPECFEM3D Globe source code;
 \texttt{Tmin} and \texttt{Tmax} correspond to the period range you are interested in;
 \texttt{NOISE\_MODEL} denotes the noise model you will be using.
 Details can be found in the Matlab script.
@@ -130,7 +130,7 @@ After running the Matlab script, you will be given the following information (pl
 the source time function has been saved in:
 /data2/yangl/3D_NOISE/S_squared         (note this path must be different)
 S_squared should be put into directory:
-./NOISE_TOMOGRAPHY/ in the SPECFEM3D_GLOBE package
+./NOISE_TOMOGRAPHY/ in the SPECFEM3D Globe package
 \end{verbatim}
 
 In other words, the Matlab script creates a file called \texttt{S\_squared},
@@ -140,14 +140,14 @@ One may choose a flat noise spectrum rather than Peterson's noise model.
 This can be done easily by modifying the Matlab script a little bit.
 
 \item
-Create a new directory in the SPECFEM3D\_GLOBE package, name it as \texttt{NOISE\_TOMOGRAPHY}.
+Create a new directory in the SPECFEM3D Globe package, name it as \texttt{NOISE\_TOMOGRAPHY}.
 In fact, this new directory should have been created already when checking out the package.
 We will add/replace some information needed in this folder.
 
 \item
 Put the Matlab-generated-file \texttt{S\_squared} in \texttt{NOISE\_TOMOGRAPHY}.
 
-That's to say, you will have a file \texttt{NOISE\_TOMOGRAPHY/S\_squared} in the SPECFEM3D\_GLOBE package.
+That's to say, you will have a file \texttt{NOISE\_TOMOGRAPHY/S\_squared} in the SPECFEM3D Globe package.
 
 \item
 Create a file called \texttt{NOISE\_TOMOGRAPHY/irec\_main\_noise}. Note that this file should be put
