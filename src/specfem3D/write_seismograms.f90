@@ -653,7 +653,7 @@ contains
   use specfem_par, only: &
     myrank, &
     station_name,network_name,stlat,stlon, &
-    DT, &
+    DT,NTSTEP_BETWEEN_OUTPUT_SAMPLE, &
     seismo_current, &
     OUTPUT_SEISMOS_ASCII_TEXT,OUTPUT_SEISMOS_SAC_ALPHANUM,OUTPUT_SEISMOS_ASDF, &
     OUTPUT_SEISMOS_SAC_BINARY,ROTATE_SEISMOGRAMS_RT, &
@@ -687,6 +687,7 @@ contains
   double precision :: phi
   real(kind=CUSTOM_REAL) :: cphi,sphi
   integer :: isample
+  double precision :: sampling_rate
 
   ! initializes
   seismogram_tmp(:,:) = 0.0_CUSTOM_REAL
@@ -711,7 +712,8 @@ contains
   endif
 
   ! get band code
-  call band_instrument_code(DT,bic)
+  sampling_rate = DT * NTSTEP_BETWEEN_OUTPUT_SAMPLE
+  call band_instrument_code(sampling_rate,bic)
 
   if (ROTATE_SEISMOGRAMS_RT) then ! iorientation 1 = N,2 = E,3 = Z,4 = R,5 = T
     ior_start = 3    ! starting from Z

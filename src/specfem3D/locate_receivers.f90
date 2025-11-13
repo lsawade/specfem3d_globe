@@ -42,7 +42,7 @@
   use shared_parameters, only: OUTPUT_FILES,R_PLANET
 
   use specfem_par, only: &
-    myrank,DT,NSTEP, &
+    myrank,DT,NSTEP,NTSTEP_BETWEEN_OUTPUT_SAMPLE, &
     nrec,islice_selected_rec,ispec_selected_rec, &
     xi_receiver,eta_receiver,gamma_receiver,station_name,network_name, &
     stlat,stlon,stele,stbur,nu_rec,receiver_final_distance_max, &
@@ -109,7 +109,9 @@
   character(len=MAX_LENGTH_STATION_NAME), dimension(nrec) :: station_name_found
   character(len=MAX_LENGTH_NETWORK_NAME), dimension(nrec) :: network_name_found
 
+  ! band code
   character(len=2) :: bic
+  double precision :: sampling_rate
 
   ! sorting order
   integer, allocatable, dimension(:) :: irec_dist_ordered
@@ -280,9 +282,9 @@
 
   ! create RECORDHEADERS file with usual format for normal-mode codes
   if (myrank == 0) then
-
-    ! get the base pathname for output files
-    call band_instrument_code(DT,bic)
+    ! get band code
+    sampling_rate = DT * NTSTEP_BETWEEN_OUTPUT_SAMPLE
+    call band_instrument_code(sampling_rate,bic)
 
     ! create file for QmX Harvard
     ! Harvard format does not support the network name
