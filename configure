@@ -8344,7 +8344,7 @@ then :
           { printf "%s\n" "$as_me:${as_lineno-$LINENO}: HIP PLATFORM AMD detected." >&5
 printf "%s\n" "$as_me: HIP PLATFORM AMD detected." >&6;}
           HIP_PLATFORM=hcc
-          FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_HCC__"
+          FLAG_PLATFORM="${FC_DEFINE}__HIP_PLATFORM_AMD__"
 
 fi
       # compiler might require a platform selection flag
