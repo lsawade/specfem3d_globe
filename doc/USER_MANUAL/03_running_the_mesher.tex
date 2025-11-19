@@ -27,7 +27,7 @@ and \citet{SeOl07}.\newline
 
 In this chapter we will focus on simulations at the scale of the entire
 globe. Regional simulations will be addressed in Chapter~\ref{cha:Regional-Simulations}.
-The spectral-element mesh for a SPECFEM3D\_GLOBE simulation is based
+The spectral-element mesh for a SPECFEM3D Globe simulation is based
 upon a mapping from the cube to the sphere called the \textit{cubed
 sphere} \citep{Sad72,RoIaPa96}. This cubed-sphere mapping breaks
 the globe into 6~chunks, each of which is further subdivided in terms
@@ -169,6 +169,8 @@ a new reference Earth model from the global coda-correlation wavefield.
 %
 \item [{\texttt{Ishii}}] Combines the 1D transversely isotropic PREM with the anisotropic inner core model defined by \citet{Ishii2002}.
 %
+\item [{\texttt{1D\_Berkeley}}] A 1D transversely isotropic Earth model developed by \citet{FrRo2014} as reference model for SEMUCB-WM1.
+%
 \end{description}
 %%
 for Mars:
@@ -273,6 +275,10 @@ Please see folder \texttt{DATA/gladm25} for further information on how to instal
 %
 \item [{\texttt{EMC\_model}}] Reads in an IRIS EMC model provided by the user. For more details how to compile and setup the code, please see the README info in folder \texttt{DATA/IRIS\_EMC/}.
 %
+\item [{\texttt{SEMUCB\_A3d}}] A global radially anisotropic shear velocity model from spectral-element waveform tomography developed by \citet{FrRo2014} at Berkeley.
+%
+\item [{\texttt{SEMUCB\_A3d\_3dQ}}] The elastic global Berkeley model (SEMUCB) combined with the 3D attenuation model developed by \citet{KaRo2018}.
+%
 \end{description}
 %%
 for Mars:
@@ -318,7 +324,7 @@ From Paul Melchior, IUGG General Assembly, Vienna, Austria, August 1991 Union le
 in function of the radius vector imply hydrostaticity. These have surface ellipticity 1/299.8 and
 a corresponding dynamical flattening of .0033 (PREM). The actual ellipticty of the Earth for a best-fitting ellipsoid is 1/298.3 with a corresponding dynamical flattening of .0034."
 
-Thus, flattening f = 1/299.8 is what is used in SPECFEM3D\_GLOBE, as it should. And eccentricity squared $e^2 = 1 - (1-f)^2 = 1 - (1 - 1/299.8)^2 = 0.00665998813529$, and the correction factor used in the code to convert geographic latitudes to geocentric is $1 - e^2 = (1-f)^2 = (1 - 1/299.8)^2 = 0.9933400118647$.
+Thus, flattening f = 1/299.8 is what is used in SPECFEM3D Globe, as it should. And eccentricity squared $e^2 = 1 - (1-f)^2 = 1 - (1 - 1/299.8)^2 = 0.00665998813529$, and the correction factor used in the code to convert geographic latitudes to geocentric is $1 - e^2 = (1-f)^2 = (1 - 1/299.8)^2 = 0.9933400118647$.
 %
 As a comparison, the classical World Geodetic System reference ellipsoid WGS 84 (see e.g. \url{http://en.wikipedia.org/wiki/World_Geodetic_System}) has $f = 1/298.2572236$.
 
@@ -920,13 +926,13 @@ the inner core mesh such that P waves are very well sampled but S
 waves are right at the sampling limit or even slightly below. This
 works fine because spurious numerical oscillations due to S-wave subsampling
 are almost completely suppressed by attenuation. However, this implies
-that one should not use SPECFEM3D\_GLOBE with the regular mesh and
+that one should not use SPECFEM3D Globe with the regular mesh and
 period estimates of Table \ref{table:nex} to study the PKJKP phase
 very precisely. If one is interested in that phase, one should use
 typically 1.5 times to twice the number of elements NEX indicated
 in the table.
 
-Regarding fluid/solid coupling at the CMB and ICB, in SPECFEM3D\_GLOBE
+Regarding fluid/solid coupling at the CMB and ICB, in SPECFEM3D Globe
 we do not use the fluid-solid formulation of \citet{KoTr02a} and
 \citet{KoTr02b} anymore, we now use a displacement potential in the
 fluid (rather than a velocity potential as in \citet{KoTr02a} and
@@ -945,7 +951,7 @@ mesh files.
 \section{Memory requirements}
 %-----------------------------------------------------------------------------------------------------------------------------------%
 
-The SPECFEM3D\_GLOBE memory requirements can be estimated before or
+The SPECFEM3D Globe memory requirements can be estimated before or
 after running the mesher using the small serial program \texttt{\small ./bin/xcreate\_header\_file},
 which reads the input file \texttt{\small DATA/Par\_file} and displays
 the total amount of memory that will be needed by the mesher and the
@@ -960,5 +966,33 @@ details about the future simulation.
 Please note that running these codes is optional because no information
 needed by the solver is generated.
 
+
+%-----------------------------------------------------------------------------------------------------------------------------------%
+\section{Scattering perturbations}\label{sec:Scattering-perturbations}
+%-----------------------------------------------------------------------------------------------------------------------------------%
+
+SPECFEM3D Globe also allows to add optional scattering perturbations to the elastic model parameters.
+The 3D random perturbations follow a von K\'arm\'an distribution, characterized by a perturbation strength and spatial correlation factor.
+As an example, to apply these perturbations to the model parameters, you can add the following parameters to the \texttt{Par\_file}:
+{\small
+\begin{verbatim}
+## scattering
+# adds scattering perturbations to velocity model
+SCATTERING_PERTURBATIONS        = .true.
+# perturbation strength
+SCATTERING_STRENGTH             = 0.3d0
+# correlation factor
+SCATTERING_CORRELATION          = 1.d0
+\end{verbatim}
+}
+
+These optional parameters are:
+\begin{description}
+\item [{\texttt{ADD\_SCATTERING\_PERTURBATIONS}}] Set to \texttt{.true.} to enable adding von K\'arm\'an type scattering perturbations to the elastic model.
+\item [{\texttt{SCATTERING\_STRENGTH}}] Defines the maximum amplitude of the perturbations, e.g., a value of 0.3 will result in 30\% perturbations.
+\item [{\texttt{SCATTERING\_CORRELATION}}] Specifies the correlation factor for the von K\'arm\'an distribution. A value of 1.0 corresponds to a correlation length $a$ where $k \times a \approx 1.0$, with $k$ being the wavenumber.
+\end{description}
+
+The current implementation sets up the 3D von K\'arm\'an power spectral density in wavenumber space, using a Hurst exponent of 0.3 and a 10\% standard deviation. The algorithm then uses a temporary regular 3D grid for the FFTs with a grid spacing determined by the smallest element size of the mesh. These 3D FFTs are computationally costly and the temporary mesh requires substantial, additional memory on all processes, especially for small-scale meshes as it scales with $N^3$. By default, the 3D perturbations are applied to density and the elastic model parameters in crust and mantle region only (no attenuation Q-factor perturbations are applied).
 
 

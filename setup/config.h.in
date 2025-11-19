@@ -114,7 +114,7 @@
 /* Set to 0 if source is from GIT, 1 otherwise. */
 #undef SPECFEM3D_GLOBE_RELEASE_VERSION
 
-/* Define SPECFEM3D_GLOBE version */
+/* Define SPECFEM3D Globe version */
 #undef SPECFEM3D_GLOBE_VERSION
 
 /* Define to 1 if all of the C89 standard headers exist (not just the ones

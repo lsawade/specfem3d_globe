@@ -1,6 +1,6 @@
 \chapter{Introduction}
 
-The software package SPECFEM3D\_GLOBE simulates three-dimensional global and regional seismic wave propagation
+The software package SPECFEM3D Globe simulates three-dimensional global and regional seismic wave propagation
 and performs full waveform imaging (FWI) or adjoint tomography based upon the spectral-element method (SEM).
 The SEM is a continuous Galerkin technique \citep{TrKoLi08,PeKoLuMaLeCaLeMaLiBlNiBaTr11},
 which can easily be made discontinuous \citep{BeMaPa94,Ch00,KoWoHu02,ChCaVi03,LaWaBe05,Kop06,WiStBuGh10,AcKo11};
@@ -42,7 +42,7 @@ perfectly diagonal mass matrix, include \cite{CoJoTo93}, \cite{Kom97},
 \cite{FaMaPaQu97}, \cite{CaGa97}, \cite{KoVi98} and \cite{KoTr99},
 whereas applications involving Chebyshev basis functions and a nondiagonal mass matrix
 include \cite{SePr94}, \cite{PrCaSe94} and \cite{SePrPr95}.
-In the Legendre version that we use in SPECFEM the mass matrix is purposely slightly inexact but diagonal (but can be made exact if needed, see \cite{Teu15}),
+In the Legendre version that we use in SPECFEM, the mass matrix is purposely slightly inexact but diagonal (but can be made exact if needed, see \cite{Teu15}),
 while in the Chebyshev version it is exact but non diagonal.\newline
 
 
@@ -55,19 +55,19 @@ If that is the case, an easy option is to slightly change the mesh in the source
 as explained in \cite{DuLiScGa14}, in which this phenomenon is described in details, and in which practical solutions to avoid it are suggested.\newline
 
 
-SPECFEM3D\_GLOBE can now perform gravity field calculations in addition (or instead of) seismic wave propagation only.
+SPECFEM3D Globe can now perform gravity field calculations in addition (or instead of) seismic wave propagation only.
 See flag \texttt{GRAVITY\_INTEGRALS} in file \texttt{setup/constants.h.in}. Please also refer to \citet{Martin2017}.
 And yes, that is the reason why there is a gravity observation satellite on the cover of the manual :-)\newline
 
 
-All SPECFEM3D\_GLOBE software is written in Fortran2003 with full portability
+All SPECFEM3D Globe software is written in Fortran2003 with full portability
 in mind, and conforms strictly to the Fortran2003 standard. It uses
 no obsolete or obsolescent features of Fortran. The package uses
 parallel programming based upon the Message Passing Interface (MPI)
 \citep{GrLuSk94,Pac97}.\newline
 
 
-SPECFEM3D\_GLOBE won the Gordon Bell award for best performance at the SuperComputing~2003
+SPECFEM3D Globe won the Gordon Bell award for best performance at the SuperComputing~2003
 conference in Phoenix, Arizona (USA) (see \cite{KoTsChTr03}).
 It was a finalist again in 2008 for a run at 0.16 petaflops (sustained) on 149,784 processors of the `Jaguar' Cray XT5 system at Oak Ridge National Laboratories (USA) \citep{CaKoLaTiMiLeSnTr08}.
 It also won the BULL Joseph Fourier supercomputing award in 2010.\newline
@@ -91,7 +91,7 @@ The package includes support for GPU graphics card acceleration \citep{Kom11,MiK
 You can find all the references below in \BibTeX format in file \texttt{doc/USER\_MANUAL/bibliography.bib}.\newline
 
 
-If you use SPECFEM3D\_GLOBE for your own research, please cite at least one
+If you use SPECFEM3D Globe for your own research, please cite at least one
 of the following articles: \cite{KoXiBoPeSaLiTr16,TrKoLi08,PeKoLuMaLeCaLeMaLiBlNiBaTr11,VaCaSaKoVi99,LeChLiKoHuTr08,LeChKoHuTr09,LeKoHuTr09,KoMiEr09,KoErGoMi10,WiKoScTr04,KoLiTrSuStSh04,ChKoViCaVaFe07,MaKoDi09,KoViCh10,CaKoLaTiMiLeSnTr08,TrKoHjLiZhPeBoMcFrTrHu10,KoRiTr02,KoTr02a,KoTr02b,KoTr99} or \cite{KoVi98}.\newline
 
 

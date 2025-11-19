@@ -9,7 +9,7 @@
 \section{Configuring and compiling the source code}
 %-----------------------------------------------------------------------------------------------------------------------------------%
 
-To get the SPECFEM3D\_GLOBE software package, type this:
+To get the SPECFEM3D Globe software package, type this:
 {\small
 \begin{verbatim}
   git clone --recursive --branch devel https://github.com/SPECFEM/specfem3d_globe.git
@@ -80,7 +80,7 @@ We recommend that you add {\texttt{ulimit -S -s unlimited}} to your {\texttt{.ba
 %-----------------------------------------------------------------------------------------------------------------------------------%
 
 \noindent
-SPECFEM3D\_GLOBE now supports CUDA, OpenCL and HIP GPU acceleration.
+SPECFEM3D Globe now supports CUDA, OpenCL and HIP GPU acceleration.
 CUDA configuration can be enabled with \texttt{-{}-with-cuda} flag and
 \texttt{CUDA\_FLAGS=}, \texttt{CUDA\_LIB=}, \texttt{CUDA\_INC=}
 and \texttt{ MPI\_INC=} variables like
@@ -126,7 +126,7 @@ So even if you have the new CUDA toolkit version 11, but you want to run on say 
 The compilation with the cuda5 setting chooses then the right architecture (\texttt{-gencode=arch=compute\_35,code=sm\_35} for K20 cards).\newline
 
 
-SPECFEM3D\_GLOBE also supports CUDA-aware MPI. This code feature can be enabled by adding the flag \texttt{-{}-enable-cuda-aware-mpi} to
+SPECFEM3D Globe also supports CUDA-aware MPI. This code feature can be enabled by adding the flag \texttt{-{}-enable-cuda-aware-mpi} to
 the configuration, like:
 {\small
 \begin{verbatim}
@@ -196,7 +196,7 @@ environments and GPU:
 
 \begin{description}
 \item[\texttt{GPU\_RUNTIME}] sets the runtime environments: $1$ for CUDA, $2$ for OpenCL, $3$ for HIP
- and $0$ for compile-time decision (hence, SPECFEM should
+ and $0$ for compile-time decision (hence, SPECFEM3D Globe should
 have been compiled with only one of \texttt{-{}-with-cuda}, \texttt{-{}-with-opencl} or \texttt{-{}-with-hip}).
 
 \item[\texttt{GPU\_PLATFORM} and \texttt{GPU\_DEVICE}] are both (case-insensitive)
@@ -316,7 +316,7 @@ If they are identical (and in most cases they will), you can select single preci
 \item [{\texttt{-{}-help}}] Directs \texttt{configure} to print a usage
 screen which provides a short description of all configuration variables
 and options. Note that the options relating to installation directories
-(e.g., \texttt{-{}-prefix}) do not apply to SPECFEM3D\_GLOBE.
+(e.g., \texttt{-{}-prefix}) do not apply to SPECFEM3D Globe.
 \end{description}
 
 The \texttt{configure} script runs a brief series of checks. Upon

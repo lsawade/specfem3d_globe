@@ -1,11 +1,11 @@
-# Contributing to SPECFEM3D_GLOBE
+# Contributing to SPECFEM3D Globe
 
-You want to contribute to the SPECFEM code? Great, let's check out this set of simple guidelines to follow for contributions.
+You want to contribute to the SPECFEM3D Globe code? Great, let's check out this set of simple guidelines to follow for contributions.
 
 ## Contributing as a user
 
 Software needs constant maintaining and updating to keep up with newest hardware and compilers.
-You found an issue when running the code? Please consider creating a "*New issue*" on the [SPECFEM3D_GLOBE Issues github page](https://github.com/SPECFEM/specfem3d_globe/issues). 
+You found an issue when running the code? Please consider creating a "*New issue*" on the [SPECFEM3D Globe Issues github page](https://github.com/SPECFEM/specfem3d_globe/issues). 
 
 Describe the problem as detailed as possible to help us reproduce the error. You can also attach console outputs from the executables to make it easier for debugging. Feel free to add an appropriate label to highlight the issue by checking out "*Labels*" on the right side of the page. Once done, click the button "*Submit new issue*". Catching bugs is always welcome, many thanks to you for improving the code!
 
@@ -13,17 +13,17 @@ Describe the problem as detailed as possible to help us reproduce the error. You
 
 You have a new feature, bug fix, or other modification you want to contribute to the code? In this case, consider submitting a "*Pull request*" to the **devel branch** of our github code repository. 
 
-This will require a few steps to setup your own github fork and be able to create a PR to the official devel version of the SPECFEM code (**note that only Pull requests towards devel are accepted**). The most basic setup looks the following:
+This will require a few steps to setup your own github fork and be able to create a PR to the official devel version of the SPECFEM3D Globe code (**note that only Pull requests towards devel are accepted**). The most basic setup looks the following:
 
 #### 1. Create your fork of the repository:
-Go to the main [SPECFEM3D_GLOBE github repository](https://github.com/SPECFEM/specfem3d_globe) and click the "*Fork*" button at the top of the page. This will create a copy of the SPECFEM3D_GLOBE repository in your personal GitHub account.
+Go to the main [SPECFEM3D Globe github repository](https://github.com/SPECFEM/specfem3d_globe) and click the "*Fork*" button at the top of the page. This will create a copy of the SPECFEM3D Globe repository in your personal GitHub account.
 
 #### 2. Clone your fork to your local workstation/laptop:
 ```
 git clone --recursive --branch devel https://github.com/<your-github-account-name>/specfem3d_globe.git
 ```
 Once you change into your local folder `cd specfem3d_globe/`, all git commands will be recognized.  
-Now, add the remote address of the SPECFEM3D_GLOBE repository:
+Now, add the remote address of the SPECFEM3D Globe repository:
 ```
 git remote add upstream https://github.com/SPECFEM/specfem3d_globe.git
 ```
@@ -76,12 +76,12 @@ In the "*Open a pull request*" page, double-check that the base repository is: *
 #### 6. Final merge:
 We'll do the rest by reviewing your code changes, checking if the Github Actions, Travis and Azure checks all look okay. We might follow up with you by commenting on the PR, as you can still fix smaller issues in the PR by committing them to your github fork version.<br>
 
-Finally, if the are no merge conflicts, the new version still compiles and tests pass, we'll merge your PR into the SPECFEM devel version - **with big thanks to you from the maintainers and the whole community!**
+Finally, if the are no merge conflicts, the new version still compiles and tests pass, we'll merge your PR into the SPECFEM3D Globe devel version - **with big thanks to you from the maintainers and the whole community!**
 
 
 ## Further informations
 
-You will find additional informations in the user manual and the [development wiki for SPECFEM3D_GLOBE](https://github.com/SPECFEM/specfem3d_globe/wiki)
+You will find additional informations in the user manual and the [development wiki for SPECFEM3D Globe](https://github.com/SPECFEM/specfem3d_globe/wiki)
 
 
 More detailed developer informations and instructions for how to contribute in general to SPECFEM codes are available at:<br>
