@@ -32,7 +32,7 @@
                                           c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
 ! rotates from local radial symmetry given by Love parameterization
-! to global global reference frame used in SPECFEM3D
+! to global reference frame used in SPECFEM3D
 
   implicit none
 
@@ -107,7 +107,7 @@
                                                c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
 ! rotates from local azimuthal symmetry given by Love & Gc,Gs parameterization
-! to global global reference frame used in SPECFEM3D
+! to global reference frame used in SPECFEM3D
 
   implicit none
 
@@ -167,7 +167,7 @@
                                                c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
 ! rotates from local symmetry given by aniso (Montagner) parameterization
-! to global global reference frame used in SPECFEM3D
+! to global reference frame used in SPECFEM3D
 
   implicit none
 
@@ -183,7 +183,23 @@
   double precision :: d11,d12,d13,d14,d15,d16,d22,d23,d24,d25,d26, &
                       d33,d34,d35,d36,d44,d45,d46,d55,d56,d66
 
+  ! construction of local stiffness matrix in Voigt notation
   ! general case (see also model_aniso_mantle.f90)
+  !
+  ! note: The expressions here follow from Chen & Tromp (2007), Appendix (A3) - (A7).
+  !       In particular, the Cartesian reference frame convention here is for Globe, where x denotes East, y North and z up.
+  !       The azimuth convention is measured counter-clockwise from due South.
+  !
+  !       Compared to the expressions like in Montagner & Nataf (1986) and others, these two conventions are different.
+  !       Montagner & Nataf (1986) uses azimuth measured clockwise from North as is usually done.
+  !       And, their Cartesian reference frame for the elastic coefficients Cij uses x in North direction,
+  !       y in East and z down.
+  !
+  !       Having azimuth theta' == -theta would lead to a sign change of the sin(..) coefficients,
+  !       i.e., Bs == -Bs, Gs == -Gs, Hs == -Hs, Es == -Es, Ds == -Ds, Js == -Js, Ms == -Ms
+  !
+  !TODO: we will need to check how to construct local tensors with different azimuth & reference frame conventions...
+  !
   d11 = A + Ec + Bc
   d12 = A - 2.d0 * N - Ec
   d13 = F + Hc
@@ -854,7 +870,7 @@
                                           c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
 ! rotates from local radial symmetry given by Love parameterization
-! to global global reference frame used in SPECFEM3D
+! to global reference frame used in SPECFEM3D
 
   implicit none
 
@@ -931,7 +947,7 @@
                                           c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
 ! rotates from local radial symmetry given by Love parameterization
-! to global global reference frame used in SPECFEM3D
+! to global reference frame used in SPECFEM3D
 
   implicit none
 
