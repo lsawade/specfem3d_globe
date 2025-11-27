@@ -195,22 +195,56 @@
   !       And, their Cartesian reference frame for the elastic coefficients Cij uses x in North direction,
   !       y in East and z down.
   !
-  !       Having azimuth theta' == -theta would lead to a sign change of the sin(..) coefficients,
-  !       i.e., Bs == -Bs, Gs == -Gs, Hs == -Hs, Es == -Es, Ds == -Ds, Js == -Js, Ms == -Ms
+  !       Going from a local azimuth angle (zeta) measured counter-clockwise from South as used in Chen & Tromp (2007)
+  !       to an angle measured clockwise from North (zeta’), would mean zeta = pi - zeta’,
+  !       which would involve sign changes on the odd cosine terms and on the even sine terms, i.e.,
+  !         Jc’ = - Jc, Kc’ = - Kc, Mc’ = - Mc, Dc’ = - Dc
+  !       and
+  !         Gs’ = - Gs, Bs’ = - Bs, Hs’ = -Hs, Es’ = - Es,
+  !       respectively.
+  !
+  ! corresponding tensor derived for local azimuth measured clockwise from North:
+  !d11_prime = A + Ec + Bc            == d11
+  !d12_prime = A - 2.d0 * N - Ec      == d12
+  !d13_prime = F + Hc                 == d13
+  !d14_prime = Ds + 2.d0 * (Js + Ms)  == d14
+  !d15_prime = -2.d0 * Jc - Dc        == -d15
+  !d16_prime = 0.5d0 * Bs + Es        == -d16
+  !
+  !d22_prime = A + Ec - Bc            == d22
+  !d23_prime = F - Hc                 == d23
+  !d24_prime = 2.d0 * Js - Ds         == d24
+  !d25_prime = 2.d0 * (Mc - Jc) + Dc  == -d25
+  !d26_prime = 0.5d0 * Bs - Es        == -d26
+  !
+  !d33_prime = C                      == d33
+  !d34_prime = 2.d0 * (Js - Ks)       == d34
+  !d35_prime = 2.d0 * (Kc - Jc)       == -d35
+  !d36_prime = Hs                     == -d36
+  !
+  !d44_prime = L - Gc                 == d44
+  !d45_prime = Gs                     == -d45
+  !d46_prime = Dc - Mc                == -d46
+  !
+  !d55_prime = L + Gc                 == d55
+  !d56_prime = Ds - Ms                == d56
+  !
+  !d66_prime = N - Ec                 == d66
   !
   !TODO: we will need to check how to construct local tensors with different azimuth & reference frame conventions...
   !
   d11 = A + Ec + Bc
   d12 = A - 2.d0 * N - Ec
   d13 = F + Hc
-  d14 = Ds + 2.d0 * Js + 2.d0 * Ms
+  d14 = Ds + 2.d0 * (Js + Ms)
   d15 = 2.d0 * Jc + Dc
   d16 = -0.5d0 * Bs - Es
+
   d22 = A + Ec - Bc
   d23 = F - Hc
   d24 = 2.d0 * Js - Ds
-  d25 = 2.d0 * Jc - 2.d0 * Mc - Dc
-  d26 = -Bs/2.d0 + Es
+  d25 = 2.d0 * (Jc - Mc) - Dc
+  d26 = -0.5d0 * Bs + Es
 
   d33 = C
   d34 = 2.d0 * (Js - Ks)
