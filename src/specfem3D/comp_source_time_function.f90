@@ -32,7 +32,7 @@
   ! for berkeley source time function
   use shared_parameters, only: STF_IS_UCB_HEAVISIDE
   use ucb_heaviside, only: comp_source_time_function_ucb_stf
-
+  use specfem_par, only: USE_SINSQ_STF
   implicit none
 
   double precision,intent(in) :: t,hdur
@@ -40,6 +40,7 @@
 
   ! local parameters
   double precision, external :: comp_source_time_function_heavi
+  double precision, external :: comp_source_time_function_ssq
   double precision, external :: comp_source_time_function_ext
 
   if (STF_IS_UCB_HEAVISIDE) then
@@ -48,7 +49,10 @@
   else if (EXTERNAL_SOURCE_TIME_FUNCTION) then
     ! external stf
     comp_source_time_function = comp_source_time_function_ext(it_index)
-  else
+  elseif(USE_SINSQ_STF)then
+    ! sin squared stf
+    comp_source_time_function = comp_source_time_function_ssq(t,hdur)
+  else 
     ! quasi Heaviside
     comp_source_time_function = comp_source_time_function_heavi(t,hdur)
   endif
@@ -77,6 +81,40 @@
 
   end function comp_source_time_function_heavi
 
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  double precision function comp_source_time_function_ssq(t,hdur)
+  use constants, only: PI
+  use specfem_par, only: myrank
+
+  implicit none
+
+  double precision,intent(in) :: t,hdur
+
+  ! Squared sinusoid STF used in PEGS. Avoids Gaussian in which tiny bits of energy are released
+  ! from -1.5t0. Energy release only starts at -t0
+  ! See, for example, https://doi.org/10.1016/j.epsl.2020.116150 where it is defined as 
+  !    dM/dt = M0/tau sin^2(pi t/(2tau)) where tau is the hdur (not hdur gaussian)
+  ! Note that this starts from -hdur instead of 0 as defined in attached DOI 
+
+
+  if(t > -hdur .and. t < hdur)then
+    comp_source_time_function_ssq = 0.5d0 + ((1/(2.0d0*PI*hdur))*( (hdur * sin(PI*t/hdur)) + PI*t))
+  else 
+  ! For regions outside the sinusoid: 
+    if(t.le.-hdur)then
+      comp_source_time_function_ssq = 0.0d0
+    else
+      comp_source_time_function_ssq = 1.0d0
+    endif 
+  endif 
+
+  end function comp_source_time_function_ssq
+
+
+!
 
 !
 !-------------------------------------------------------------------------------------------------

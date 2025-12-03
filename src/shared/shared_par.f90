@@ -76,6 +76,7 @@
 
   ! sources
   logical :: USE_FORCE_POINT_SOURCE
+  logical :: USE_SINSQ_STF = .false.
   logical :: USE_MONOCHROMATIC_CMT_SOURCE,PRINT_SOURCE_TIME_FUNCTION
 
   ! checkpointing/restart
