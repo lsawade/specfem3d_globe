@@ -120,17 +120,22 @@ $LD_LIBRARY_PATH=/path/to/OpenMPI/lib/:$LD_LIBRARY_PATH
  \end{verbatim}
  
  
- \subsection{Running the solver}
- Only two changes are required to run with full gravity. 
+ \subsection{Running a full-gravity simulation}
+ A few three changes are required to run with full gravity. First, the \texttt{Par\_file} must be updated as follows: 
  \begin{enumerate}
-   \item In the \texttt{Par\_file} both the flags \texttt{GRAVITY} and \texttt{FULL\_GRAVITY} must be set to \texttt{.true.}.   
+   \item Both the flags \texttt{GRAVITY} and \texttt{FULL\_GRAVITY} must be set to \texttt{.true.}.   
    \item Set \texttt{POISSON\_SOLVER} to 0 (in-built solver) or 1 (PETSC solver). PETSC is recommended. 
+   \item Since the current implementation is restricted to global simulations, \texttt{NCHUNKS} must equal 6.
  \end{enumerate}    
- 
+The mesher can then be run as normal. An intermediate workflow step is required between meshing and solving. 
+Following execution of Meshfem, you must run the program \texttt{xgindex3D}, a serial executable that reorders 
+some of the global indexing for the new mesh. Simply \texttt{make xgindex3D}, followed by \texttt{./bin/xgindex3D <nprocs>}, 
+where nprocs is the number of cores/tasks you will use for an MPI run. In some cases you may need to use  
+\texttt{mpirun -np 1 ./bin/xgindex3D <nprocs>}. Following this, the solver may be executed.
  
  \subsection{Outputs}
- In addition to the normal displacement time-series for a station, a number of other time-series will be written to 
- \texttt{OUTPUT\_FILES}: 
+ In addition to the normal displacement/velocity/acceleration time-series for a station, a number of other time-series 
+ will be written to \texttt{OUTPUT\_FILES}: 
  
  \begin{itemize}
      \item \texttt{net.sta.MXG.sem.ascii} - Gravitational potential 

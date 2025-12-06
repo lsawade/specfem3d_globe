@@ -4,9 +4,6 @@
 # executable
 var=xspecfem3D
 
-
-PETSC_INC=/home/we3822/software/petscbuild/include
-PETSC_LIB=/home/we3822/software/petscbuild/lib
 export LD_LIBRARY_PATH=$PETSC_LIB/:$LD_LIBRARY_PATH
 OMPI_MCA_btl_openib_allow_ib=1
 
