@@ -87,7 +87,6 @@
 
   double precision function comp_source_time_function_ssq(t,hdur)
   use constants, only: PI
-  use specfem_par, only: myrank
 
   implicit none
 
