@@ -287,6 +287,7 @@ USE_FORCE_POINT_SOURCE          = .false.
 # half duration is interpreted as a PERIOD just to avoid changing CMTSOLUTION file format
 # default is .false. which uses Heaviside function
 USE_MONOCHROMATIC_CMT_SOURCE    = .false.
+USE_SINSQ_STF  = .false.
 
 # print source time function
 PRINT_SOURCE_TIME_FUNCTION      = .true.
