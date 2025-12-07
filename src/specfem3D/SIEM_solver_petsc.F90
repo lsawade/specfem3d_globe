@@ -209,10 +209,8 @@ module siem_solver_petsc
   ! Centralize PETSc version check
   ! Force display of version info (will cause compilation to stop here)
 #if PETSC_VERSION_GE(3,23,0)
-#warning "USING NEW PETSC API"
 #define PETSC_NEW_NULL_API 1
 #else
-#warning "USING OLD PETSC API"
 #define PETSC_NEW_NULL_API 0
 #endif
 
