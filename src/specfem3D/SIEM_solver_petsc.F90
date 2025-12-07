@@ -135,7 +135,6 @@ module siem_solver_petsc
   !use petscksp, only: tKSP
   !use petscpc, only: tPC
   !use petscis, only: tIS
-
 #endif
 
   use constants, only: myrank,IMAIN,CUSTOM_REAL
@@ -206,6 +205,20 @@ module siem_solver_petsc
   PetscReal, parameter :: KSP_RTOL = 1.0e-7
   PetscReal, parameter :: KSP_ATOL = 1.0e-30
   PetscReal, parameter :: KSP_DTOL = 1.0e30
+
+  ! Centralize PETSc version check
+  ! Force display of version info (will cause compilation to stop here)
+#if PETSC_VERSION_GE(3,19,0)
+#warning "USING NEW PETSC API"
+#define PETSC_NEW_NULL_API 1
+#else
+#warning "USING OLD PETSC API"
+#define PETSC_NEW_NULL_API 0
+#endif
+
+
+
+
 
   ! solver type
   PetscInt, parameter     :: COMMAND = 0, CG = 1, SUPERLU = 2, MUMPS = 3
@@ -311,7 +324,6 @@ contains
   PetscInt,allocatable :: ninterface_darray1(:),ninterface_oarray1(:)
   PetscScalar,allocatable :: rg_interface(:),rnself_lgarray1(:)
   PetscScalar,pointer :: rninterface_darray1(:),rninterface_oarray1(:)
-
   ! memory info
   PetscLogDouble :: bytes
 
@@ -826,8 +838,19 @@ contains
   !
   !        this seems to lead to a much faster petsc_set_matrix1() routine without the re-allocations.
   !        however, the diagonal and in particular the off-diagonal estimate with nzeros_max might be still off.
-  call MatMPIAIJSetPreallocation(Amat1,nzeros_max,PETSC_NULL_INTEGER_ARRAY, &
-                                 nzeros_max,PETSC_NULL_INTEGER_ARRAY, ierr); CHECK_PETSC_ERROR(ierr)
+  
+  
+#if PETSC_NEW_NULL_API
+  ! Later version uses integer array
+  call MatMPIAIJSetPreallocation(Amat1,nzeros_max, PETSC_NULL_INTEGER_ARRAY, &
+                                 nzeros_max, PETSC_NULL_INTEGER_ARRAY, ierr); CHECK_PETSC_ERROR(ierr)
+#else
+  call MatMPIAIJSetPreallocation(Amat1,nzeros_max, PETSC_NULL_INTEGER, &
+                                nzeros_max, PETSC_NULL_INTEGER, ierr); CHECK_PETSC_ERROR(ierr)
+#endif
+
+
+
 
   call MatSetFromOptions(Amat1,ierr); CHECK_PETSC_ERROR(ierr)
   call MatGetOwnershipRange(Amat1,istart,iend,ierr); CHECK_PETSC_ERROR(ierr)
@@ -1111,10 +1134,16 @@ contains
   !                const PetscInt idxn[], const PetscScalar v[], InsertMode addv)
   PetscScalar :: v
 
-  ! matrix info
-  !double precision :: info(MAT_INFO_SIZE)
-  MatInfo :: info
-  !double precision :: mallocsval
+   ! matrix info
+#if PETSC_NEW_NULL_API
+MatInfo :: info
+#else 
+  double precision :: info(MAT_INFO_SIZE)
+#endif 
+double precision :: mallocsval
+
+
+
   PetscLogDouble :: bytes
 
   ! timing
@@ -1352,7 +1381,11 @@ contains
   ! matrix info
   call MatGetInfo(Amat1, MAT_GLOBAL_MAX, info, ierr); CHECK_PETSC_ERROR(ierr)
 
-  !mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
+#if PETSC_NEW_NULL_API
+mallocsval = info%mallocs
+#else 
+mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
+#endif 
   !memval = info(MAT_INFO_MEMORY)                   ! memory allocated - not provided
   !nonzeros_allocated = info(MAT_INFO_NZ_ALLOCATED) ! nonzero entries allocated
 
@@ -1361,7 +1394,7 @@ contains
 
   ! user output
   if (myrank == 0) then
-    write(IMAIN,*) '    number of mallocs during setting values: ',int(info%mallocs)
+    write(IMAIN,*) '    number of mallocs during setting values: ',int(mallocsval)
     write(IMAIN,*) '    current PETSc memory usage  = ',sngl(bytes / 1024.d0 / 1024.d0),'MB'
     write(IMAIN,*) '                                = ',sngl(bytes / 1024.d0 / 1024.d0 / 1024.d0),'GB'
     write(IMAIN,*)
@@ -2019,7 +2052,13 @@ contains
   PetscScalar, dimension(:),allocatable :: varr
 
   ! matrix info
-  MatInfo :: info
+#if PETSC_NEW_NULL_API
+MatInfo :: info
+#else 
+  double precision :: info(MAT_INFO_SIZE)
+#endif 
+double precision :: mallocsval
+
   PetscLogDouble :: bytes
 
   ! timing
@@ -2229,14 +2268,19 @@ contains
 
   ! matrix info
   call MatGetInfo(Amat, MAT_GLOBAL_MAX, info, ierr); CHECK_PETSC_ERROR(ierr)
-  !mallocsval = info(MAT_INFO_MALLOCS) ! number of mallocs during MatSetValues()
+
+#if PETSC_NEW_NULL_API
+mallocsval = info%mallocs
+#else 
+mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
+#endif 
 
   ! memory usage
   call PetscMemoryGetCurrentUsage(bytes, ierr); CHECK_PETSC_ERROR(ierr)
 
   ! user output
   if (myrank == 0) then
-    write(IMAIN,*) '    number of mallocs during setting values: ',int(info%mallocs)
+    write(IMAIN,*) '    number of mallocs during setting values: ',int(mallocsval)
     write(IMAIN,*) '    current PETSc memory usage  = ',sngl(bytes / 1024.d0 / 1024.d0),'MB'
     write(IMAIN,*) '                                = ',sngl(bytes / 1024.d0 / 1024.d0 / 1024.d0),'GB'
     write(IMAIN,*)
