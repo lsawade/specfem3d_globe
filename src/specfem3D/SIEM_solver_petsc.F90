@@ -219,13 +219,13 @@ module siem_solver_petsc
 ! Versions between 3.19 and 3.23 used an F90
 ! suffix in things like VecGetArray
 #if PETSC_VERSION_GE(3,19,0)
-  #if PETSC_VERSION_LT(3,23,0)
-    #define API_F90_SUFFIX 1
-  #else
-    #define API_F90_SUFFIX 0
-  #endif
+#if PETSC_VERSION_LT(3,23,0)
+#define API_F90_SUFFIX 1
 #else
-  #define API_F90_SUFFIX 0
+#define API_F90_SUFFIX 0
+#endif
+#else
+#define API_F90_SUFFIX 0
 #endif
 
 ! In version 3.23 
