@@ -237,21 +237,6 @@ module siem_solver_petsc
 #endif
 
 
-#if PETSC_VERSION_EQ(3,19,6)
-#warning "Version 3.19.6"
-#elif PETSC_VERSION_GE(3,23,0)
-#warning "Version 3.23 something"
-#elif PETSC_VERSION_EQ(3,15,5)
-#warning "Version 3.15.5"
-#else
-#error "Error on version"
-#endif 
-
-
-
-
-
-
   ! solver type
   PetscInt, parameter     :: COMMAND = 0, CG = 1, SUPERLU = 2, MUMPS = 3
 
