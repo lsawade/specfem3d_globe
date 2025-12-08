@@ -208,11 +208,45 @@ module siem_solver_petsc
 
   ! Centralize PETSc version check
   ! Force display of version info (will cause compilation to stop here)
-#if PETSC_VERSION_GE(3,23,0)
-#define PETSC_NEW_NULL_API 1
+  ! PETSC_NULL_SCALAR_ARRAY instead of PETSC_NULL_SCALAR
+  ! introduced in 3.22
+#if PETSC_VERSION_GE(3,22,0)
+#define PETSC_ARRAY_NULL_API 1
 #else
-#define PETSC_NEW_NULL_API 0
+#define PETSC_ARRAY_NULL_API 0
 #endif
+
+! Versions between 3.19 and 3.23 used an F90
+! suffix in things like VecGetArray
+#if PETSC_VERSION_GE(3,19,0)
+  #if PETSC_VERSION_LT(3,23,0)
+    #define API_F90_SUFFIX 1
+  #else
+    #define API_F90_SUFFIX 0
+  #endif
+#else
+  #define API_F90_SUFFIX 0
+#endif
+
+! In version 3.23 
+! MatInfo changed from arrays to derived data types
+#if PETSC_VERSION_GE(3,22,0)
+#define PETSC_INFO_DERIVED_TYPE 1
+#else
+#define PETSC_INFO_DERIVED_TYPE 0
+#endif
+
+
+#if PETSC_VERSION_EQ(3,19,6)
+#warning "Version 3.19.6"
+#elif PETSC_VERSION_GE(3,23,0)
+#warning "Version 3.23 something"
+#elif PETSC_VERSION_EQ(3,15,5)
+#warning "Version 3.15.5"
+#else
+#error "Error on version"
+#endif 
+
 
 
 
@@ -596,14 +630,24 @@ contains
 
   allocate(rnself_lgarray1(neq1))
   call scatter_globalvec1(nself_gvec1, rnself_lgarray1)
+
+#if API_F90_SUFFIX
+  call VecGetArrayF90(nself_gvec1,rnself_array1,ierr)
+#else 
   call VecGetArray(nself_gvec1,rnself_array1,ierr)
+#endif 
 
   allocate(nself_array1(n))
   nself_array1 = int(rnself_array1(1:n))
 
   where(nself_array1 > 0) nself_array1 = nself_array1-1 ! subtract self
 
+#if API_F90_SUFFIX
+  call VecRestoreArrayF90(nself_gvec1,rnself_array1,ierr)
+#else 
   call VecRestoreArray(nself_gvec1,rnself_array1,ierr)
+#endif 
+
   call VecDestroy(nself_gvec1,ierr)
 
   if (myrank == 0) print *,'PETSc solver: maximum value of nself:',maxval(nself_array1)
@@ -718,7 +762,12 @@ contains
   ! apply correction for repeatition due to interfaces
   ! diagonal matrix
   call VecGetLocalSize(nzeror_dvec1,n,ierr)
+#if API_F90_SUFFIX
+  call VecGetArrayF90(nzeror_dvec1,nzeror_darray1,ierr)
+#else 
   call VecGetArray(nzeror_dvec1,nzeror_darray1,ierr)
+#endif 
+
 
   allocate(nnzero_diag1(n))
   nnzero_diag1(:) = int(nzeror_darray1(1:n))
@@ -729,42 +778,77 @@ contains
                                                  minval(nnzero_diag1),maxval(nnzero_diag1)
   call synchronize_all()
 
+#if API_F90_SUFFIX
+  call VecRestoreArrayF90(nzeror_dvec1,nzeror_darray1,ierr)
+#else 
   call VecRestoreArray(nzeror_dvec1,nzeror_darray1,ierr)
+#endif 
+
   call VecDestroy(nzeror_dvec1,ierr)
 
   ! off-diagonal matrix
+#if API_F90_SUFFIX
+  call VecGetArrayF90(nzeror_ovec1,nzeror_oarray1,ierr)
+#else 
   call VecGetArray(nzeror_ovec1,nzeror_oarray1,ierr)
+#endif 
+
 
   allocate(nnzero_offdiag1(n))
   nnzero_offdiag1(:) = int(nzeror_oarray1(1:n))
 
+#if API_F90_SUFFIX
+  call VecRestoreArrayF90(nzeror_ovec1,nzeror_oarray1,ierr)
+#else 
   call VecRestoreArray(nzeror_ovec1,nzeror_oarray1,ierr)
+#endif 
+
   call VecDestroy(nzeror_ovec1,ierr)
 
   ! correction
   ! I do not know why but there are some DOFs where the correction exceeds by 4 or
   ! 8 therefore to be safe we need to subtract this from all
+#if API_F90_SUFFIX
+  call VecGetArrayF90(ninterface_dvec1,rninterface_darray1,ierr)
+#else 
   call VecGetArray(ninterface_dvec1,rninterface_darray1,ierr)
+#endif 
+
 
   !where(rninterface_darray1>0.0 .and. rninterface_darray1 < 1.0)rninterface_darray1=1.0
 
   allocate(ninterface_darray1(n))
   ninterface_darray1 = int(rninterface_darray1(1:n))
 
+#if API_F90_SUFFIX
+  call VecRestoreArrayF90(ninterface_dvec1,rninterface_darray1,ierr)
+#else 
   call VecRestoreArray(ninterface_dvec1,rninterface_darray1,ierr)
+#endif 
+
   call VecDestroy(ninterface_dvec1,ierr)
 
   where(ninterface_darray1 > 0) ninterface_darray1 = ninterface_darray1 - 4
   where(ninterface_darray1 < 0) ninterface_darray1 = 0
 
+#if API_F90_SUFFIX
+  call VecGetArrayF90(ninterface_ovec1,rninterface_oarray1,ierr)
+#else 
   call VecGetArray(ninterface_ovec1,rninterface_oarray1,ierr)
+#endif 
+
 
   !where(rninterface_oarray1>0.0 .and. rninterface_oarray1 < 1.0)rninterface_oarray1=1.0
 
   allocate(ninterface_oarray1(n))
   ninterface_oarray1 = int(rninterface_oarray1(1:n))
 
+#if API_F90_SUFFIX
+  call VecGetArrayF90(ninterface_ovec1,rninterface_oarray1,ierr)
+#else 
   call VecGetArray(ninterface_ovec1,rninterface_oarray1,ierr)
+#endif 
+
   call VecDestroy(ninterface_ovec1,ierr)
 
   where(ninterface_oarray1 > 0) ninterface_oarray1 = ninterface_oarray1 - 8
@@ -796,12 +880,21 @@ contains
   deallocate(kgrow_sparse1,kgcol_sparse1)
 
   ! non-zero array for diagonal/off-diagonal matrix?
+#if API_F90_SUFFIX
+  call VecGetArrayF90(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
   call VecGetArray(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
 
   allocate(inzeror_array1(n))
   inzeror_array1(:) = int(nzeror_array1(1:n))
 
+#if API_F90_SUFFIX
+  call VecRestoreArrayF90(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
   call VecRestoreArray(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
+
   call VecDestroy(nzeror_gvec1,ierr); CHECK_PETSC_ERROR(ierr)
 
   inzeros_max = maxvec(inzeror_array1)
@@ -838,7 +931,7 @@ contains
   !        however, the diagonal and in particular the off-diagonal estimate with nzeros_max might be still off.
   
   
-#if PETSC_NEW_NULL_API
+#if PETSC_ARRAY_NULL_API
   ! Later version uses integer array
   call MatMPIAIJSetPreallocation(Amat1,nzeros_max, PETSC_NULL_INTEGER_ARRAY, &
                                  nzeros_max, PETSC_NULL_INTEGER_ARRAY, ierr); CHECK_PETSC_ERROR(ierr)
@@ -1133,7 +1226,7 @@ contains
   PetscScalar :: v
 
    ! matrix info
-#if PETSC_NEW_NULL_API
+#if PETSC_INFO_DERIVED_TYPE
 MatInfo :: info
 #else 
   double precision :: info(MAT_INFO_SIZE)
@@ -1379,7 +1472,7 @@ double precision :: mallocsval
   ! matrix info
   call MatGetInfo(Amat1, MAT_GLOBAL_MAX, info, ierr); CHECK_PETSC_ERROR(ierr)
 
-#if PETSC_NEW_NULL_API
+#if PETSC_INFO_DERIVED_TYPE
 mallocsval = info%mallocs
 #else 
 mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
@@ -1671,10 +1764,20 @@ mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during Mat
   call VecScatterEnd(vscat1,global_vec,local_vec1,INSERT_VALUES,SCATTER_FORWARD,ierr); CHECK_PETSC_ERROR(ierr)
   call VecGetSize(local_vec1,n,ierr)
 
+#if API_F90_SUFFIX
+  call VecGetArrayF90(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
   call VecGetArray(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
+
 
   larray(1:n) = array_data(1:n)
+
+#if API_F90_SUFFIX
+  call VecRestoreArrayF90(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
   call VecRestoreArray(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
 
   end subroutine scatter_globalvec1
 
@@ -2050,7 +2153,7 @@ mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during Mat
   PetscScalar, dimension(:),allocatable :: varr
 
   ! matrix info
-#if PETSC_NEW_NULL_API
+#if PETSC_INFO_DERIVED_TYPE
 MatInfo :: info
 #else 
   double precision :: info(MAT_INFO_SIZE)
@@ -2267,7 +2370,7 @@ double precision :: mallocsval
   ! matrix info
   call MatGetInfo(Amat, MAT_GLOBAL_MAX, info, ierr); CHECK_PETSC_ERROR(ierr)
 
-#if PETSC_NEW_NULL_API
+#if PETSC_INFO_DERIVED_TYPE
 mallocsval = info%mallocs
 #else 
 mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
