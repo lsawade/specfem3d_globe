@@ -80,6 +80,24 @@
 !   call VecSetValues(bvec,neq,l2gdof(1:),y,ADD_VALUES,ierr)
 ! well, until a better solution is found.
 
+! 5/12/25 - WE: A further issue with this is the variables ix and y 
+!  for single values e.g. originally 
+!  call VecSetValues(interface_gvec1,1,igdof,rval,INSERT_VALUES,ierr)
+!  needs to be written as 
+!  call VecSetValues(interface_gvec1,1,[igdof],[rval],INSERT_VALUES,ierr)
+!  also for MatSetValues(Mat mat, PetscInt m, const PetscInt idxm[], 
+!                        PetscInt n, const PetscInt idxn[], 
+!                        const PetscScalar v[], InsertMode addv)
+! the variables idxm, idxn, and v.
+! Other examples in: 
+!   MatMPIAIJSetPreallocation --> requires PETSC_NULL_INTEGER_ARRAY 
+!   instead of PETSC_NULL_INTEGER
+
+! For MatSetValues - flattening
+!   MatSetValues documentation suggests in f90 varray needs to be flattened
+!   note that F90 is column major but C is row major. 
+! It appears petsc updated VecGetArrayF90 back to VecGetArray in 
+! 3.23 (https://petsc.org/release/changes/323/)
 
 module siem_solver_petsc
 
@@ -117,7 +135,6 @@ module siem_solver_petsc
   !use petscksp, only: tKSP
   !use petscpc, only: tPC
   !use petscis, only: tIS
-
 #endif
 
   use constants, only: myrank,IMAIN,CUSTOM_REAL
@@ -178,16 +195,47 @@ module siem_solver_petsc
   !   KSPSetTolerances(KSP ksp, PetscReal rtol, PetscReal abstol, PetscReal dtol, PetscInt maxits)
   !
   ! Level-1 KSP solver
-  PetscInt, parameter :: KSP_MAXITER1 = 3000
+  PetscInt,  parameter :: KSP_MAXITER1 = 3000
   PetscReal, parameter :: KSP_RTOL1 = 1.0e-7
   PetscReal, parameter :: KSP_ATOL1 = 1.0e-30
   PetscReal, parameter :: KSP_DTOL1 = 1.0e30
 
   ! Level-2 KSP solver
-  PetscInt, parameter :: KSP_MAXITER = 3000
+  PetscInt,  parameter :: KSP_MAXITER = 3000
   PetscReal, parameter :: KSP_RTOL = 1.0e-7
   PetscReal, parameter :: KSP_ATOL = 1.0e-30
   PetscReal, parameter :: KSP_DTOL = 1.0e30
+
+  ! Centralize PETSc version check
+  ! Force display of version info (will cause compilation to stop here)
+  ! PETSC_NULL_SCALAR_ARRAY instead of PETSC_NULL_SCALAR
+  ! introduced in 3.22
+#if PETSC_VERSION_GE(3,22,0)
+#define PETSC_ARRAY_NULL_API 1
+#else
+#define PETSC_ARRAY_NULL_API 0
+#endif
+
+! Versions between 3.19 and 3.23 used an F90
+! suffix in things like VecGetArray
+#if PETSC_VERSION_GE(3,19,0)
+#if PETSC_VERSION_LT(3,23,0)
+#define API_F90_SUFFIX 1
+#else
+#define API_F90_SUFFIX 0
+#endif
+#else
+#define API_F90_SUFFIX 0
+#endif
+
+! In version 3.23 
+! MatInfo changed from arrays to derived data types
+#if PETSC_VERSION_GE(3,22,0)
+#define PETSC_INFO_DERIVED_TYPE 1
+#else
+#define PETSC_INFO_DERIVED_TYPE 0
+#endif
+
 
   ! solver type
   PetscInt, parameter     :: COMMAND = 0, CG = 1, SUPERLU = 2, MUMPS = 3
@@ -234,7 +282,7 @@ module siem_solver_petsc
   type(tPC)               :: pc
   PetscErrorCode          :: ierr
   PetscInt                :: nzeros_max,nzeros_min
-  PetscInt                :: ig0,ig1
+  PetscInt                :: ig0,ig1, ONE 
 #endif
 
   ! public function
@@ -264,7 +312,7 @@ contains
   use specfem_par, only: ADD_TRINF,SIMULATION_TYPE
 
   use specfem_par_full_gravity, only: ggdof_ic1,ggdof_oc1,ggdof_cm1,ggdof_trinf1,ggdof_inf1
-
+  
   implicit none
   type(tVec) :: nzeror_gvec1,nzeror_dvec1,nzeror_ovec1,iproc_gvec1, &
                 interface_gvec1,ninterface_dvec1,ninterface_ovec1,nself_gvec1
@@ -293,7 +341,6 @@ contains
   PetscInt,allocatable :: ninterface_darray1(:),ninterface_oarray1(:)
   PetscScalar,allocatable :: rg_interface(:),rnself_lgarray1(:)
   PetscScalar,pointer :: rninterface_darray1(:),rninterface_oarray1(:)
-
   ! memory info
   PetscLogDouble :: bytes
 
@@ -479,7 +526,7 @@ contains
     do i_bool = 1,nibool
       do i_ndof = 1,NNDOF
         igdof = ggdof_ic1(i_ndof,ibool_interface(i_bool))-1
-        if (igdof >= 0) call VecSetValues(interface_gvec1,1,igdof,rval,INSERT_VALUES,ierr)
+        if (igdof >= 0) call VecSetValues(interface_gvec1,1,[igdof],[rval],INSERT_VALUES,ierr)
       enddo
     enddo
     deallocate(ibool_interface)
@@ -493,7 +540,7 @@ contains
     do i_bool = 1,nibool
       do i_ndof = 1,NNDOF
         igdof = ggdof_oc1(i_ndof,ibool_interface(i_bool))-1
-        if (igdof >= 0) call VecSetValues(interface_gvec1,1,igdof,rval,INSERT_VALUES,ierr)
+        if (igdof >= 0) call VecSetValues(interface_gvec1,1,[igdof],[rval],INSERT_VALUES,ierr)
       enddo
     enddo
     deallocate(ibool_interface)
@@ -507,7 +554,7 @@ contains
     do i_bool = 1,nibool
       do i_ndof = 1,NNDOF
         igdof = ggdof_cm1(i_ndof,ibool_interface(i_bool))-1
-        if (igdof >= 0) call VecSetValues(interface_gvec1,1,igdof,rval,INSERT_VALUES,ierr)
+        if (igdof >= 0) call VecSetValues(interface_gvec1,1,[igdof],[rval],INSERT_VALUES,ierr)
       enddo
     enddo
     deallocate(ibool_interface)
@@ -522,7 +569,7 @@ contains
       do i_bool = 1,nibool
         do i_ndof = 1,NNDOF
           igdof = ggdof_trinf1(i_ndof,ibool_interface(i_bool))-1
-          if (igdof >= 0) call VecSetValues(interface_gvec1,1,igdof,rval,INSERT_VALUES,ierr)
+          if (igdof >= 0) call VecSetValues(interface_gvec1,1,[igdof],[rval],INSERT_VALUES,ierr)
         enddo
       enddo
       deallocate(ibool_interface)
@@ -537,7 +584,7 @@ contains
     do i_bool = 1,nibool
       do i_ndof = 1,NNDOF
         igdof = ggdof_inf1(i_ndof,ibool_interface(i_bool))-1
-        if (igdof >= 0) call VecSetValues(interface_gvec1,1,igdof,rval,INSERT_VALUES,ierr)
+        if (igdof >= 0) call VecSetValues(interface_gvec1,1,[igdof],[rval],INSERT_VALUES,ierr)
       enddo
     enddo
     deallocate(ibool_interface)
@@ -559,7 +606,7 @@ contains
   rval = 1.0
   do i = 1,neq1
     if (isg_interface(i) == 1) then
-      call VecSetValues(nself_gvec1,1,l2gdof1(i),rval,ADD_VALUES,ierr);
+      call VecSetValues(nself_gvec1,1,[l2gdof1(i)],[rval],ADD_VALUES,ierr);
     endif
   enddo
   call VecAssemblyBegin(nself_gvec1,ierr); CHECK_PETSC_ERROR(ierr)
@@ -568,14 +615,24 @@ contains
 
   allocate(rnself_lgarray1(neq1))
   call scatter_globalvec1(nself_gvec1, rnself_lgarray1)
+
+#if API_F90_SUFFIX
   call VecGetArrayF90(nself_gvec1,rnself_array1,ierr)
+#else 
+  call VecGetArray(nself_gvec1,rnself_array1,ierr)
+#endif 
 
   allocate(nself_array1(n))
   nself_array1 = int(rnself_array1(1:n))
 
   where(nself_array1 > 0) nself_array1 = nself_array1-1 ! subtract self
 
+#if API_F90_SUFFIX
   call VecRestoreArrayF90(nself_gvec1,rnself_array1,ierr)
+#else 
+  call VecRestoreArray(nself_gvec1,rnself_array1,ierr)
+#endif 
+
   call VecDestroy(nself_gvec1,ierr)
 
   if (myrank == 0) print *,'PETSc solver: maximum value of nself:',maxval(nself_array1)
@@ -619,11 +676,11 @@ contains
       ! set values computed so far
       rnd = real(nd)
       rnoffd = real(noffd)
-      call VecSetValues(nzeror_dvec1,1,igr0,rnd,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
-      call VecSetValues(nzeror_ovec1,1,igr0,rnoffd,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(nzeror_dvec1,1,[igr0],[rnd],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(nzeror_ovec1,1,[igr0],[rnoffd],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
 
-      call VecSetValues(ninterface_dvec1,1,igr0,rnid,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
-      call VecSetValues(ninterface_ovec1,1,igr0,rnioffd,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(ninterface_dvec1,1,[igr0],[rnid],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(ninterface_ovec1,1,[igr0],[rnioffd],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
 
       ! reset
       nd = 0; noffd = 0
@@ -667,11 +724,11 @@ contains
       ! for last
       rnd = real(nd)
       rnoffd = real(noffd)
-      call VecSetValues(nzeror_dvec1,1,igr0,rnd,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
-      call VecSetValues(nzeror_ovec1,1,igr0,rnoffd,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(nzeror_dvec1,1,[igr0],[rnd],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(nzeror_ovec1,1,[igr0],[rnoffd],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
 
-      call VecSetValues(ninterface_dvec1,1,igr0,rnid,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
-      call VecSetValues(ninterface_ovec1,1,igr0,rnioffd,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(ninterface_dvec1,1,[igr0],[rnid],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+      call VecSetValues(ninterface_ovec1,1,[igr0],[rnioffd],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
     endif
   enddo
   deallocate(krow_sparse1,kcol_sparse1)
@@ -690,7 +747,12 @@ contains
   ! apply correction for repeatition due to interfaces
   ! diagonal matrix
   call VecGetLocalSize(nzeror_dvec1,n,ierr)
+#if API_F90_SUFFIX
   call VecGetArrayF90(nzeror_dvec1,nzeror_darray1,ierr)
+#else 
+  call VecGetArray(nzeror_dvec1,nzeror_darray1,ierr)
+#endif 
+
 
   allocate(nnzero_diag1(n))
   nnzero_diag1(:) = int(nzeror_darray1(1:n))
@@ -701,42 +763,77 @@ contains
                                                  minval(nnzero_diag1),maxval(nnzero_diag1)
   call synchronize_all()
 
+#if API_F90_SUFFIX
   call VecRestoreArrayF90(nzeror_dvec1,nzeror_darray1,ierr)
+#else 
+  call VecRestoreArray(nzeror_dvec1,nzeror_darray1,ierr)
+#endif 
+
   call VecDestroy(nzeror_dvec1,ierr)
 
   ! off-diagonal matrix
+#if API_F90_SUFFIX
   call VecGetArrayF90(nzeror_ovec1,nzeror_oarray1,ierr)
+#else 
+  call VecGetArray(nzeror_ovec1,nzeror_oarray1,ierr)
+#endif 
+
 
   allocate(nnzero_offdiag1(n))
   nnzero_offdiag1(:) = int(nzeror_oarray1(1:n))
 
+#if API_F90_SUFFIX
   call VecRestoreArrayF90(nzeror_ovec1,nzeror_oarray1,ierr)
+#else 
+  call VecRestoreArray(nzeror_ovec1,nzeror_oarray1,ierr)
+#endif 
+
   call VecDestroy(nzeror_ovec1,ierr)
 
   ! correction
   ! I do not know why but there are some DOFs where the correction exceeds by 4 or
   ! 8 therefore to be safe we need to subtract this from all
+#if API_F90_SUFFIX
   call VecGetArrayF90(ninterface_dvec1,rninterface_darray1,ierr)
+#else 
+  call VecGetArray(ninterface_dvec1,rninterface_darray1,ierr)
+#endif 
+
 
   !where(rninterface_darray1>0.0 .and. rninterface_darray1 < 1.0)rninterface_darray1=1.0
 
   allocate(ninterface_darray1(n))
   ninterface_darray1 = int(rninterface_darray1(1:n))
 
+#if API_F90_SUFFIX
   call VecRestoreArrayF90(ninterface_dvec1,rninterface_darray1,ierr)
+#else 
+  call VecRestoreArray(ninterface_dvec1,rninterface_darray1,ierr)
+#endif 
+
   call VecDestroy(ninterface_dvec1,ierr)
 
   where(ninterface_darray1 > 0) ninterface_darray1 = ninterface_darray1 - 4
   where(ninterface_darray1 < 0) ninterface_darray1 = 0
 
+#if API_F90_SUFFIX
   call VecGetArrayF90(ninterface_ovec1,rninterface_oarray1,ierr)
+#else 
+  call VecGetArray(ninterface_ovec1,rninterface_oarray1,ierr)
+#endif 
+
 
   !where(rninterface_oarray1>0.0 .and. rninterface_oarray1 < 1.0)rninterface_oarray1=1.0
 
   allocate(ninterface_oarray1(n))
   ninterface_oarray1 = int(rninterface_oarray1(1:n))
 
-  call VecRestoreArrayF90(ninterface_ovec1,rninterface_oarray1,ierr)
+#if API_F90_SUFFIX
+  call VecGetArrayF90(ninterface_ovec1,rninterface_oarray1,ierr)
+#else 
+  call VecGetArray(ninterface_ovec1,rninterface_oarray1,ierr)
+#endif 
+
   call VecDestroy(ninterface_ovec1,ierr)
 
   where(ninterface_oarray1 > 0) ninterface_oarray1 = ninterface_oarray1 - 8
@@ -753,7 +850,7 @@ contains
   rval = 1.0
   do i = 1,nsparse1
     igdof = kgrow_sparse1(i)-1 ! Fortran index
-    call VecSetValues(nzeror_gvec1,1,igdof,rval,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+    call VecSetValues(nzeror_gvec1,1,[igdof],[rval],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
   enddo
   call VecAssemblyBegin(nzeror_gvec1,ierr); CHECK_PETSC_ERROR(ierr)
   call VecAssemblyEnd(nzeror_gvec1,ierr); CHECK_PETSC_ERROR(ierr)
@@ -768,12 +865,21 @@ contains
   deallocate(kgrow_sparse1,kgcol_sparse1)
 
   ! non-zero array for diagonal/off-diagonal matrix?
+#if API_F90_SUFFIX
   call VecGetArrayF90(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
+  call VecGetArray(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
 
   allocate(inzeror_array1(n))
   inzeror_array1(:) = int(nzeror_array1(1:n))
 
+#if API_F90_SUFFIX
   call VecRestoreArrayF90(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
+  call VecRestoreArray(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
+
   call VecDestroy(nzeror_gvec1,ierr); CHECK_PETSC_ERROR(ierr)
 
   inzeros_max = maxvec(inzeror_array1)
@@ -808,8 +914,19 @@ contains
   !
   !        this seems to lead to a much faster petsc_set_matrix1() routine without the re-allocations.
   !        however, the diagonal and in particular the off-diagonal estimate with nzeros_max might be still off.
-  call MatMPIAIJSetPreallocation(Amat1,nzeros_max,PETSC_NULL_INTEGER, &
-                                 nzeros_max,PETSC_NULL_INTEGER,ierr); CHECK_PETSC_ERROR(ierr)
+  
+  
+#if PETSC_ARRAY_NULL_API
+  ! Later version uses integer array
+  call MatMPIAIJSetPreallocation(Amat1,nzeros_max, PETSC_NULL_INTEGER_ARRAY, &
+                                 nzeros_max, PETSC_NULL_INTEGER_ARRAY, ierr); CHECK_PETSC_ERROR(ierr)
+#else
+  call MatMPIAIJSetPreallocation(Amat1,nzeros_max, PETSC_NULL_INTEGER, &
+                                nzeros_max, PETSC_NULL_INTEGER, ierr); CHECK_PETSC_ERROR(ierr)
+#endif
+
+
+
 
   call MatSetFromOptions(Amat1,ierr); CHECK_PETSC_ERROR(ierr)
   call MatGetOwnershipRange(Amat1,istart,iend,ierr); CHECK_PETSC_ERROR(ierr)
@@ -1077,8 +1194,13 @@ contains
 
   !debugging
   logical, parameter :: DEBUG_FILE_OUTPUT = .false.
-  integer :: ncols
-  integer,dimension(:),allocatable :: cols
+
+  ! For the MatGetRow call 
+  !integer :: ncols
+  !integer,dimension(:),allocatable :: cols
+  PetscInt :: ncols
+  PetscInt, pointer :: cols(:)
+  PetscScalar, pointer :: debug_vals(:)
 
   character(len=10) :: char_myrank
   character(len=60) :: outf_name
@@ -1088,9 +1210,16 @@ contains
   !                const PetscInt idxn[], const PetscScalar v[], InsertMode addv)
   PetscScalar :: v
 
-  ! matrix info
+   ! matrix info
+#if PETSC_INFO_DERIVED_TYPE
+MatInfo :: info
+#else 
   double precision :: info(MAT_INFO_SIZE)
-  double precision :: mallocsval
+#endif 
+double precision :: mallocsval
+
+
+
   PetscLogDouble :: bytes
 
   ! timing
@@ -1150,7 +1279,7 @@ contains
           !                  storekmat_inner_core1(i,j,i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
           ! petsc types
           v = storekmat_inner_core1(i,j,i_elmt)
-          call MatSetValues(Amat1,1,ggdof_elmt(i),1,ggdof_elmt(j),v,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+          call MatSetValues(Amat1,1,[ggdof_elmt(i)],1,[ggdof_elmt(j)],[v],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
         endif
       enddo
     enddo
@@ -1179,7 +1308,7 @@ contains
           !                  storekmat_outer_core1(i,j,i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
           ! petsc types
           v = storekmat_outer_core1(i,j,i_elmt)
-          call MatSetValues(Amat1,1,ggdof_elmt(i),1,ggdof_elmt(j),v,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+          call MatSetValues(Amat1,1,[ggdof_elmt(i)],1,[ggdof_elmt(j)],[v],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
         endif
       enddo
     enddo
@@ -1208,7 +1337,7 @@ contains
           !                  storekmat_crust_mantle1(i,j,i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
           ! petsc types
           v = storekmat_crust_mantle1(i,j,i_elmt)
-          call MatSetValues(Amat1,1,ggdof_elmt(i),1,ggdof_elmt(j),v,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+          call MatSetValues(Amat1,1,[ggdof_elmt(i)],1,[ggdof_elmt(j)],[v],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
         endif
       enddo
     enddo
@@ -1243,7 +1372,7 @@ contains
             !                  storekmat_trinfinite1(i,j,i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
             ! petsc types
             v = storekmat_trinfinite1(i,j,i_elmt)
-            call MatSetValues(Amat1,1,ggdof_elmt(i),1,ggdof_elmt(j),v,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+            call MatSetValues(Amat1,1,[ggdof_elmt(i)],1,[ggdof_elmt(j)],[v],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
           endif
         enddo
       enddo
@@ -1276,7 +1405,7 @@ contains
           !                  storekmat_infinite1(i,j,i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
           ! petsc types
           v = storekmat_infinite1(i,j,i_elmt)
-          call MatSetValues(Amat1,1,ggdof_elmt(i),1,ggdof_elmt(j),v,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+          call MatSetValues(Amat1,1,[ggdof_elmt(i)],1,[ggdof_elmt(j)],[v],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
         endif
       enddo
     enddo
@@ -1297,26 +1426,29 @@ contains
   ! symmetric
   call MatSetOption(Amat1,MAT_SYMMETRIC,PETSC_TRUE,ierr); CHECK_PETSC_ERROR(ierr)
 
-  ! debugging output
+  !debugging output
+  !unsure if this updated debugging call works but it compiles...
+  !updates require pointers
   if (DEBUG_FILE_OUTPUT) then
-    allocate(cols(nzeros_max))
-    cols(:) = 0
+    ! allocate(cols(nzeros_max))
+    ! cols(:) = 0
+
     write(char_myrank,'(i4)') myrank
     outf_name='tmp_nonzeros'//trim(adjustl(char_myrank))
     open(1,file=outf_name,action='write',status='replace')
     call MatGetOwnershipRange(Amat1,istart,iend,ierr); CHECK_PETSC_ERROR(ierr)
     do i = istart,iend-1
-      cols(:) = -1
+      !cols(:) = -1
       ! gets row i
-      call MatGetRow(Amat1,i,ncols,cols,PETSC_NULL_SCALAR,ierr); CHECK_PETSC_ERROR(ierr)
+      call MatGetRow(Amat1, i, ncols, cols, debug_vals,ierr); CHECK_PETSC_ERROR(ierr)
       ndiag = count(cols >= ig0 .and. cols <= ig1)
       noffdiag = ncols-ndiag
       write(1,*) ndiag,noffdiag,ncols
       ! free temporary space of MatGetRow()
-      call MatRestoreRow(Amat1,i,ncols,PETSC_NULL_INTEGER,PETSC_NULL_SCALAR,ierr); CHECK_PETSC_ERROR(ierr)
+      call MatRestoreRow(Amat1,i,ncols,cols,debug_vals,ierr); CHECK_PETSC_ERROR(ierr)
     enddo
     close(1)
-    deallocate(cols)
+    !deallocate(cols)
   endif
 
   ! synchronize all processes
@@ -1325,7 +1457,11 @@ contains
   ! matrix info
   call MatGetInfo(Amat1, MAT_GLOBAL_MAX, info, ierr); CHECK_PETSC_ERROR(ierr)
 
-  mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
+#if PETSC_INFO_DERIVED_TYPE
+mallocsval = info%mallocs
+#else 
+mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
+#endif 
   !memval = info(MAT_INFO_MEMORY)                   ! memory allocated - not provided
   !nonzeros_allocated = info(MAT_INFO_NZ_ALLOCATED) ! nonzero entries allocated
 
@@ -1474,7 +1610,8 @@ contains
 
 #ifdef USE_PETSC
   ! local parameters
-  PetscInt :: iter,ireason
+  PetscInt :: iter
+  KSPConvergedReason:: ireason
   ! petsc type array
   PetscScalar :: y(size(sdata1))
 
@@ -1612,10 +1749,20 @@ contains
   call VecScatterEnd(vscat1,global_vec,local_vec1,INSERT_VALUES,SCATTER_FORWARD,ierr); CHECK_PETSC_ERROR(ierr)
   call VecGetSize(local_vec1,n,ierr)
 
+#if API_F90_SUFFIX
   call VecGetArrayF90(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
+  call VecGetArray(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
+
 
   larray(1:n) = array_data(1:n)
+
+#if API_F90_SUFFIX
   call VecRestoreArrayF90(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#else 
+  call VecRestoreArray(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
+#endif 
 
   end subroutine scatter_globalvec1
 
@@ -1860,7 +2007,7 @@ contains
   call synchronize_all()
 
   ! preallocation
-  call MatMPIAIJSetPreallocation(Amat,nzeros_max,nzeros,nzeros_max,20*nzeros,ierr); CHECK_PETSC_ERROR(ierr)
+  call MatMPIAIJSetPreallocation(Amat,nzeros_max,[nzeros],nzeros_max,[20*nzeros],ierr); CHECK_PETSC_ERROR(ierr)
   call MatSetFromOptions(Amat,ierr); CHECK_PETSC_ERROR(ierr)
   call MatGetOwnershipRange(Amat,istart,iend,ierr); CHECK_PETSC_ERROR(ierr)
 
@@ -1981,18 +2128,23 @@ contains
     ggdof_inf,storekmat_infinite,inode_elmt_inf
 
   implicit none
-  integer :: i,i_elmt,j,ncount
+  integer :: i,i_elmt,j,ncount,iflat,jflat
   integer :: ggdof_elmt(NEDOF),idof(NEDOF),igdof(NEDOF)
 
   ! types required by MatSetValues:
   !   MatSetValues(Mat mat, PetscInt m, const PetscInt idxm[], PetscInt n, \
   !                const PetscInt idxn[], const PetscScalar v[], InsertMode addv)
   PetscScalar :: v
-  PetscScalar,dimension(:,:),allocatable :: varr
+  PetscScalar, dimension(:),allocatable :: varr
 
   ! matrix info
+#if PETSC_INFO_DERIVED_TYPE
+MatInfo :: info
+#else 
   double precision :: info(MAT_INFO_SIZE)
-  double precision :: mallocsval
+#endif 
+double precision :: mallocsval
+
   PetscLogDouble :: bytes
 
   ! timing
@@ -2036,7 +2188,7 @@ contains
           !                  storekmat_inner_core(i,j,i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
           ! petsc types
           v = storekmat_inner_core(i,j,i_elmt)
-          call MatSetValues(Amat,1,ggdof_elmt(i),1,ggdof_elmt(j),v,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+          call MatSetValues(Amat,1,[ggdof_elmt(i)],1,[ggdof_elmt(j)],[v],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
         endif
       enddo
     enddo
@@ -2062,7 +2214,7 @@ contains
             storekmat_outer_core(i,j,i_elmt) /= 0.0_CUSTOM_REAL) then
           ! petsc types
           v = storekmat_outer_core(i,j,i_elmt)
-          call MatSetValues(Amat,1,ggdof_elmt(i),1,ggdof_elmt(j),v,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
+          call MatSetValues(Amat,1,[ggdof_elmt(i)],1,[ggdof_elmt(j)],[v],ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
         endif
       enddo
     enddo
@@ -2092,8 +2244,17 @@ contains
     !call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount), &
     !                  storekmat_crust_mantle(idof(1:ncount),idof(1:ncount),i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
     ! petsc types
-    allocate(varr(ncount,ncount))
-    varr(:,:) = storekmat_crust_mantle(idof(1:ncount),idof(1:ncount),i_elmt)
+    allocate(varr(ncount*ncount))
+
+    ! WE 5/12/25
+    ! See notes at top on flattening
+    !varr(:,:) = storekmat_crust_mantle(idof(1:ncount),idof(1:ncount),i_elmt)
+    do iflat = 1, ncount
+      do jflat = 1, ncount
+        varr((iflat-1)*ncount + jflat) = storekmat_crust_mantle(idof(iflat), idof(jflat), i_elmt)
+      enddo !jflat 
+    enddo !iflat
+
     call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount),varr,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
     deallocate(varr)
   enddo
@@ -2128,8 +2289,14 @@ contains
       !call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount), &
       !                  storekmat_trinfinite(idof(1:ncount),idof(1:ncount),i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
       ! petsc types
-      allocate(varr(ncount,ncount))
-      varr(:,:) = storekmat_trinfinite(idof(1:ncount),idof(1:ncount),i_elmt)
+      allocate(varr(ncount*ncount))
+      ! WE 5/12/25
+      ! See notes at top on flattening
+      do iflat = 1, ncount
+        do jflat = 1, ncount
+          varr((iflat-1)*ncount + jflat) = storekmat_trinfinite(idof(iflat), idof(jflat), i_elmt)
+        enddo !jflat 
+      enddo !iflat
       call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount),varr,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
       deallocate(varr)
     enddo
@@ -2163,8 +2330,12 @@ contains
     !call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount), &
     !                  storekmat_infinite(idof(1:ncount),idof(1:ncount),i_elmt),ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
     ! petsc types
-    allocate(varr(ncount,ncount))
-    varr(:,:) = storekmat_infinite(idof(1:ncount),idof(1:ncount),i_elmt)
+    allocate(varr(ncount*ncount))
+    do iflat = 1, ncount
+      do jflat = 1, ncount
+        varr((iflat-1)*ncount + jflat) = storekmat_infinite(idof(iflat), idof(jflat), i_elmt)
+      enddo !jflat 
+    enddo !iflat
     call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount),varr,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
     deallocate(varr)
   enddo
@@ -2183,7 +2354,12 @@ contains
 
   ! matrix info
   call MatGetInfo(Amat, MAT_GLOBAL_MAX, info, ierr); CHECK_PETSC_ERROR(ierr)
-  mallocsval = info(MAT_INFO_MALLOCS) ! number of mallocs during MatSetValues()
+
+#if PETSC_INFO_DERIVED_TYPE
+mallocsval = info%mallocs
+#else 
+mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
+#endif 
 
   ! memory usage
   call PetscMemoryGetCurrentUsage(bytes, ierr); CHECK_PETSC_ERROR(ierr)
@@ -2282,7 +2458,8 @@ contains
 
 #ifdef USE_PETSC
   ! local parameters
-  PetscInt :: iter,ireason
+  PetscInt :: iter
+  KSPConvergedReason:: ireason
   ! petsc type array
   PetscScalar :: y(size(sdata))
 
@@ -2295,7 +2472,7 @@ contains
   ! Check solution and clean up
   !-------------------------------------------------------------------------------
 
-  call KSPGetConvergedReason(ksp,ireason,ierr); CHECK_PETSC_ERROR(ierr)
+  call KSPGetConvergedReason(ksp, ireason,ierr); CHECK_PETSC_ERROR(ierr)
   call KSPGetIterationNumber(ksp,iter,ierr); CHECK_PETSC_ERROR(ierr)
 
   !debug

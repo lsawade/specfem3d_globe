@@ -37,7 +37,7 @@
   integer, parameter :: nparam_i = 51
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 80
+  integer, parameter :: nparam_l = 81
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 42
@@ -113,7 +113,7 @@
             OUTPUT_SEISMOS_3D_ARRAY, &
             REGIONAL_MESH_CUTOFF,REGIONAL_MESH_ADD_2ND_DOUBLING, &
             EMC_MODEL,EMC_MODEL_TISO,EMC_MODEL_QMU, &
-            FULL_GRAVITY, &
+            FULL_GRAVITY, USE_SINSQ_STF, &
             HDF5_ENABLED, HDF5_FOR_MOVIES, OUTPUT_SEISMOS_HDF5, &
             ATTENUATION_3D_BERKELEY /)
 
@@ -367,10 +367,11 @@
     EMC_MODEL_TISO = bcast_logical(74)
     EMC_MODEL_QMU = bcast_logical(75)
     FULL_GRAVITY = bcast_logical(76)
-    HDF5_ENABLED = bcast_logical(77)
-    HDF5_FOR_MOVIES = bcast_logical(78)
-    OUTPUT_SEISMOS_HDF5 = bcast_logical(79)
-    ATTENUATION_3D_BERKELEY = bcast_logical(80)
+    USE_SINSQ_STF = bcast_logical(77) 
+    HDF5_ENABLED = bcast_logical(78)
+    HDF5_FOR_MOVIES = bcast_logical(79)
+    OUTPUT_SEISMOS_HDF5 = bcast_logical(80)
+    ATTENUATION_3D_BERKELEY = bcast_logical(81)
 
     ! double precisions
     DT = bcast_double_precision(1)

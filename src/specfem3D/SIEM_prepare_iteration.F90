@@ -451,6 +451,7 @@
   call compute_poisson_rhoload3()
 
   if (POISSON_SOLVER == ISOLVER_BUILTIN) then
+    if (myrank == 0) print *,'  Using built-in solver...'
     ! built-in solver
     if (CG_SCALING) then
       gravload1(:) = ndscale1(:) * gravload1(:)
@@ -465,6 +466,7 @@
     endif
   else
     ! petsc solver
+    if (myrank == 0) print *,'  Using PETSC solver...'
     call petsc_set_vector1(gravload1)
     if (myrank == 0) print *,'PETSc solver: L1: Set RHS with PETSC done'
 
@@ -763,6 +765,7 @@
     write(IMAIN,*) '    Elapsed time for background gravity solve: ',sngl(tCPU),'(s)'
     write(IMAIN,*)
     call flush_IMAIN()
+    print *, '--- COMPLETED BACKGROUND GRAVITY ---'
   endif
 
   end subroutine SIEM_compute_background_gravity

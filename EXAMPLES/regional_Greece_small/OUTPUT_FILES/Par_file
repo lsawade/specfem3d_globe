@@ -6,27 +6,27 @@
 
 # forward or adjoint simulation
 SIMULATION_TYPE                 = 1   # set to 1 for forward simulations, 2 for adjoint simulations for sources, and 3 for kernel simulations
-NOISE_TOMOGRAPHY                = 2   # flag of noise tomography, three steps (1,2,3). If earthquake simulation, set it to 0.
-SAVE_FORWARD                    = .true.   # save last frame of forward simulation or not
+NOISE_TOMOGRAPHY                = 0   # flag of noise tomography, three steps (1,2,3). If earthquake simulation, set it to 0.
+SAVE_FORWARD                    = .false.   # save last frame of forward simulation or not
 
 # number of chunks (1,2,3 or 6)
 NCHUNKS                         = 1
 
 # angular width of the first chunk (not used if full sphere with six chunks)
-ANGULAR_WIDTH_XI_IN_DEGREES     = 90.d0   # angular size of a chunk
-ANGULAR_WIDTH_ETA_IN_DEGREES    = 90.d0
-CENTER_LATITUDE_IN_DEGREES      = 0.d0
-CENTER_LONGITUDE_IN_DEGREES     = 15.d0
+ANGULAR_WIDTH_XI_IN_DEGREES     = 20.d0   # angular size of a chunk
+ANGULAR_WIDTH_ETA_IN_DEGREES    = 20.d0
+CENTER_LATITUDE_IN_DEGREES      = 40.d0
+CENTER_LONGITUDE_IN_DEGREES     = 25.d0
 GAMMA_ROTATION_AZIMUTH          = 0.d0
 
 # number of elements at the surface along the two sides of the first chunk
 # (must be multiple of 16 and 8 * multiple of NPROC below)
-NEX_XI                          = 160
-NEX_ETA                         = 160
+NEX_XI                          = 64
+NEX_ETA                         = 64
 
 # number of MPI processors along the two sides of the first chunk
-NPROC_XI                        = 20
-NPROC_ETA                       = 20
+NPROC_XI                        = 2
+NPROC_ETA                       = 2
 
 #-----------------------------------------------------------
 #
@@ -65,14 +65,14 @@ NPROC_ETA                       = 20
 #                          associated reference model rather than the default 3D crustal model
 #                          e.g. s20rts_1Dcrust, s362ani_1Dcrust, etc.
 #
-MODEL                           = 1D_isotropic_prem
+MODEL                           = 1D_transversely_isotropic_prem
 
 # parameters describing the Earth model
-OCEANS                          = .false.
-ELLIPTICITY                     = .false.
-TOPOGRAPHY                      = .false.
-GRAVITY                         = .false.
-ROTATION                        = .false.
+OCEANS                          = .true.
+ELLIPTICITY                     = .true.
+TOPOGRAPHY                      = .true.
+GRAVITY                         = .true.
+ROTATION                        = .true.
 ATTENUATION                     = .true.
 
 # full gravity calculation by solving Poisson's equation for gravity potential instead of using a Cowling approximation
@@ -83,7 +83,7 @@ FULL_GRAVITY                    = .false.
 POISSON_SOLVER                  = 0
 
 # record length in minutes
-RECORD_LENGTH_IN_MINUTES        = 50.0d0
+RECORD_LENGTH_IN_MINUTES        = 2.5d0
 
 #-----------------------------------------------------------
 #
@@ -206,10 +206,10 @@ RATIO_BY_WHICH_TO_INCREASE_IT   = 1.5d0
 # save AVS or OpenDX movies
 #MOVIE_COARSE saves movie only at corners of elements (SURFACE OR VOLUME)
 #MOVIE_COARSE does not work with create_movie_AVS_DX
-MOVIE_SURFACE                   = .true.
+MOVIE_SURFACE                   = .false.
 MOVIE_VOLUME                    = .false.
-MOVIE_COARSE                    = .false.
-NTSTEP_BETWEEN_FRAMES           = 2500
+MOVIE_COARSE                    = .true.
+NTSTEP_BETWEEN_FRAMES           = 50
 HDUR_MOVIE                      = 0.d0
 
 # save movie in volume.  Will save element if center of element is in prescribed volume
@@ -229,7 +229,7 @@ MOVIE_START                     = 0
 MOVIE_STOP                      = 40000
 
 # save mesh files to check the mesh
-SAVE_MESH_FILES                 = .false.
+SAVE_MESH_FILES                 = .true.
 
 # restart files (number of runs can be 1 or higher, choose 1 for no restart files)
 NUMBER_OF_RUNS                  = 1
@@ -241,7 +241,7 @@ LOCAL_PATH                      = ./DATABASES_MPI
 LOCAL_TMP_PATH                  = ./DATABASES_MPI
 
 # interval at which we output time step info and max of norm of displacement
-NTSTEP_BETWEEN_OUTPUT_INFO      = 10000
+NTSTEP_BETWEEN_OUTPUT_INFO      = 200
 
 #-----------------------------------------------------------
 #
@@ -261,16 +261,16 @@ NTSTEP_BETWEEN_OUTPUT_INFO      = 10000
 # - the components of a (non necessarily unitary) direction vector for the force source in the E/N/Z_UP basis.
 # The direction vector is made unitary internally in the code and thus only its direction matters here;
 # its norm is ignored and the norm of the force used is the factor force source times the source time function.
-USE_FORCE_POINT_SOURCE          = .true.
+USE_FORCE_POINT_SOURCE          = .false.
 
 # use monochromatic source time function for CMTSOLUTION moment-tensor source.
 # half duration is interpreted as a PERIOD just to avoid changing CMTSOLUTION file format
 # default is .false. which uses Heaviside function
 USE_MONOCHROMATIC_CMT_SOURCE    = .false.
-USE_SINSQ_STF  = .false.
+
 
 # print source time function
-PRINT_SOURCE_TIME_FUNCTION      = .false.
+PRINT_SOURCE_TIME_FUNCTION      = .true.
 
 #-----------------------------------------------------------
 #
@@ -292,7 +292,7 @@ SAVE_SEISMOGRAMS_STRAIN         = .false.
 
 # save seismograms also when running the adjoint runs for an inverse problem
 # (usually they are unused and not very meaningful, leave this off in almost all cases)
-SAVE_SEISMOGRAMS_IN_ADJOINT_RUN = .false.
+SAVE_SEISMOGRAMS_IN_ADJOINT_RUN = .true.
 
 # output format for the seismograms (one can use either or all of the three formats)
 OUTPUT_SEISMOS_ASCII_TEXT       = .true.
@@ -306,7 +306,7 @@ OUTPUT_SEISMOS_HDF5             = .false.
 ROTATE_SEISMOGRAMS_RT           = .false.
 
 # decide if main process writes all the seismograms or if all processes do it in parallel
-WRITE_SEISMOGRAMS_BY_MAIN       = .true.
+WRITE_SEISMOGRAMS_BY_MAIN       = .false.
 
 # save all seismograms in one large combined file instead of one file per seismogram
 # to avoid overloading shared non-local file systems such as LUSTRE or GPFS for instance
@@ -324,7 +324,7 @@ RECEIVERS_CAN_BE_BURIED         = .true.
 
 # interval in time steps for reading adjoint traces
 # 0 = read the whole adjoint sources at start time
-NTSTEP_BETWEEN_READ_ADJSRC      = 1000
+NTSTEP_BETWEEN_READ_ADJSRC      = 10000
 
 # use ASDF format for reading the adjoint sources
 READ_ADJSRC_ASDF                = .false.
