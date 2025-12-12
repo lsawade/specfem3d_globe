@@ -731,12 +731,12 @@
                   if (zmesh > -SMALL_VAL_ANGLE .and. zmesh <= ZERO) zmesh = - real(SMALL_VAL_ANGLE,kind=CUSTOM_REAL)
                   if (zmesh < SMALL_VAL_ANGLE .and. zmesh >= ZERO) zmesh = real(SMALL_VAL_ANGLE,kind=CUSTOM_REAL)
                   thetaval = atan2(sqrt(xmesh*xmesh+ymesh*ymesh),zmesh)
-                  ! thetaval between 0 and PI / 2
+                  ! thetaval between 0 and PI
                   !print *,'thetaval:',thetaval * 180. / PI
-                  ! close to north pole
-                  if (thetaval >= 0.495 * PI ) istamp1 = ieoff
-                  ! close to south pole
+                  ! close to south pole (colatitude near 0, theta ~ 0-0.6 degrees)
                   if (thetaval <= 0.01 ) istamp2 = ieoff
+                  ! close to north pole (colatitude near 180, theta ~ 179.1-180 degrees)
+                  if (thetaval >= 0.99 * PI ) istamp1 = ieoff
                 endif
 
              enddo !i
@@ -810,35 +810,36 @@
       ! this should avoid flickering when normalizing wavefields
       if (AVERAGE_NORMALIZE_VALUES) then
         ! checks stamp indices for maximum values
-        if (istamp1 == 0 ) istamp1 = ieoff
-        if (istamp2 == 0 ) istamp2 = ieoff-1
-        !print *, 'stamp: ',istamp1,istamp2
+        ! only apply stamping if both poles were found
+        if (istamp1 > 0 .and. istamp2 > 0) then
+          !print *, 'stamp: ',istamp1,istamp2
 
-        if (max_absol < max_average) then
-          ! distance (in degree) of surface waves travelled
-          distance = real(SURFACE_WAVE_VELOCITY * ((it-1)*DT-t0) / (R_PLANET/1000.d0) * RADIANS_TO_DEGREES,kind=CUSTOM_REAL)
-          if (distance > 10.0 .and. distance <= 20.0) then
-            ! smooth transition between 10 and 20 degrees
-            ! sets positive and negative maximum
-            field_display(istamp1) = + max_absol + (max_average-max_absol) * (distance - 10.d0)/10.d0
-            field_display(istamp2) = - ( max_absol + (max_average-max_absol) * (distance - 10.d0)/10.d0 )
-          else if (distance > 20.0) then
+          if (max_absol < max_average) then
+            ! distance (in degree) of surface waves travelled
+            distance = real(SURFACE_WAVE_VELOCITY * ((it-1)*DT-t0) / (R_PLANET/1000.d0) * RADIANS_TO_DEGREES,kind=CUSTOM_REAL)
+            if (distance > 10.0 .and. distance <= 20.0) then
+              ! smooth transition between 10 and 20 degrees
+              ! sets positive and negative maximum
+              field_display(istamp1) = + max_absol + (max_average-max_absol) * (distance - 10.d0)/10.d0
+              field_display(istamp2) = - ( max_absol + (max_average-max_absol) * (distance - 10.d0)/10.d0 )
+            else if (distance > 20.0) then
+              ! sets positive and negative maximum
+              field_display(istamp1) = + max_average
+              field_display(istamp2) = - max_average
+            endif
+          else
+            ! thresholds positive & negative maximum values
+            where( field_display(:) > max_average ) field_display = max_average
+            where( field_display(:) < - max_average ) field_display = -max_average
             ! sets positive and negative maximum
             field_display(istamp1) = + max_average
             field_display(istamp2) = - max_average
           endif
-        else
-          ! thresholds positive & negative maximum values
-          where( field_display(:) > max_average ) field_display = max_average
-          where( field_display(:) < - max_average ) field_display = -max_average
-          ! sets positive and negative maximum
-          field_display(istamp1) = + max_average
-          field_display(istamp2) = - max_average
-        endif
-        ! updates current wavefield maxima
-        min_field_current = minval(field_display(:))
-        max_field_current = maxval(field_display(:))
-        max_absol = (abs(min_field_current)+abs(max_field_current))/2.d0
+          ! updates current wavefield maxima
+          min_field_current = minval(field_display(:))
+          max_field_current = maxval(field_display(:))
+          max_absol = (abs(min_field_current)+abs(max_field_current))/2.d0
+        endif ! istamp1 > 0 .and. istamp2 > 0
       endif
 
       ! scales field values up to match average
@@ -860,30 +861,35 @@
           else
             ! no wavefield yet assumed
 
-            ! we set two single field values (last in array)
-            ! to: +/- 100 * max_average
+            ! we set two single field values (at poles if found)
+            ! to: +/- 100 * max_average (or scaled value)
             ! to avoid further amplifying when
             ! a normalization routine is used for rendering images
             ! (which for example is the case for shakemovies)
-            if (STARTTIME_TO_MUTE > TINYVAL) then
-              ! with additional scale factor:
-              ! linear scaling between [0,1]:
-              ! from 0 (simulation time equal to -t0 )
-              ! to 1 (simulation time equals starttime_to_mute)
-              mute_factor = real(1.d0 - ( STARTTIME_TO_MUTE - ((it-1)*DT-t0) ) / (STARTTIME_TO_MUTE+t0),kind=CUSTOM_REAL)
-              ! takes complement and shifts scale to (1,100)
-              ! thus, mute factor is 100 at simulation start and 1.0 at starttime_to_mute
-              mute_factor = abs(1.0 - mute_factor) * 99.0 + 1.0
-              ! positive and negative maximum reach average when wavefield appears
-              val = real(mute_factor * max_average,kind=CUSTOM_REAL)
+            if (istamp1 > 0 .and. istamp2 > 0) then
+              if (STARTTIME_TO_MUTE > TINYVAL) then
+                ! with additional scale factor:
+                ! linear scaling between [0,1]:
+                ! from 0 (simulation time equal to -t0 )
+                ! to 1 (simulation time equals starttime_to_mute)
+                mute_factor = real(1.d0 - ( STARTTIME_TO_MUTE - ((it-1)*DT-t0) ) / (STARTTIME_TO_MUTE+t0),kind=CUSTOM_REAL)
+                ! takes complement and shifts scale to (1,100)
+                ! thus, mute factor is 100 at simulation start and 1.0 at starttime_to_mute
+                mute_factor = abs(1.0 - mute_factor) * 99.0 + 1.0
+                ! positive and negative maximum reach average when wavefield appears
+                val = real(mute_factor * max_average,kind=CUSTOM_REAL)
+              else
+                ! uses a constant factor
+                val = real(100.d0 * max_average,kind=CUSTOM_REAL)
+              endif
+              ! positive and negative maximum
+              field_display(istamp1) = + val
+              field_display(istamp2) = - val
+              if (abs(max_average) > TINYVAL ) field_display = field_display / val
             else
-              ! uses a constant factor
-              val = real(100.d0 * max_average,kind=CUSTOM_REAL)
+              ! poles not found, just normalize by max_average
+              if (abs(max_average) > TINYVAL ) field_display = field_display / max_average
             endif
-            ! positive and negative maximum
-            field_display(istamp1) = + val
-            field_display(istamp2) = - val
-            if (abs(max_average) > TINYVAL ) field_display = field_display / val
           endif
         else
           ! no source to mute

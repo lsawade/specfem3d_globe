@@ -10,7 +10,7 @@ NOISE_TOMOGRAPHY                = 0   # flag of noise tomography, three steps (1
 SAVE_FORWARD                    = .false.   # save last frame of forward simulation or not
 
 # number of chunks (1,2,3 or 6)
-NCHUNKS                         = 1
+NCHUNKS                         = 6
 
 # angular width of the first chunk (not used if full sphere with six chunks)
 ANGULAR_WIDTH_XI_IN_DEGREES     = 20.d0   # angular size of a chunk
@@ -21,8 +21,8 @@ GAMMA_ROTATION_AZIMUTH          = 0.d0
 
 # number of elements at the surface along the two sides of the first chunk
 # (must be multiple of 16 and 8 * multiple of NPROC below)
-NEX_XI                          = 64
-NEX_ETA                         = 64
+NEX_XI                          = 128
+NEX_ETA                         = 128
 
 # number of MPI processors along the two sides of the first chunk
 NPROC_XI                        = 2
@@ -65,7 +65,7 @@ NPROC_ETA                       = 2
 #                          associated reference model rather than the default 3D crustal model
 #                          e.g. s20rts_1Dcrust, s362ani_1Dcrust, etc.
 #
-MODEL                           = 1D_isotropic_prem
+MODEL                           = GLL
 
 # parameters describing the Earth model
 OCEANS                          = .true.
@@ -83,7 +83,7 @@ FULL_GRAVITY                    = .false.
 POISSON_SOLVER                  = 0
 
 # record length in minutes
-RECORD_LENGTH_IN_MINUTES        = 2.5d0
+RECORD_LENGTH_IN_MINUTES        = 30.0d0
 
 #-----------------------------------------------------------
 #
@@ -112,7 +112,7 @@ REGIONAL_MESH_ADD_2ND_DOUBLING  = .false.
 #-----------------------------------------------------------
 
 # absorbing boundary conditions for a regional simulation
-ABSORBING_CONDITIONS            = .true.
+ABSORBING_CONDITIONS            = .false.
 
 # run global simulation for a circular region and apply high attenuation for the rest of the model
 # this creates an absorbing boundary with less reflection than stacey at a cost of 6x the computational cost
@@ -133,7 +133,7 @@ SPONGE_RADIUS_IN_DEGREES        = 25.d0
 # to undo attenuation for sensitivity kernel calculations or forward runs with SAVE_FORWARD
 # use one (and only one) of the two flags below. UNDO_ATTENUATION is much better (it is exact)
 # but requires a significant amount of disk space for temporary storage.
-PARTIAL_PHYS_DISPERSION_ONLY    = .true.
+PARTIAL_PHYS_DISPERSION_ONLY    = .false.
 UNDO_ATTENUATION                = .false.
 
 ## undo attenuation memory
@@ -206,11 +206,11 @@ RATIO_BY_WHICH_TO_INCREASE_IT   = 1.5d0
 # save AVS or OpenDX movies
 #MOVIE_COARSE saves movie only at corners of elements (SURFACE OR VOLUME)
 #MOVIE_COARSE does not work with create_movie_AVS_DX
-MOVIE_SURFACE                   = .false.
+MOVIE_SURFACE                   = .true.
 MOVIE_VOLUME                    = .false.
-MOVIE_COARSE                    = .true.
+MOVIE_COARSE                    = .false.
 NTSTEP_BETWEEN_FRAMES           = 50
-HDUR_MOVIE                      = 0.d0
+HDUR_MOVIE                      = 25.d0
 
 # save movie in volume.  Will save element if center of element is in prescribed volume
 # top/bottom: depth in KM, use MOVIE_TOP = -100 to make sure the surface is stored.
@@ -298,9 +298,9 @@ SAVE_SEISMOGRAMS_STRAIN         = .false.
 SAVE_SEISMOGRAMS_IN_ADJOINT_RUN = .false.
 
 # output format for the seismograms (one can use either or all of the three formats)
-OUTPUT_SEISMOS_ASCII_TEXT       = .true.
+OUTPUT_SEISMOS_ASCII_TEXT       = .false.
 OUTPUT_SEISMOS_SAC_ALPHANUM     = .false.
-OUTPUT_SEISMOS_SAC_BINARY       = .false.
+OUTPUT_SEISMOS_SAC_BINARY       = .true.
 OUTPUT_SEISMOS_ASDF             = .false.
 OUTPUT_SEISMOS_3D_ARRAY         = .false.
 OUTPUT_SEISMOS_HDF5             = .false.
@@ -419,15 +419,15 @@ BROADCAST_SAME_MESH_AND_MODEL   = .false.
 #-----------------------------------------------------------
 
 # set to true to use GPUs
-GPU_MODE                        = .false.
+GPU_MODE                        = .true.
 # Only used if GPU_MODE = .true. :
 GPU_RUNTIME                     = 1
 # 2 (OpenCL), 1 (Cuda) ou 0 (Compile-time -- does not work if configured with --with-cuda *AND* --with-opencl)
 GPU_PLATFORM                    = NVIDIA
-GPU_DEVICE                      = Tesla
+GPU_DEVICE                      = *
 
 # set to true to use the ADIOS library for I/Os
-ADIOS_ENABLED                   = .false.
+ADIOS_ENABLED                   = .true.
 ADIOS_FOR_FORWARD_ARRAYS        = .true.
 ADIOS_FOR_MPI_ARRAYS            = .true.
 ADIOS_FOR_ARRAYS_SOLVER         = .true.
