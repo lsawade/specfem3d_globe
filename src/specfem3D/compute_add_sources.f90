@@ -539,9 +539,9 @@
     if (USE_MONOCHROMATIC_CMT_SOURCE) then
       f0 = 1.d0 / hdur(isource) ! using half duration as a PERIOD just to avoid changing CMTSOLUTION file format
       stf = comp_source_time_function_mono(time_source_dble,f0)
-    elseif (USE_SINSQ_STF) then
+    else if (USE_SINSQ_STF) then
       stf = comp_source_time_function(time_source_dble,hdur(isource),it_index)
-    else 
+    else
       stf = comp_source_time_function(time_source_dble,hdur_Gaussian(isource),it_index)
     endif
   endif

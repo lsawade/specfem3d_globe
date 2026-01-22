@@ -819,11 +819,11 @@
   ! Sine-squared STF
   if (USE_SINSQ_STF) then
     t0 = 0.d0
-    if(NSOURCES > 1) write(*,*)'WARNING: USE_SINSQ_STF not tested for NSOURCES > 1'
+    if (NSOURCES > 1) write(*,*) 'WARNING: USE_SINSQ_STF not tested for NSOURCES > 1'
     do isource = 1,NSOURCES
       t0 = - min(t0,tshift_src(isource) - hdur(isource))
-    enddo 
-  endif 
+    enddo
+  endif
 
   ! checks if user set USER_T0 to fix simulation start time
   ! note: USER_T0 has to be positive
@@ -1750,7 +1750,7 @@
       allocate(seismograms(NDIM,nrec_local,nlength_seismogram),stat=ier)
       if (ier /= 0) stop 'Error while allocating seismograms'
 
-      if (FULL_GRAVITY_VAL) then 
+      if (FULL_GRAVITY_VAL) then
         allocate(seismograms_a(NDIM,nrec_local,nlength_seismogram),stat=ier)
         if (ier /= 0) stop 'Error while allocating seismograms_a'
       endif
@@ -1775,9 +1775,9 @@
 
     ! initializes seismograms
     seismograms(:,:,:) = 0._CUSTOM_REAL
-    if (FULL_GRAVITY_VAL) then 
+    if (FULL_GRAVITY_VAL) then
       seismograms_a(:,:,:) = 0._CUSTOM_REAL
-    endif 
+    endif
 
   else
     ! dummy arrays

@@ -49,7 +49,7 @@ Then, select in the `DATA/Par_file`:
 ```
 MODEL            =  EMC_model
 ```
-to read in and use the EMC model. 
+to read in and use the EMC model.
 
 Additionally, for local EMC models the mesher `xmeshfem3D` can use parameters to produce local meshes, with a cut-off depth and local doubling layers.
 In `Par_file`, the following settings could be defined, for example in the Alaska model case:
@@ -95,7 +95,7 @@ which can be used as a guideline to select a stable `DT` size.
 
 ## Implementation
 
-Currently, we support the above mentioned Alaska and CVM model files only. 
+Currently, we support the above mentioned Alaska and CVM model files only.
 Other models might define different parameters and are likely not compatible at the moment.
 
 More general support will hopefully come in future.

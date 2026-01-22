@@ -367,7 +367,7 @@
     EMC_MODEL_TISO = bcast_logical(74)
     EMC_MODEL_QMU = bcast_logical(75)
     FULL_GRAVITY = bcast_logical(76)
-    USE_SINSQ_STF = bcast_logical(77) 
+    USE_SINSQ_STF = bcast_logical(77)
     HDF5_ENABLED = bcast_logical(78)
     HDF5_FOR_MOVIES = bcast_logical(79)
     OUTPUT_SEISMOS_HDF5 = bcast_logical(80)
