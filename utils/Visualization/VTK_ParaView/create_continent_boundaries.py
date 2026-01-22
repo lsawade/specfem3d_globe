@@ -270,7 +270,7 @@ def usage():
     print("     --ellip         - (optional) for an elliptical Earth (default)")
     print("     --sphere        - (optional) for a spherical Earth")
     print("     --region=R      - (optional) use a fixed region specifier R (e.g. 'lonmin/lonmax/latmin/latmax')")
-    
+
     sys.exit(1)
 
 if __name__ == '__main__':

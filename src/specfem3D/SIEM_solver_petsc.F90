@@ -80,23 +80,23 @@
 !   call VecSetValues(bvec,neq,l2gdof(1:),y,ADD_VALUES,ierr)
 ! well, until a better solution is found.
 
-! 5/12/25 - WE: A further issue with this is the variables ix and y 
-!  for single values e.g. originally 
+! 5/12/25 - WE: A further issue with this is the variables ix and y
+!  for single values e.g. originally
 !  call VecSetValues(interface_gvec1,1,igdof,rval,INSERT_VALUES,ierr)
-!  needs to be written as 
+!  needs to be written as
 !  call VecSetValues(interface_gvec1,1,[igdof],[rval],INSERT_VALUES,ierr)
-!  also for MatSetValues(Mat mat, PetscInt m, const PetscInt idxm[], 
-!                        PetscInt n, const PetscInt idxn[], 
+!  also for MatSetValues(Mat mat, PetscInt m, const PetscInt idxm[],
+!                        PetscInt n, const PetscInt idxn[],
 !                        const PetscScalar v[], InsertMode addv)
 ! the variables idxm, idxn, and v.
-! Other examples in: 
-!   MatMPIAIJSetPreallocation --> requires PETSC_NULL_INTEGER_ARRAY 
+! Other examples in:
+!   MatMPIAIJSetPreallocation --> requires PETSC_NULL_INTEGER_ARRAY
 !   instead of PETSC_NULL_INTEGER
 
 ! For MatSetValues - flattening
 !   MatSetValues documentation suggests in f90 varray needs to be flattened
-!   note that F90 is column major but C is row major. 
-! It appears petsc updated VecGetArrayF90 back to VecGetArray in 
+!   note that F90 is column major but C is row major.
+! It appears petsc updated VecGetArrayF90 back to VecGetArray in
 ! 3.23 (https://petsc.org/release/changes/323/)
 
 module siem_solver_petsc
@@ -228,7 +228,7 @@ module siem_solver_petsc
 #define API_F90_SUFFIX 0
 #endif
 
-! In version 3.23 
+! In version 3.23
 ! MatInfo changed from arrays to derived data types
 #if PETSC_VERSION_GE(3,22,0)
 #define PETSC_INFO_DERIVED_TYPE 1
@@ -282,7 +282,7 @@ module siem_solver_petsc
   type(tPC)               :: pc
   PetscErrorCode          :: ierr
   PetscInt                :: nzeros_max,nzeros_min
-  PetscInt                :: ig0,ig1, ONE 
+  PetscInt                :: ig0,ig1, ONE
 #endif
 
   ! public function
@@ -312,7 +312,7 @@ contains
   use specfem_par, only: ADD_TRINF,SIMULATION_TYPE
 
   use specfem_par_full_gravity, only: ggdof_ic1,ggdof_oc1,ggdof_cm1,ggdof_trinf1,ggdof_inf1
-  
+
   implicit none
   type(tVec) :: nzeror_gvec1,nzeror_dvec1,nzeror_ovec1,iproc_gvec1, &
                 interface_gvec1,ninterface_dvec1,ninterface_ovec1,nself_gvec1
@@ -618,9 +618,9 @@ contains
 
 #if API_F90_SUFFIX
   call VecGetArrayF90(nself_gvec1,rnself_array1,ierr)
-#else 
+#else
   call VecGetArray(nself_gvec1,rnself_array1,ierr)
-#endif 
+#endif
 
   allocate(nself_array1(n))
   nself_array1 = int(rnself_array1(1:n))
@@ -629,9 +629,9 @@ contains
 
 #if API_F90_SUFFIX
   call VecRestoreArrayF90(nself_gvec1,rnself_array1,ierr)
-#else 
+#else
   call VecRestoreArray(nself_gvec1,rnself_array1,ierr)
-#endif 
+#endif
 
   call VecDestroy(nself_gvec1,ierr)
 
@@ -749,9 +749,9 @@ contains
   call VecGetLocalSize(nzeror_dvec1,n,ierr)
 #if API_F90_SUFFIX
   call VecGetArrayF90(nzeror_dvec1,nzeror_darray1,ierr)
-#else 
+#else
   call VecGetArray(nzeror_dvec1,nzeror_darray1,ierr)
-#endif 
+#endif
 
 
   allocate(nnzero_diag1(n))
@@ -765,18 +765,18 @@ contains
 
 #if API_F90_SUFFIX
   call VecRestoreArrayF90(nzeror_dvec1,nzeror_darray1,ierr)
-#else 
+#else
   call VecRestoreArray(nzeror_dvec1,nzeror_darray1,ierr)
-#endif 
+#endif
 
   call VecDestroy(nzeror_dvec1,ierr)
 
   ! off-diagonal matrix
 #if API_F90_SUFFIX
   call VecGetArrayF90(nzeror_ovec1,nzeror_oarray1,ierr)
-#else 
+#else
   call VecGetArray(nzeror_ovec1,nzeror_oarray1,ierr)
-#endif 
+#endif
 
 
   allocate(nnzero_offdiag1(n))
@@ -784,9 +784,9 @@ contains
 
 #if API_F90_SUFFIX
   call VecRestoreArrayF90(nzeror_ovec1,nzeror_oarray1,ierr)
-#else 
+#else
   call VecRestoreArray(nzeror_ovec1,nzeror_oarray1,ierr)
-#endif 
+#endif
 
   call VecDestroy(nzeror_ovec1,ierr)
 
@@ -795,9 +795,9 @@ contains
   ! 8 therefore to be safe we need to subtract this from all
 #if API_F90_SUFFIX
   call VecGetArrayF90(ninterface_dvec1,rninterface_darray1,ierr)
-#else 
+#else
   call VecGetArray(ninterface_dvec1,rninterface_darray1,ierr)
-#endif 
+#endif
 
 
   !where(rninterface_darray1>0.0 .and. rninterface_darray1 < 1.0)rninterface_darray1=1.0
@@ -807,9 +807,9 @@ contains
 
 #if API_F90_SUFFIX
   call VecRestoreArrayF90(ninterface_dvec1,rninterface_darray1,ierr)
-#else 
+#else
   call VecRestoreArray(ninterface_dvec1,rninterface_darray1,ierr)
-#endif 
+#endif
 
   call VecDestroy(ninterface_dvec1,ierr)
 
@@ -818,9 +818,9 @@ contains
 
 #if API_F90_SUFFIX
   call VecGetArrayF90(ninterface_ovec1,rninterface_oarray1,ierr)
-#else 
+#else
   call VecGetArray(ninterface_ovec1,rninterface_oarray1,ierr)
-#endif 
+#endif
 
 
   !where(rninterface_oarray1>0.0 .and. rninterface_oarray1 < 1.0)rninterface_oarray1=1.0
@@ -830,9 +830,9 @@ contains
 
 #if API_F90_SUFFIX
   call VecGetArrayF90(ninterface_ovec1,rninterface_oarray1,ierr)
-#else 
+#else
   call VecGetArray(ninterface_ovec1,rninterface_oarray1,ierr)
-#endif 
+#endif
 
   call VecDestroy(ninterface_ovec1,ierr)
 
@@ -867,18 +867,18 @@ contains
   ! non-zero array for diagonal/off-diagonal matrix?
 #if API_F90_SUFFIX
   call VecGetArrayF90(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
-#else 
+#else
   call VecGetArray(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
-#endif 
+#endif
 
   allocate(inzeror_array1(n))
   inzeror_array1(:) = int(nzeror_array1(1:n))
 
 #if API_F90_SUFFIX
   call VecRestoreArrayF90(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
-#else 
+#else
   call VecRestoreArray(nzeror_gvec1,nzeror_array1,ierr); CHECK_PETSC_ERROR(ierr)
-#endif 
+#endif
 
   call VecDestroy(nzeror_gvec1,ierr); CHECK_PETSC_ERROR(ierr)
 
@@ -914,8 +914,8 @@ contains
   !
   !        this seems to lead to a much faster petsc_set_matrix1() routine without the re-allocations.
   !        however, the diagonal and in particular the off-diagonal estimate with nzeros_max might be still off.
-  
-  
+
+
 #if PETSC_ARRAY_NULL_API
   ! Later version uses integer array
   call MatMPIAIJSetPreallocation(Amat1,nzeros_max, PETSC_NULL_INTEGER_ARRAY, &
@@ -1195,7 +1195,7 @@ contains
   !debugging
   logical, parameter :: DEBUG_FILE_OUTPUT = .false.
 
-  ! For the MatGetRow call 
+  ! For the MatGetRow call
   !integer :: ncols
   !integer,dimension(:),allocatable :: cols
   PetscInt :: ncols
@@ -1213,9 +1213,9 @@ contains
    ! matrix info
 #if PETSC_INFO_DERIVED_TYPE
 MatInfo :: info
-#else 
+#else
   double precision :: info(MAT_INFO_SIZE)
-#endif 
+#endif
 double precision :: mallocsval
 
 
@@ -1459,9 +1459,9 @@ double precision :: mallocsval
 
 #if PETSC_INFO_DERIVED_TYPE
 mallocsval = info%mallocs
-#else 
+#else
 mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
-#endif 
+#endif
   !memval = info(MAT_INFO_MEMORY)                   ! memory allocated - not provided
   !nonzeros_allocated = info(MAT_INFO_NZ_ALLOCATED) ! nonzero entries allocated
 
@@ -1751,18 +1751,18 @@ mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during Mat
 
 #if API_F90_SUFFIX
   call VecGetArrayF90(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
-#else 
+#else
   call VecGetArray(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
-#endif 
+#endif
 
 
   larray(1:n) = array_data(1:n)
 
 #if API_F90_SUFFIX
   call VecRestoreArrayF90(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
-#else 
+#else
   call VecRestoreArray(local_vec1,array_data,ierr); CHECK_PETSC_ERROR(ierr)
-#endif 
+#endif
 
   end subroutine scatter_globalvec1
 
@@ -2140,9 +2140,9 @@ mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during Mat
   ! matrix info
 #if PETSC_INFO_DERIVED_TYPE
 MatInfo :: info
-#else 
+#else
   double precision :: info(MAT_INFO_SIZE)
-#endif 
+#endif
 double precision :: mallocsval
 
   PetscLogDouble :: bytes
@@ -2252,7 +2252,7 @@ double precision :: mallocsval
     do iflat = 1, ncount
       do jflat = 1, ncount
         varr((iflat-1)*ncount + jflat) = storekmat_crust_mantle(idof(iflat), idof(jflat), i_elmt)
-      enddo !jflat 
+      enddo !jflat
     enddo !iflat
 
     call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount),varr,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
@@ -2295,7 +2295,7 @@ double precision :: mallocsval
       do iflat = 1, ncount
         do jflat = 1, ncount
           varr((iflat-1)*ncount + jflat) = storekmat_trinfinite(idof(iflat), idof(jflat), i_elmt)
-        enddo !jflat 
+        enddo !jflat
       enddo !iflat
       call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount),varr,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
       deallocate(varr)
@@ -2334,7 +2334,7 @@ double precision :: mallocsval
     do iflat = 1, ncount
       do jflat = 1, ncount
         varr((iflat-1)*ncount + jflat) = storekmat_infinite(idof(iflat), idof(jflat), i_elmt)
-      enddo !jflat 
+      enddo !jflat
     enddo !iflat
     call MatSetValues(Amat,ncount,igdof(1:ncount),ncount,igdof(1:ncount),varr,ADD_VALUES,ierr); CHECK_PETSC_ERROR(ierr)
     deallocate(varr)
@@ -2357,9 +2357,9 @@ double precision :: mallocsval
 
 #if PETSC_INFO_DERIVED_TYPE
 mallocsval = info%mallocs
-#else 
+#else
 mallocsval = info(MAT_INFO_MALLOCS)               ! number of mallocs during MatSetValues()
-#endif 
+#endif
 
   ! memory usage
   call PetscMemoryGetCurrentUsage(bytes, ierr); CHECK_PETSC_ERROR(ierr)

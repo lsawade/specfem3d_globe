@@ -1636,13 +1636,13 @@
 
   ! additional scaling factors for gravity seismograms
   scale_accel = scale_veloc * scale_t_inv        ! [m / s^2]
-  scale_phi   = scale_displ**2 * scale_t_inv**2  ! [m^2 / s^2] 
-  scale_pgrav = scale_displ * scale_t_inv**2     ! [m / s^2] 
-  
-  ! strain is defined as second time integral 
-  ! of grad grad phi here we just output 
-  ! grad grad phi so scale by units of 1/s^2  
-  scale_hgrav =  scale_t_inv**2     ! [1 / s^2] 
+  scale_phi   = scale_displ**2 * scale_t_inv**2  ! [m^2 / s^2]
+  scale_pgrav = scale_displ * scale_t_inv**2     ! [m / s^2]
+
+  ! strain is defined as second time integral
+  ! of grad grad phi here we just output
+  ! grad grad phi so scale by units of 1/s^2
+  scale_hgrav =  scale_t_inv**2     ! [1 / s^2]
 
 
   ! allocate seismogram array

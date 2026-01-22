@@ -424,7 +424,7 @@ def plot_cross_section(filename):
 
             print("  grid: spacing = {} / {}".format(space_x,space_y))
             print("")
-            
+
             grid = pygmt.surface(data_xyz, region=R, spacing=[space_x,space_y], verbose='q')
         else:
             # horizontal lon/lat/radius

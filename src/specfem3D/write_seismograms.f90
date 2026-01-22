@@ -105,12 +105,12 @@
       case (1)
         ! forward run
         if (.not. GPU_MODE) then
-          ! on CPU 
+          ! on CPU
           call compute_seismograms(NGLOB_CRUST_MANTLE,displ_crust_mantle,seismo_current,seismograms,scale_displ)
           ! Full gravity useful to have acceleration outputted
-          if (FULL_GRAVITY_VAL) then 
+          if (FULL_GRAVITY_VAL) then
             call compute_seismograms(NGLOB_CRUST_MANTLE,accel_crust_mantle,seismo_current,seismograms_a,scale_accel)
-          endif 
+          endif
         else
           ! on GPU
           call compute_seismograms_gpu(Mesh_pointer,seismograms,seismo_current,it,it_end,scale_displ,nlength_seismogram)
@@ -290,7 +290,7 @@
   case (2)
     component = 'v'   ! velocity - not used yet...
   case (3)
-    component = 'a'   ! acceleration 
+    component = 'a'   ! acceleration
   case (4)
     component = 'p'   ! pressure - not used yet...
   case (5)
@@ -759,15 +759,15 @@ contains
     ! single component only for pressure & gravitational potential
     if (istore == 4 .or. istore == 5) then
       chn = bic(1:2)//'P'
-    elseif (istore == 2) then 
+    else if (istore == 2) then
       ! Velocity
       chn = chn(1:3)//'V'
-    elseif (istore == 3) then
+    else if (istore == 3) then
       ! Acceleration
       chn = chn(1:3)//'A'
     endif
 
-    
+
 
 
     ! backazimuth rotation
@@ -836,7 +836,7 @@ contains
     write(sisname_big_file,"(a,'.',a,'.',a3,'.sem')") network_name(irec)(1:length_network_name), &
                    station_name(irec)(1:length_station_name),chn
 
-    if(istore == 3) then 
+    if (istore == 3) then
 
       write(sisname,"('/',a,'.',a,'.',a4,'.sem')") network_name(irec)(1:length_network_name), &
       station_name(irec)(1:length_station_name),chn
@@ -844,7 +844,7 @@ contains
       ! create this name also for the text line added to the unique big seismogram file
       write(sisname_big_file,"(a,'.',a,'.',a4,'.sem')") network_name(irec)(1:length_network_name), &
             station_name(irec)(1:length_station_name),chn
-    endif 
+    endif
 
 
     ! full gravity seismos add an additional component indicator to the name

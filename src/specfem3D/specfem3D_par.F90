@@ -1387,7 +1387,7 @@ module specfem_par_full_gravity
 
   ! for the adjoint Euler scheme for rotation in linear indexing for 3-GLLX points
   real(kind=CUSTOM_REAL),dimension(:,:), allocatable :: b_A_array_rotationL3, b_B_array_rotationL3
-  
+
 
   ! testing
   logical :: output_background_grav_siem_for_testing = .false.
