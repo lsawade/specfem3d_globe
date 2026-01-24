@@ -812,6 +812,31 @@
     REFERENCE_1D_MODEL = REFERENCE_MODEL_SEMUCB   ! uses berkeley 1D reference
     REFERENCE_CRUSTAL_MODEL = ICRUST_BERKELEY     ! uses berkeley crust
 
+  case('semucb_a3d_azim')
+    ! Berkeley model with radial and azimuthal anisotropy (Gc,Gs only)
+    CASE_3D = .true.                              ! moho stretching
+    CRUSTAL = .true.                              ! berkeley crustal model will be used
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .true.                  ! uses tiso parameterization (from reference 1D model)
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.         ! uses 3d mantle perturbations
+    THREE_D_MODEL = THREE_D_MODEL_BERKELEY_AZIM
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_SEMUCB   ! uses berkeley 1D reference
+    REFERENCE_CRUSTAL_MODEL = ICRUST_BERKELEY     ! uses berkeley crust
+    ANISOTROPIC_3D_MANTLE = .true.                ! treats mantle elements as fully anisotropic
+
+  case('semucb_a3d_azim_3dq')
+    ! Berkeley model with radial and azimuthal anisotropy (Gc,Gs only) and 3D attenuation
+    CASE_3D = .true.                              ! moho stretching
+    CRUSTAL = .true.                              ! berkeley crustal model will be used
+    ONE_CRUST = .true.
+    TRANSVERSE_ISOTROPY = .true.                  ! uses tiso parameterization (from reference 1D model)
+    ATTENUATION_3D_BERKELEY = .true.              ! uses 3D attenuation model
+    MODEL_3D_MANTLE_PERTUBATIONS = .true.         ! uses 3d mantle perturbations
+    THREE_D_MODEL = THREE_D_MODEL_BERKELEY_AZIM
+    REFERENCE_1D_MODEL = REFERENCE_MODEL_SEMUCB   ! uses berkeley 1D reference
+    REFERENCE_CRUSTAL_MODEL = ICRUST_BERKELEY     ! uses berkeley crust
+    ANISOTROPIC_3D_MANTLE = .true.                ! treats mantle elements as fully anisotropic
+
   case ('ishii')
     ! Ishii et al. (2002) inner core model
     THREE_D_MODEL_IC = THREE_D_MODEL_INNER_CORE_ISHII

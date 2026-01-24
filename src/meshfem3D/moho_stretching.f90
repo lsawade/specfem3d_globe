@@ -49,7 +49,7 @@
   use meshfem_par, only: &
     RMOHO_FICTITIOUS_IN_MESHER,R220,RMIDDLE_CRUST,REFERENCE_CRUSTAL_MODEL
 
-  use meshfem_models_par, only: THREE_D_MODEL,THREE_D_MODEL_BERKELEY
+  use meshfem_models_par, only: THREE_D_MODEL,THREE_D_MODEL_BERKELEY,THREE_D_MODEL_BERKELEY_AZIM
 
   implicit none
 
@@ -196,7 +196,10 @@
     do_mesh_stretching = .false.
 
     if (USE_OLD_VERSION_FORMAT) then
-      if (.not. SUPPRESS_MOHO_STRETCHING .and. (TOPOGRAPHY .or. THREE_D_MODEL == THREE_D_MODEL_BERKELEY)) &
+      if (.not. SUPPRESS_MOHO_STRETCHING .and. &
+          (TOPOGRAPHY .or. &
+           THREE_D_MODEL == THREE_D_MODEL_BERKELEY .or. &
+           THREE_D_MODEL == THREE_D_MODEL_BERKELEY_AZIM)) &
         do_mesh_stretching = .true.
     else
       if (.not. SUPPRESS_MOHO_STRETCHING .and. TOPOGRAPHY) &
