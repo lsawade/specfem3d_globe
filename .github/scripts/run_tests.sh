@@ -8,6 +8,8 @@ if [ -f $HOME/.tmprc ]; then source $HOME/.tmprc; fi
 
 WORKDIR=`pwd`
 dir=${TESTDIR}
+TESTID=${TESTID:-}
+TESTCOV=${TESTCOV:-}
 
 # info
 echo "work directory: $WORKDIR"
@@ -119,6 +121,12 @@ fi
 if [ "${TESTDIR}" == "EXAMPLES/regional_Berkeley" ]; then
   sed -i "s:^RECORD_LENGTH_IN_MINUTES .*:RECORD_LENGTH_IN_MINUTES = 4.0:" DATA/Par_file  # needs increase due to source time function
 fi
+if [ "${TESTDIR}" == "EXAMPLES/regional_Greece_noise_small" ]; then
+  sed -i "s:^RECORD_LENGTH_IN_MINUTES .*:RECORD_LENGTH_IN_MINUTES = 0.1:" DATA/Par_file
+  sed -i "s:2999:199:g" run_this_example.kernel.sh
+  # uses kernel script by default
+  cp -v run_this_example.kernel.sh run_this_example.sh
+fi
 
 # debug
 if [ "${DEBUG}" == "true" ]; then
@@ -139,11 +147,13 @@ if [ "${FULL_GRAVITY}" == "true" ]; then
   echo "NSTEP = 2" >> DATA/Par_file
 fi
 
-# hdf5 i/o example
+## HDF5 - i/o example
 if [ "${HDF5}" == "true" ]; then
   echo
   echo "test run w/ HDF5"
   echo
+  # turns on HDF5
+  echo "turning on HDF5"
   sed -i "s:^HDF5_ENABLED .*:HDF5_ENABLED    = .true.:" DATA/Par_file
   #sed -i "s:^HDF5_FOR_MOVIES .*:HDF5_FOR_MOVIES    = .true.:" DATA/Par_file
   #sed -i "s:^HDF5_IO_NODES .*:HDF5_IO_NODES    = 1:" DATA/Par_file
@@ -151,7 +161,7 @@ if [ "${HDF5}" == "true" ]; then
   #cp -v run_this_example_HDF5_IO_server.sh run_this_example.sh
 fi
 
-# adios
+## adios
 if [ "${ADIOS2}" == "true" ]; then
   # turns on ADIOS
   echo "turning on ADIOS"
@@ -165,10 +175,26 @@ if [ "${GPU}" == "true" ]; then
   sed -i "s:^GPU_MODE .*:GPU_MODE = .true.:" DATA/Par_file
 fi
 
-# save Par_file state
-cp -v DATA/Par_file DATA/Par_file.bak
+# coverage runs use short steps
+if [ "$TESTCOV" == "true" ]; then
+  # limit for debugging
+  sed -i "s:^RECORD_LENGTH_IN_MINUTES .*:RECORD_LENGTH_IN_MINUTES = 0.0:" DATA/Par_file
+  if [ "${TESTDIR}" == "EXAMPLES/regional_Greece_noise_small" ]; then
+    # will have a number of time steps = 9
+    # add a line after generating S_square file to delete lines > 9 (for running dummy simulation)
+    sed -i "/run_generate_S_squared/a sed -i '10,$ d' NOISE_TOMOGRAPHY/S_squared" run_this_example.sh
+  else
+    # set NSTEP for short checks only
+    echo "NSTEP = 2" >> DATA/Par_file
+  fi
+fi
 
-# use kernel script
+# save Par_file state
+if [ -e DATA/Par_file ]; then
+  cp -v DATA/Par_file DATA/Par_file.bak
+fi
+
+# runs simulation
 if [ "${RUN_KERNEL}" == "true" ]; then
   # use kernel script
   ./run_this_example_kernel.sh | tee output.log
@@ -186,11 +212,19 @@ echo `date`
 echo
 
 # seismogram comparison
-if [ "${DEBUG}" == "true" ] || [ "${FULL_GRAVITY}" == "true" ] || [ "${RUN_KERNEL}" == "true" ]; then
+RUN_COMPARE=true
+# turn off for non-default runs
+if [ "${TESTCOV}" == "true" ]; then RUN_COMPARE=false; fi
+if [ "${DEBUG}" == "true" ]; then RUN_COMPARE=false; fi
+if [ "${RUN_KERNEL}" == "true" ]; then RUN_COMPARE=false; fi
+if [ "${FULL_GRAVITY}" == "true" ]; then RUN_COMPARE=false; fi
+if [ "${TESTDIR}" == "EXAMPLES/regional_Greece_noise_small" ]; then RUN_COMPARE=false; fi
+
+if [ "${RUN_COMPARE}" == "true" ]; then
+  my_test
+else
   # no comparisons
   :     # do nothing
-else
-  my_test
 fi
 # checks exit code
 if [[ $? -ne 0 ]]; then exit 1; fi
@@ -229,10 +263,13 @@ if [ "${RUN_KERNEL}" == "true" ]; then
 fi
 
 # restore original Par_file
-cp -v DATA/Par_file.bak DATA/Par_file
+if [ -e DATA/Par_file.bak ]; then
+  cp -v DATA/Par_file.bak DATA/Par_file
+fi
 
 # cleanup
-rm -rf OUTPUT_FILES* DATABASES_MPI*
+rm -rf OUTPUT_FILES*
+if [ -e DATABASES_MPI ]; then rm -rf DATABASES_MPI*; fi
 if [ -e SEM ]; then rm -rf SEM/; fi
 
 echo
