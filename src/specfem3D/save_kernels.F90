@@ -38,11 +38,6 @@
   use specfem_par, only: NOISE_TOMOGRAPHY,SIMULATION_TYPE,nrec_local, &
     APPROXIMATE_HESS_KL,ADIOS_FOR_KERNELS
 
-  use specfem_par_innercore, only: rhostore_inner_core,muvstore_inner_core,kappavstore_inner_core, &
-    rho_kl_inner_core,alpha_kl_inner_core,beta_kl_inner_core
-
-  use specfem_par_outercore, only: rhostore_outer_core,kappavstore_outer_core,rho_kl_outer_core,alpha_kl_outer_core
-
   use manager_adios
 
   implicit none
@@ -70,13 +65,12 @@
 
     ! outer core
     if (SAVE_KERNELS_OC) then
-      call save_kernels_outer_core(rhostore_outer_core,kappavstore_outer_core,rho_kl_outer_core,alpha_kl_outer_core)
+      call save_kernels_outer_core()
     endif
 
     ! inner core
     if (SAVE_KERNELS_IC) then
-      call save_kernels_inner_core(rhostore_inner_core,muvstore_inner_core,kappavstore_inner_core, &
-                                   rho_kl_inner_core,alpha_kl_inner_core,beta_kl_inner_core)
+      call save_kernels_inner_core()
     endif
 
     ! boundary kernel
@@ -1646,7 +1640,7 @@
   implicit none
 
   ! local parameters
-  real(kind=CUSTOM_REAL) :: scale_kl,scale_kl_ani,scale_kl_rho
+  real(kind=CUSTOM_REAL) :: scale_kl !,scale_kl_ani,scale_kl_rho
   real(kind=CUSTOM_REAL) :: rhol,mul,kappal
   real(kind=CUSTOM_REAL) :: rho_kl,alpha_kl,beta_kl
   integer :: ispec,i,j,k
@@ -1672,9 +1666,9 @@
   scale_kl = real(scale_t * scale_displ_inv * 1.d9,kind=CUSTOM_REAL)
   ! For anisotropic kernels
   ! final unit : [s km^(-3) GPa^(-1)]
-  scale_kl_ani = real(scale_t**3 / (RHOAV*R_PLANET**3) * 1.d18,kind=CUSTOM_REAL)
+  !scale_kl_ani = real(scale_t**3 / (RHOAV*R_PLANET**3) * 1.d18,kind=CUSTOM_REAL)
   ! final unit : [s km^(-3) (kg/m^3)^(-1)]
-  scale_kl_rho = real(scale_t * scale_displ_inv / RHOAV * 1.d9,kind=CUSTOM_REAL)
+  !scale_kl_rho = real(scale_t * scale_displ_inv / RHOAV * 1.d9,kind=CUSTOM_REAL)
 
   ! isotropic kernels
   !
@@ -1807,18 +1801,12 @@
 ! put the list of parameters back here to avoid a warning / error from the gfortran compiler
 ! about undefined behavior when aggressive loop vectorization is used by the compiler
 
-  subroutine save_kernels_outer_core(rhostore_outer_core,kappavstore_outer_core,rho_kl_outer_core,alpha_kl_outer_core)
+  subroutine save_kernels_outer_core()
 
   use specfem_par
+  use specfem_par_outercore
 
   implicit none
-
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_OUTER_CORE),intent(in) :: &
-    rhostore_outer_core,kappavstore_outer_core
-
-  ! adjoint kernels
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_OUTER_CORE_ADJOINT),intent(inout) :: &
-    rho_kl_outer_core,alpha_kl_outer_core
 
   ! local parameters
   real(kind=CUSTOM_REAL) :: scale_kl
@@ -1829,6 +1817,7 @@
   ! saftey check
   if (.not. SAVE_KERNELS_OC) return
 
+  ! kernel unit [ s / km^3 ]
   scale_kl = real(scale_t * scale_displ_inv * 1.d9,kind=CUSTOM_REAL)
 
   ! outer_core
@@ -1887,39 +1876,371 @@
 ! put the list of parameters back here to avoid a warning / error from the gfortran compiler
 ! about undefined behavior when aggressive loop vectorization is used by the compiler
 
-  subroutine save_kernels_inner_core(rhostore_inner_core,muvstore_inner_core,kappavstore_inner_core, &
-                                     rho_kl_inner_core,alpha_kl_inner_core,beta_kl_inner_core)
+  subroutine save_kernels_inner_core()
 
   use specfem_par
+  use specfem_par_innercore
 
   implicit none
-
-  ! material parameters
-  ! (note: muvstore also needed for attenuation in case of anisotropic inner core)
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE),intent(in) :: &
-    rhostore_inner_core,kappavstore_inner_core,muvstore_inner_core
-
-  ! adjoint kernels
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT),intent(inout) :: &
-    rho_kl_inner_core,beta_kl_inner_core, alpha_kl_inner_core
 
   ! local parameters
   real(kind=CUSTOM_REAL) :: scale_kl
   real(kind=CUSTOM_REAL) :: rhol,mul,kappal,rho_kl,alpha_kl,beta_kl
   real(kind=CUSTOM_REAL) :: rho_max,alpha_max,beta_max
   integer :: ispec,i,j,k
+  ! anisotropic kernels
+  real(kind=CUSTOM_REAL) :: scale_kl_ani,scale_kl_rho,scaleval,scale_GPa
+  real(kind=CUSTOM_REAL) :: A,C,F,L,N
+  real(kind=CUSTOM_REAL) :: muvl,muhl,kappavl,eta ! kappahl
+  real(kind=CUSTOM_REAL) :: rhonotprime_kl
+  real(kind=CUSTOM_REAL) :: K_C11,K_C12,K_C13,K_C22,K_C23,K_C33,K_C44,K_C55,K_C66
+  real(kind=CUSTOM_REAL), dimension(5) :: an_kl
+  ! tiso kernels
+  real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: alphav_kl,alphah_kl,betav_kl,betah_kl,eta_kl
+  ! bulk kernels
+  real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: bulk_c_kl,bulk_betav_kl,bulk_betah_kl
+  real(kind=CUSTOM_REAL) :: alphav_sq,alphah_sq,betav_sq,betah_sq,bulk_sq
+  real(kind=CUSTOM_REAL) :: cijkl_max
+  real(kind=CUSTOM_REAL) :: alphav_max,alphah_max,betav_max,betah_max,eta_kl_max
+  integer :: ier
 
   ! safety check
   if (.not. SAVE_KERNELS_IC) return
 
   ! scaling to units
+  ! kernel unit [ s / km^3 ]
   scale_kl = real(scale_t * scale_displ_inv * 1.d9,kind=CUSTOM_REAL)
+
+  ! saves kernels in final form
+  if (ANISOTROPIC_KL) then
+    ! For anisotropic kernels
+    ! final unit : [s km^(-3) GPa^(-1)]
+    scale_kl_ani = real(scale_t**3 / (RHOAV*R_PLANET**3) * 1.d18,kind=CUSTOM_REAL)
+    ! final unit : [s km^(-3) (kg/m^3)^(-1)]
+    scale_kl_rho = real(scale_t * scale_displ_inv / RHOAV * 1.d9,kind=CUSTOM_REAL)
+    ! the scale of GPa--[g/cm^3][(km/s)^2]
+    scaleval = real(sqrt(PI*GRAV*RHOAV),kind=CUSTOM_REAL)
+    scale_GPa = real((RHOAV/1000.d0)*((R_PLANET*scaleval/1000.d0)**2),kind=CUSTOM_REAL)
+
+    ! allocates temporary arrays
+    ! anisotropic kernels
+    if (SAVE_TRANSVERSE_KL_ONLY) then
+      ! transverse isotropic kernel arrays for file output
+      allocate(alphav_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
+               alphah_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
+               betav_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
+               betah_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
+               eta_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT),stat=ier)
+      if (ier /= 0) stop 'Error allocating transverse kernels alphav_kl,... for inner core'
+      alphav_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+      alphah_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+      betav_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+      betah_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+      eta_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+
+      ! for parameterization (bulk_c,betah,betav,eta,rho)
+      allocate(bulk_c_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
+               bulk_betah_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
+               bulk_betav_kl(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT),stat=ier)
+      if (ier /= 0) stop 'Error allocating transverse kernels bulk_c_kl,... for inner core'
+      bulk_c_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+      bulk_betah_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+      bulk_betav_kl(:,:,:,:) = 0.0_CUSTOM_REAL
+    endif
+
+    ! inner_core kernels
+    do ispec = 1, NSPEC_INNER_CORE_ADJOINT
+      ! exclude fictitious elements in central cube
+      if (idoubling_inner_core(ispec) == IFLAG_IN_FICTITIOUS_CUBE) cycle
+
+      do k = 1, NGLLZ
+        do j = 1, NGLLY
+          do i = 1, NGLLX
+            ! For anisotropic kernels
+            rhol = rhostore_inner_core(i,j,k,ispec)
+
+            cijkl_kl_inner_core(:,i,j,k,ispec) = cijkl_kl_inner_core(:,i,j,k,ispec) * scale_kl_ani
+            rho_kl_inner_core(i,j,k,ispec) = rho_kl_inner_core(i,j,k,ispec) * scale_kl_rho
+
+            ! elastic tensor for hexagonal symmetry in reduced notation:
+            !
+            !      c11 c12 c13  0   0        0
+            !      c12 c11 c13  0   0        0
+            !      c13 c13 c33  0   0        0
+            !       0   0   0  c44  0        0
+            !       0   0   0   0  c44       0
+            !       0   0   0   0   0  (c11-c12)/2
+            !
+            !       in terms of the A, C, L, N and F of Love (1927):
+            !
+            !       c11 = A
+            !       c12 = A-2N
+            !       c13 = F
+            !       c33 = C
+            !       c44 = L
+            !
+            ! note: kernel with respect to anisotropic model parameters
+            !       see Sieminski (2007b) and Zhu (2015)
+            !
+            ! kernels for model parameterization (A,C,N,L,F):
+            !
+            ! A = C11                  -> kernel K_A = K_C11 + K_C22 + K_C12
+            ! C = C33                  -> kernel K_C = K_C33
+            ! N = 1/2 (C11 - C12)      -> kernel K_N = K_C66 - 2 K_C12
+            ! L = C44                  -> kernel K_L = K_C44 + K_C55
+            ! F = C13                  -> kernel K_F = K_C13 + K_C23
+            !
+            ! the hexagonal symmetric Cij maps to Love parameters:
+            ! C11 = A
+            ! C22 = C11 = A  (symmetry)
+            ! C33 = C
+            ! C12 = A - 2N
+            ! C13 = F
+            ! C23 = C13 = F  (symmetry)
+            ! C44 = L
+            ! C55 = C44 = L  (symmetry)
+            ! C66 = N        (satifies (C11 - C12)/2 )
+            !
+            ! for example: a variation in A, \delta A, affects C11, C22 and C12 by
+            !                 {\partial C11} / {\partial A} = 1
+            !                 {\partial C22} / {\partial A} = 1
+            !                 {\partial C12} / {\partial A} = 1
+            !               resulting in -> K_A = 1*K_C11 + 1*K_C22 + 1*K_C12
+            !
+            ! we use a mapping:
+            !   cijkl_kl(1) -> K_C11
+            !   cijkl_kl(2) -> K_C12
+            !   cijkl_kl(3) -> K_C13
+            !   cijkl_kl(4) -> K_C22
+            !   cijkl_kl(5) -> K_C23
+            !   cijkl_kl(6) -> K_C33
+            !   cijkl_kl(7) -> K_C44
+            !   cijkl_kl(8) -> K_C55
+            !   cijkl_kl(9) -> K_C66
+            K_C11 = cijkl_kl_inner_core(1,i,j,k,ispec)
+            K_C12 = cijkl_kl_inner_core(2,i,j,k,ispec)
+            K_C13 = cijkl_kl_inner_core(3,i,j,k,ispec)
+            K_C22 = cijkl_kl_inner_core(4,i,j,k,ispec)
+            K_C23 = cijkl_kl_inner_core(5,i,j,k,ispec)
+            K_C33 = cijkl_kl_inner_core(6,i,j,k,ispec)
+            K_C44 = cijkl_kl_inner_core(7,i,j,k,ispec)
+            K_C55 = cijkl_kl_inner_core(8,i,j,k,ispec)
+            K_C66 = cijkl_kl_inner_core(9,i,j,k,ispec)
+
+            ! Love kernels
+            an_kl(1) = K_C11 + K_C22 + K_C12            ! A
+            an_kl(2) = K_C33                            ! C
+            an_kl(3) = K_C66 - 2._CUSTOM_REAL * K_C12   ! N
+            an_kl(4) = K_C44 + K_C55                    ! L
+            an_kl(5) = K_C13 + K_C23                    ! F
+
+            if (SAVE_TRANSVERSE_KL_ONLY) then
+              ! tiso kernels
+              ! to convert to tiso parameterization:
+              !   A = rho * vph**2
+              !   C = rho * vpv**2
+              !   N = rho * vsh**2 = muh
+              !   L = rho * vsv**2 = muv
+              !   F = eta * (A - 2*L)
+              !
+              !   and derived from: kappav = rho*(vpv*vpv - 4.d0/3.0*vsv*vsv) and muv = rho * vsv**2
+              !                     kappah = rho*(vph*vph - 4.d0/3.0*vsh*vsh) and muh = rho * vsh**2
+              !
+              !   muv = L             == c44
+              !   muh = N             == 0.5*(c11 - c12)
+              !   kappav = C - 4/3*L  == c33 - 4/3*c44
+              !   kappah = A - 4/3*N  == c11 - 2/3*(c11 - c12)
+              !   eta = F / (A - 2*L) == c13 / (c11 - 2*c44)
+              !
+              A = c11store_inner_core(i,j,k,ispec)
+              C = c33store_inner_core(i,j,k,ispec)
+              N = 0.5_CUSTOM_REAL * (c11store_inner_core(i,j,k,ispec) - c12store_inner_core(i,j,k,ispec))
+              L = c44store_inner_core(i,j,k,ispec)
+              F = c13store_inner_core(i,j,k,ispec)
+
+              ! K_rho (primary kernel, for a parameterization (A,C,L,N,F,rho) )
+              rhonotprime_kl = rhol * rho_kl_inner_core(i,j,k,ispec) / scale_kl_rho
+
+              ! Gets transverse isotropic kernels
+              ! (see Appendix B of Sieminski et al., GJI 171, 2007)
+              !
+              ! note: the kernels are for relative perturbations (delta ln (m_i) = (m_i - m_0)/m_i )
+              !
+              ! for parameterization: ( alpha_v, alpha_h, beta_v, beta_h, eta, rho )
+              ! K_alpha_v
+              alphav_kl(i,j,k,ispec) = 2._CUSTOM_REAL * C * an_kl(2)
+              ! K_alpha_h
+              alphah_kl(i,j,k,ispec) = 2._CUSTOM_REAL * A * an_kl(1) + 2._CUSTOM_REAL * A * eta * an_kl(5)
+              ! K_beta_v
+              betav_kl(i,j,k,ispec) = 2._CUSTOM_REAL * L * an_kl(4) - 4._CUSTOM_REAL * L * eta * an_kl(5)
+              ! K_beta_h
+              betah_kl(i,j,k,ispec) = 2._CUSTOM_REAL * N * an_kl(3)
+              ! K_eta
+              eta_kl(i,j,k,ispec) = F * an_kl(5)
+
+              ! K_rhoprime  (for a parameterization (alpha_v, ..., rho) )
+              rho_kl_inner_core(i,j,k,ispec) = A * an_kl(1) + C * an_kl(2) &
+                                               + N * an_kl(3) + L * an_kl(4) + F * an_kl(5) &
+                                               + rhonotprime_kl
+
+              ! write the kernel in physical units
+              !rhonotprime_kl = - rhonotprime_kl * scale_kl
+
+              alphav_kl(i,j,k,ispec) = - alphav_kl(i,j,k,ispec) * scale_kl
+              alphah_kl(i,j,k,ispec) = - alphah_kl(i,j,k,ispec) * scale_kl
+              betav_kl(i,j,k,ispec) = - betav_kl(i,j,k,ispec) * scale_kl
+              betah_kl(i,j,k,ispec) = - betah_kl(i,j,k,ispec) * scale_kl
+              eta_kl(i,j,k,ispec) = - eta_kl(i,j,k,ispec) * scale_kl
+
+              rho_kl_inner_core(i,j,k,ispec) = - rho_kl_inner_core(i,j,k,ispec) * scale_kl
+
+              ! for parameterization: ( bulk, beta_v, beta_h, eta, rho )
+              ! where kappa_v = kappa_h = kappa and bulk c = sqrt( kappa / rho )
+              muvl = L
+              muhl = N
+              kappavl = C - FOUR_THIRDS * L
+              !kappahl = A - FOUR_THIRDS * N  ! not used - bulk c parameterization assumes kappah == kappav
+              kappal = kappavl
+              eta = F / (A - 2._CUSTOM_REAL * L)
+
+              betav_sq = muvl / rhol
+              betah_sq = muhl / rhol
+              alphav_sq = ( kappal + FOUR_THIRDS * muvl ) / rhol
+              alphah_sq = ( kappal + FOUR_THIRDS * muhl ) / rhol
+              bulk_sq = kappal / rhol
+
+              bulk_c_kl(i,j,k,ispec) = &
+                bulk_sq / alphav_sq * alphav_kl(i,j,k,ispec) + bulk_sq / alphah_sq * alphah_kl(i,j,k,ispec)
+
+              bulk_betah_kl(i,j,k,ispec) = &
+                betah_kl(i,j,k,ispec) + FOUR_THIRDS * betah_sq / alphah_sq * alphah_kl(i,j,k,ispec)
+
+              bulk_betav_kl(i,j,k,ispec) = &
+                betav_kl(i,j,k,ispec) + FOUR_THIRDS * betav_sq / alphav_sq * alphav_kl(i,j,k,ispec)
+              ! the rest, K_eta and K_rho are the same as above
+
+              ! to check: isotropic kernels from transverse isotropic ones
+              !alpha_kl = alphav_kl(i,j,k,ispec) + alphah_kl(i,j,k,ispec)
+              !beta_kl = betav_kl(i,j,k,ispec) + betah_kl(i,j,k,ispec)
+              !rho_kl = rhonotprime_kl + alpha_kl + beta_kl
+              !
+              !bulk_beta_kl = bulk_betah_kl(i,j,k,ispec) + bulk_betav_kl(i,j,k,ispec)
+
+            else
+              ! anisotropic kernels
+              ! note: the C_ij and density kernels are not for relative perturbations (delta ln( m_i) = delta m_i / m_i),
+              !          but absolute perturbations (delta m_i = m_i - m_0)
+              rho_kl_inner_core(i,j,k,ispec) = - rho_kl_inner_core(i,j,k,ispec)
+              cijkl_kl_inner_core(:,i,j,k,ispec) = - cijkl_kl_inner_core(:,i,j,k,ispec)
+            endif
+          enddo
+        enddo
+      enddo
+    enddo
+
+    ! writes out kernels to file
+    if (SAVE_TRANSVERSE_KL_ONLY) then
+      ! transversely isotropic kernels
+      call max_all_cr(maxval(rho_kl_inner_core),rho_max)
+      call max_all_cr(maxval(alphav_kl),alphav_max)
+      call max_all_cr(maxval(alphah_kl),alphah_max)
+      call max_all_cr(maxval(betav_kl),betav_max)
+      call max_all_cr(maxval(betah_kl),betah_max)
+      call max_all_cr(maxval(eta_kl),eta_kl_max)
+
+      ! user output
+      if (myrank == 0) then
+        write(IMAIN,*) 'inner core kernels: transversly isotropic'
+        write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+        write(IMAIN,*) '  maximum value of alphav kernel     = ',alphav_max
+        write(IMAIN,*) '  maximum value of alphah kernel     = ',alphah_max
+        write(IMAIN,*) '  maximum value of betav kernel      = ',betav_max
+        write(IMAIN,*) '  maximum value of betah kernel      = ',betah_max
+        write(IMAIN,*) '  maximum value of eta kernel        = ',eta_kl_max
+        write(IMAIN,*)
+        call flush_IMAIN()
+      endif
+
+      ! binary output
+      call create_name_database(prname,myrank,IREGION_INNER_CORE,LOCAL_TMP_PATH)
+
+      open(unit=IOUT,file=trim(prname)//'rho_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) rho_kl_inner_core
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'alphav_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) alphav_kl
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'alphah_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) alphah_kl
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'betav_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) betav_kl
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'betah_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) betah_kl
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'eta_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) eta_kl
+      close(IOUT)
+
+      ! (bulk, beta_v, beta_h, eta, rho ) parameterization: K_eta and K_rho same as above
+      open(unit=IOUT,file=trim(prname)//'bulk_c_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) bulk_c_kl
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'bulk_betah_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) bulk_betah_kl
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'bulk_betav_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) bulk_betav_kl
+      close(IOUT)
+
+    else
+      ! anisotropic kernels
+      call max_all_cr(maxval(rho_kl_inner_core),rho_max)
+      call max_all_cr(maxval(cijkl_kl_inner_core),cijkl_max)
+
+      ! user output
+      if (myrank == 0) then
+        write(IMAIN,*) 'inner core kernels: anisotropic (hexagonal symmetry)'
+        write(IMAIN,*) '  maximum value of rho kernel        = ',rho_max
+        write(IMAIN,*) '  maximum value of cijkl kernel      = ',cijkl_max
+        write(IMAIN,*)
+        call flush_IMAIN()
+      endif
+
+      ! binary output
+      call create_name_database(prname,myrank,IREGION_INNER_CORE,LOCAL_TMP_PATH)
+
+      open(unit=IOUT,file=trim(prname)//'rho_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) rho_kl_inner_core
+      close(IOUT)
+      open(unit=IOUT,file=trim(prname)//'cijkl_kernel.bin',status='unknown',form='unformatted',action='write')
+      write(IOUT) cijkl_kl_inner_core
+      close(IOUT)
+    endif
+
+    ! free memory
+    if (SAVE_TRANSVERSE_KL_ONLY) then
+      ! transverse isotropic kernel arrays for file output
+      deallocate(alphav_kl,alphah_kl,betav_kl,betah_kl,eta_kl)
+      deallocate(bulk_c_kl,bulk_betah_kl,bulk_betav_kl)
+    endif
+
+    ! all done
+    return
+  endif  ! ANISOTROPIC_KL
+
+  ! isotropic kernels
 
   ! inner_core
   do ispec = 1, NSPEC_INNER_CORE_ADJOINT
+    ! exclude fictitious elements in central cube
+    if (idoubling_inner_core(ispec) == IFLAG_IN_FICTITIOUS_CUBE) cycle
+
     do k = 1, NGLLZ
       do j = 1, NGLLY
         do i = 1, NGLLX
+          ! isotropic kernels
           rhol = rhostore_inner_core(i,j,k,ispec)
           mul = muvstore_inner_core(i,j,k,ispec)
           kappal = kappavstore_inner_core(i,j,k,ispec)
@@ -1928,7 +2249,8 @@
           alpha_kl = -kappal * alpha_kl_inner_core(i,j,k,ispec)
           beta_kl =  - 2._CUSTOM_REAL * mul * beta_kl_inner_core(i,j,k,ispec)
 
-          rho_kl_inner_core(i,j,k,ispec) = (rho_kl + alpha_kl + beta_kl) * scale_kl
+          ! for parameterization (rho,alpha,beta)
+          rho_kl_inner_core(i,j,k,ispec) = (rho_kl + alpha_kl + beta_kl) * scale_kl    ! kernel in physical units
           beta_kl_inner_core(i,j,k,ispec) = 2._CUSTOM_REAL * (beta_kl - FOUR_THIRDS * mul * alpha_kl / kappal) * scale_kl
           alpha_kl_inner_core(i,j,k,ispec) = 2._CUSTOM_REAL * (1._CUSTOM_REAL +  FOUR_THIRDS * mul / kappal) * alpha_kl * scale_kl
         enddo
@@ -1957,6 +2279,7 @@
   else if (HDF5_ENABLED) then
     call write_kernels_ic_hdf5()
   else
+    ! binary output
     call create_name_database(prname,myrank,IREGION_INNER_CORE,LOCAL_TMP_PATH)
 
     open(unit=IOUT,file=trim(prname)//'rho_kernel.bin',status='unknown',form='unformatted',action='write')
@@ -2165,6 +2488,7 @@
   real(kind=CUSTOM_REAL) :: hess_max,hess_rho_max,hess_kappa_max,hess_mu_max
 
   ! scaling factors
+  ! kernel unit [ s / km^3 ]
   scale_kl = real(scale_t * scale_displ_inv * 1.d9,kind=CUSTOM_REAL)
 
   ! scales approximate Hessian

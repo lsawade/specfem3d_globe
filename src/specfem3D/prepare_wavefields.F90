@@ -390,6 +390,11 @@
     allocate(rho_kl_inner_core(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
              beta_kl_inner_core(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT), &
              alpha_kl_inner_core(NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT),stat=ier)
+    ! For anisotropic kernels
+    if (ANISOTROPIC_KL) then
+      allocate(cijkl_kl_inner_core(9,NGLLX,NGLLY,NGLLZ,NSPEC_INNER_CORE_ADJOINT),stat=ier)
+      if (ier /= 0 ) call exit_MPI(myrank,'Error allocating full cijkl kernel in inner_core')
+    endif
   else
     ! dummy (for function call arguments)
     allocate(rho_kl_inner_core(1,1,1,1), &
@@ -982,6 +987,10 @@
     rho_kl_inner_core(:,:,:,:) = 0._CUSTOM_REAL
     beta_kl_inner_core(:,:,:,:) = 0._CUSTOM_REAL
     alpha_kl_inner_core(:,:,:,:) = 0._CUSTOM_REAL
+    ! For anisotropic kernels
+    if (ANISOTROPIC_KL) then
+      cijkl_kl_inner_core(:,:,:,:,:) = 0._CUSTOM_REAL
+    endif
   endif
 
   end subroutine init_kernels
