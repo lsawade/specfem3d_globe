@@ -2180,6 +2180,34 @@ contains
     sz_l = dummyz_loc(INDEX_IJK)
 
     ! compute G tensor from s . g and add to sigma (not symmetric)
+    !
+    ! note: Komatitsch & Tromp 2002, Spectral-element simulations of global seismic wave propagation – II. Three-dimensional
+    !       models, oceans, rotation and self-gravitation, GJI, 150, 303-318
+    !       https://doi.org/10.1046/j.1365-246X.2002.01716.x
+    !
+    !       G is defined as G = \rho [ s g - (s \cdot g) I ]. G is non-symmetric.
+    !
+    !       Here, the contribution added to the elastic stress tensor (sigma, or T in the paper) is:
+    !          (s \cdot (\rho g)) I - s (\rho g) = \rho [ (s \cdot g) I - s g ]
+    !       where \rho is multiplied to g already in array gravity_pre_store(..)
+    !       (instead of adding the product explicitly here to save computational costs).
+    !
+    !       In index notation the contribution here is:
+    !          \rho [ (s_k g_k) \delta_ij - s_i g_j ]
+    !       That is, the contribution added is - G.
+    !
+    !       This will lead to a formulation of the weak form for stress as:
+    !          - int_\Omega \nabla w : (T - G) d\Omega
+    !       Note that the sign of G is different to the expression in the paper, where the derivation of the weak form seems
+    !       to contain a sign mistake in the (T - G) term.
+    !
+    !       contribution \rho [ (s_k g_k) \delta_ij - s_i g_j ]:
+    !       for example: xx (i=1, j=1): (sx * gx + sy * gy + sz * gz) * 1 - sx gx == sy * gy + sz * gz
+    !                    yy (i=2, j=2): (sx * gx + sy * gy + sz * gz) * 1 - sy gy == sx * gx + sz * gz
+    !                    zz (i=3, j=3): (sx * gx + sy * gy + sz * gz) * 1 - sz gz == sx * gx + sy * gy
+    !                    xy (i=1, j=2): (sx * gx + sy * gy + sz * gz) * 0 - sx gy == - sx * gy
+    !                    ..
+    !
     sigma_xx(INDEX_IJK) = sigma_xx(INDEX_IJK) + sy_l * gyl + sz_l * gzl
     sigma_yy(INDEX_IJK) = sigma_yy(INDEX_IJK) + sx_l * gxl + sz_l * gzl
     sigma_zz(INDEX_IJK) = sigma_zz(INDEX_IJK) + sx_l * gxl + sy_l * gyl
@@ -2193,6 +2221,23 @@ contains
     sigma_yz(INDEX_IJK) = sigma_yz(INDEX_IJK) - sy_l * gzl
     sigma_zy(INDEX_IJK) = sigma_zy(INDEX_IJK) - sz_l * gyl
 
+    ! H term contribution
+    ! note: this computes term \rho s \cdot H
+    !       The array gravity_H(..) has \rho multiplied to H already (for better computational costs), i.e., H' = \rho H.
+    !       Since H is defined as H = \nabla g and g = - \nabla \Psi with the gravitational potential \Psi,
+    !       the resulting tensor H = \nabla \nabla \Psi' must be symmetric (using \Psi' == -\Psi).
+    !
+    !       (And for a symmetric tensor H, the product s \cdot H == H^T \cdot s == H \cdot s,
+    !        with H^T being the transpose of H)
+    !
+    !       Note that the H term in the Komatitsch & Tromp 2002 paper seems to have a sign mistake as well, and should be
+    !          + \int_\Omega \rho s \cdot H \cdot w d\Omega
+    !
+    !       contribution v = s \cdot H' in index notation v_i = s_j H'_ji:
+    !       for example: vx: sx * Hxx + sy * Hyx + sz * Hzx == sx * Hxx + sy * Hxy + sz * Hxz (since Hyx == Hxy, Hzx == Hxz)
+    !                    vy: sx * Hxy + sy * Hyy + sz * Hzy == sx * Hxy + sy * Hyy + sz * Hyz (since Hyx == Hxy, Hzy == Hyz)
+    !                    vz: sx * Hxz + sy * Hyz + sz * Hzz
+    !
     Hxxl = gravity_H(1,iglob) ! minus_g_over_radius*(cos_phi_sq*cos_theta_sq + sin_phi_sq) + cos_phi_sq*minus_dg*sin_theta_sq * rho
     Hyyl = gravity_H(2,iglob) ! minus_g_over_radius*(cos_phi_sq + cos_theta_sq*sin_phi_sq) + minus_dg*sin_phi_sq*sin_theta_sq * rho
     Hzzl = gravity_H(3,iglob) ! cos_theta_sq*minus_dg + minus_g_over_radius*sin_theta_sq * rho
