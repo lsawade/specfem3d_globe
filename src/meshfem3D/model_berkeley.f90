@@ -101,19 +101,26 @@ end module model_berkeley_par
   character :: trash
 
   character(len=*), parameter :: A3d_dat_tiso       = trim(A3d_folder) // 'A3d.dat'
-  character(len=*), parameter :: A3d_dat_azim       = trim(A3d_folder) // 'AZIM/A3d.dat'  ! in DATA/SEMUCB_A3d/AZIM/ subfolder
-  character(len=*), parameter :: hknots_dat         = trim(A3d_folder) // 'hknots.dat'
-  character(len=*), parameter :: hknots2_dat        = trim(A3d_folder) // 'hknots2.dat'
+  character(len=*), parameter :: hknots_dat_tiso    = trim(A3d_folder) // 'hknots.dat'
+  character(len=*), parameter :: hknots2_dat_tiso   = trim(A3d_folder) // 'hknots2.dat'
 
-  character(len=MAX_STRING_LEN) :: A3d_dat
+  character(len=*), parameter :: A3d_dat_azim       = trim(A3d_folder) // 'AZIM/A3d.dat'  ! in DATA/SEMUCB_A3d/AZIM/ subfolder
+  character(len=*), parameter :: hknots_dat_azim    = trim(A3d_folder) // 'AZIM/hknots.dat'
+  character(len=*), parameter :: hknots2_dat_azim   = trim(A3d_folder) // 'AZIM/hknots2.dat'
+
+  character(len=MAX_STRING_LEN) :: A3d_dat,hknots_dat,hknots2_dat
 
   double precision, parameter :: deg2rad = PI / 180.d0
 
   ! A3d
   if (THREE_D_MODEL == THREE_D_MODEL_BERKELEY_AZIM) then
     A3d_dat = A3d_dat_azim
+    hknots_dat = hknots_dat_azim
+    hknots2_dat = hknots2_dat_azim
   else
     A3d_dat = A3d_dat_tiso
+    hknots_dat = hknots_dat_tiso
+    hknots2_dat = hknots2_dat_tiso
   endif
 
   ! user info
@@ -1179,8 +1186,8 @@ end module model_berkeley_par
   !debug
   !if (myrank == 0) then
   !  if (Gc /= 0.d0 .or. Gs /= 0.d0) then
-  !    print*,'debug: r,theta,phi',r,theta,phi,'iregion',iregion_code,CRUSTAL,'rank',myrank
-  !    print*,'debug: Gc Gs',Gc,Gs !,'vs1d fi',vs1d,fi
+  !    print *,'debug: r,theta,phi',r,theta,phi,'iregion',iregion_code,CRUSTAL,'rank',myrank
+  !    print *,'debug: Gc Gs',Gc,Gs !,'vs1d fi',vs1d,fi
   !  endif
   !endif
 
@@ -1277,7 +1284,7 @@ end module model_berkeley_par
   d36 = 0.d0
 
   d44 = L - Gc
-  d45 = Gs                      ! Gs' == -Gs  -> sign changed in: d45 = -Gs
+  d45 = Gs                      ! Gs' == -Gs  - > sign changed in: d45 = -Gs
   d46 = 0.d0
 
   d55 = L + Gc
