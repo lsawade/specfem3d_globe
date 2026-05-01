@@ -53,6 +53,17 @@
 
 #include "config.h"
 
+#ifdef WITH_MPI
+#include <mpi.h>
+// CUDA-aware support
+#ifdef WITH_CUDA_AWARE_MPI
+// extension
+#if defined(OPEN_MPI)
+#include <mpi-ext.h> /* extensions */
+#endif
+#endif  // WITH_CUDA_AWARE_MPI
+#endif  // WITH_MPI
+
 #ifdef USE_CUDA
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -62,13 +73,6 @@
 #include <hip/hip_runtime.h>
 #endif
 
-#ifdef WITH_MPI
-#include <mpi.h>
-#endif
-
-#ifdef WITH_CUDA_AWARE_MPI
-#include <mpi-ext.h>
-#endif
 
 // type of "working" variables: see also CUSTOM_REAL in constants.h
 //
@@ -91,7 +95,9 @@ typedef double realw;
 #endif
 
 /*----------------------------------------------------------------------------------------------- */
+
 // for debugging and benchmarking
+
 /*----------------------------------------------------------------------------------------------- */
 
 // debug: outputs traces
@@ -182,7 +188,9 @@ typedef double realw;
 #define VAR_NAME_VALUE(var) #var " = "  VALUE(var)
 
 /*----------------------------------------------------------------------------------------------- */
+
 // GPU constant arrays
+
 /*----------------------------------------------------------------------------------------------- */
 // (must match constants.h definitions)
 
@@ -557,7 +565,9 @@ typedef union {
 #endif
 
 /*----------------------------------------------------------------------------------------------- */
+
 // mesh pointer wrapper structure
+
 /*----------------------------------------------------------------------------------------------- */
 
 typedef struct mesh_ {
@@ -1287,7 +1297,9 @@ typedef struct mesh_ {
 
 
 /*----------------------------------------------------------------------------------------------- */
+
 // utility functions
+
 /*----------------------------------------------------------------------------------------------- */
 
 // defined in helper_functions_gpu.c
@@ -1410,7 +1422,9 @@ realw get_device_array_maximum_value (gpu_realw_mem d_array, int size);
 
 
 /* ----------------------------------------------------------------------------------------------- */
+
 // kernel setup function
+
 /* ----------------------------------------------------------------------------------------------- */
 // moved here into header to inline function calls if possible
 

@@ -662,10 +662,30 @@
 
   !----------------------------------------------------------------
 
-  if (GPU_MODE .and. USE_HYBRID_CPU_GPU) then
+  ! checks if GPU simulation turned on
+  if (.not. GPU_MODE) return
+
+  ! GPU_MODE now defined in Par_file
+  if (myrank == 0) then
+    write(IMAIN,*)
+    write(IMAIN,*) "GPU_MODE Active."
+    call flush_IMAIN()
+  endif
+
+  ! check for GPU runs
+  if (NGLLX /= 5 .or. NGLLY /= 5 .or. NGLLZ /= 5 ) &
+    stop 'GPU mode can only be used if NGLLX == NGLLY == NGLLZ == 5'
+  if (CUSTOM_REAL /= SIZE_REAL) &
+    stop 'GPU mode runs only with CUSTOM_REAL == SIZE_REAL'
+  if (ATTENUATION_VAL) then
+    if (N_SLS /= 3 ) &
+      stop 'GPU mode does not support N_SLS /= 3 yet'
+  endif
+
+  if (USE_HYBRID_CPU_GPU) then
     ! distributes processes on GPU and CPU
     if (mod(myrank,TOTAL_PROCESSES_PER_NODE) < PROCESSES_PER_CPU) then
-      ! turns of GPU mode for this process
+      ! turns off GPU mode for this process
       GPU_MODE = .false.
     else
       !leaves GPU_MODE == .true.
@@ -691,35 +711,38 @@
   call any_all_l(USE_CUDA_AWARE_MPI,USE_CUDA_AWARE_MPI_all)
   USE_CUDA_AWARE_MPI = USE_CUDA_AWARE_MPI_all
 
+#ifdef WITH_CUDA_AWARE_MPI
+  if (USE_CUDA_AWARE_MPI) then
+    ! double check if loaded MPI system has CUDA support
+    ! query MPI for cuda support
+    call query_cuda_aware_mpi(myrank,USE_CUDA_AWARE_MPI)
+
+    ! all processes need support
+    call any_all_l(USE_CUDA_AWARE_MPI,USE_CUDA_AWARE_MPI_all)
+    USE_CUDA_AWARE_MPI = USE_CUDA_AWARE_MPI_all
+
+    if (myrank == 0) then
+      write(IMAIN,*) "check CUDA-aware MPI returned : ",USE_CUDA_AWARE_MPI
+      call flush_IMAIN()
+    endif
+  endif
+#endif
+
   ! GPU_MODE now defined in Par_file
   if (GPU_MODE) then
     ! user output
     if (myrank == 0) then
-      write(IMAIN,*)
-      write(IMAIN,*) "GPU_MODE Active."
       write(IMAIN,*) "  runtime : ",GPU_RUNTIME
       write(IMAIN,*) "  platform: ",trim(GPU_PLATFORM)
       write(IMAIN,*) "  device  : ",trim(GPU_DEVICE)
       call flush_IMAIN()
     endif
 
-    ! check for GPU runs
-    if (NGLLX /= 5 .or. NGLLY /= 5 .or. NGLLZ /= 5 ) &
-      stop 'GPU mode can only be used if NGLLX == NGLLY == NGLLZ == 5'
-    if (CUSTOM_REAL /= SIZE_REAL) &
-      stop 'GPU mode runs only with CUSTOM_REAL == SIZE_REAL'
-    if (ATTENUATION_VAL) then
-      if (N_SLS /= 3 ) &
-        stop 'GPU mode does not support N_SLS /= 3 yet'
-    endif
-
     ! initializes GPU and outputs info to files for all processes
     if (USE_CUDA_AWARE_MPI) then
       ! devices have already been set before MPI_init()
       if (myrank == 0) then
-        write(IMAIN,*)
         write(IMAIN,*) "  using CUDA-aware MPI"
-        write(IMAIN,*)
         call flush_IMAIN()
       endif
       ! just to get number of devices and device info output
