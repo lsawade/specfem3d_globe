@@ -16,7 +16,8 @@ echo
 echo "**********************************************************"
 echo
 echo "configuration test: TESTFLAGS=${TESTFLAGS} TESTNGLL=${TESTNGLL} TESTCOV=${TESTCOV}"
-echo "                    CUDA=${CUDA} HIP=${HIP} ADIOS2=${ADIOS2} HDF5=${HDF5}"
+echo "                    CUDA=${CUDA} HIP=${HIP} OPENCL=${OPENCL}"
+echo "                    ADIOS2=${ADIOS2} HDF5=${HDF5}"
 echo "                    NETCDF=${NETCDF} PETSC=${PETSC}"
 echo
 echo "**********************************************************"

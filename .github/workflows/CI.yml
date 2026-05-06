@@ -413,6 +413,30 @@ jobs:
       shell: bash
 
 
+  linuxCheck-OpenCL:
+    name: Test on linux w/ OpenCL
+    runs-on: ubuntu-22.04
+    needs: changesCheck
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install packages
+      env:
+        CUDA: true
+        OPENCL: true
+      run: ./.github/scripts/run_install.sh
+      shell: bash
+
+    - name: Run build
+      env:
+        CUDA: true
+        OPENCL: true
+        TESTFLAGS: --enable-debug
+      run: ./.github/scripts/run_build.sh
+      shell: bash
+
+
   linuxCheck-HIP:
     name: Test on linux w/ HIP
     runs-on: ubuntu-latest
@@ -436,10 +460,9 @@ jobs:
       run: ./.github/scripts/run_build.sh
       shell: bash
 
-
   # intermediate workflow check
   compilationChecks:
-    needs: [linuxCheck,linuxCheck-CUDA,linuxCheck-HIP]
+    needs: [linuxCheck,linuxCheck-CUDA,linuxCheck-HIP,linuxCheck-OpenCL]
     runs-on: ubuntu-latest
     steps:
     - run: echo "compilation tests passed"
@@ -855,24 +878,24 @@ jobs:
       shell: bash
 
   linuxTest_16:
-    name: Test 16 - regional_s40rts w/ OpenCL
+    name: Test 16 - regional_s40rts w/ HIP
     runs-on: ubuntu-latest
     needs: [compilationChecks]
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true      # needs submodule content in folder external_libs/ROCm-HIP-CPU/
 
     - name: Install packages
       env:
-        CUDA: true
-        OPENCL: true
+        HIP: true
       run: ./.github/scripts/run_install.sh
       shell: bash
 
     - name: Run build
       env:
-        CUDA: true
-        OPENCL: true
+        HIP: true
         TESTFLAGS: --enable-vectorization
       run: ./.github/scripts/run_build.sh
       shell: bash
@@ -971,8 +994,7 @@ jobs:
         - testid: 4
           testdir: EXAMPLES/regional_s40rts
           testflags: --enable-vectorization
-          testCUDA: true
-          testOpenCL: true
+          testHIP: true
         - testid: 5
           testdir: EXAMPLES/regional_EMC_model
           testflags:

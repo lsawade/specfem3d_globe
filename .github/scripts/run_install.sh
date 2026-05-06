@@ -169,12 +169,12 @@ fi
 # installs the CUDA toolkit
 if [ "${CUDA}" == "true" ]; then
   # Linux environment
-  ## distribution from ubuntu 22.04
+  ## distribution from ubuntu 24.04
   UBUNTU_VERSION=ubuntu2204
 
   # CUDA_VERSION - specifies CUDA toolkit version
   # http://developer.download.nvidia.com/compute/cuda/repos/
-  CUDA_VERSION=13.1.1-1
+  CUDA_VERSION=13.2.1-1
 
   # default architecture amd64
   CUDA_OS=x86_64
@@ -214,8 +214,8 @@ if [ "${CUDA}" == "true" ]; then
   sudo rm -f /etc/apt/sources.list.d/cuda.list
   sudo rm -f /etc/apt/sources.list.d/nvidia-ml.list
   # for ubuntu1804/ppc64el ../$distro/$arch/.. becomes ../${UBUNTU_VERSION}/${CUDA_OS}/..
-  wget https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/${CUDA_OS}/cuda-keyring_1.0-1_all.deb
-  sudo dpkg -i cuda-keyring_1.0-1_all.deb
+  wget https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_VERSION}/${CUDA_OS}/cuda-keyring_1.1-1_all.deb
+  sudo dpkg -i cuda-keyring_1.1-1_all.deb
   echo
 
   # update
@@ -236,6 +236,8 @@ if [ "${CUDA}" == "true" ]; then
   export PATH=${CUDA_HOME}/bin:${PATH}
   echo ""
   nvcc --version
+  # checks exit code
+  if [[ $? -ne 0 ]]; then exit 1; fi
   echo ""
 
   ## OpenCL additionals
@@ -256,7 +258,7 @@ if [ "${CUDA}" == "true" ]; then
     sudo apt-get install nvidia-opencl-dev
     # drivers w/ container using CPU core - not working...
     #apt-get install -y ocl-icd-libopencl1 pocl-opencl-icd
-    apt-get install -y clinfo
+    #apt-get install -y clinfo
     echo ""
   fi
 else
