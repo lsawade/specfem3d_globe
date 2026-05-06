@@ -254,6 +254,9 @@ if [ "${CUDA}" == "true" ]; then
     #sudo apt-get install opencl-headers
     # for ppc64 architecture: to be able to compile/link OpenCL version
     sudo apt-get install nvidia-opencl-dev
+    # drivers w/ container using CPU core - not working...
+    #apt-get install -y ocl-icd-libopencl1 pocl-opencl-icd
+    apt-get install -y clinfo
     echo ""
   fi
 else

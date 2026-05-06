@@ -956,14 +956,14 @@ void ocl_select_device(const char *platform_filter, const char *device_filter, i
     synchronize_mpi();
     // outputs info
     fflush(stdout);
-    printf("\nrank %d - OpenCL devices: number of devices = %d\n",myrank,mocl.nb_devices);
+    printf("\nOpenCL - rank: %d OpenCL devices: number of devices = %d\n",myrank,mocl.nb_devices);
     for (i = 0; i < mocl.nb_devices; i++) {
       size_t info_length;
       char *info;
       clCheck( clGetDeviceInfo(cdDevices[i], CL_DEVICE_NAME, 0, NULL, &info_length));
       info = (char *) malloc(info_length * sizeof(char));
       clCheck( clGetDeviceInfo(cdDevices[i], CL_DEVICE_NAME, info_length, info, NULL));
-      printf("  gpu device id %d: %s\n",i,info);
+      printf("OpenCL - rank: %d GPU device id %d: %s\n",myrank,i,info);
       free(info);
     }
     printf("\n");
