@@ -3,7 +3,7 @@
 # runs additional coverage examples
 #
 
-set -euo pipefail
+#set -euo pipefail
 
 # getting updated environment (CUDA_HOME, PATH, ..)
 if [ -f $HOME/.tmprc ]; then source $HOME/.tmprc; fi

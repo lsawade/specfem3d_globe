@@ -1008,6 +1008,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: ${{ matrix.testHIP == true && 'true' || 'false' }}  # HIP needs submodule content in folder external_libs/ROCm-HIP-CPU/
 
     - name: Install packages
       env:
@@ -1051,7 +1053,10 @@ jobs:
 
     - name: Generate gcov reports
       if: ${{ github.repository == 'SPECFEM/specfem3d_globe' }}
+      env:
+        REPOSITORY: ${{ github.repository }}
       run: |
+        echo "repository: $REPOSITORY"
         gcov --version
         echo `pwd`
         ls -al obj/
