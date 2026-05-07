@@ -480,7 +480,7 @@
   use constants, only: IMAIN,myrank, &
     IFLAG_CRUST,IFLAG_220_80,IFLAG_80_MOHO,IFLAG_670_220,IFLAG_MANTLE_NORMAL,IREGION_CRUST_MANTLE, &
     REFERENCE_MODEL_1DREF,REFERENCE_MODEL_1DREF,REFERENCE_MODEL_SEMUCB, &
-    THREE_D_MODEL_S362WMANI,THREE_D_MODEL_SGLOBE,THREE_D_MODEL_BERKELEY, &
+    THREE_D_MODEL_S362WMANI,THREE_D_MODEL_SGLOBE,THREE_D_MODEL_BERKELEY,THREE_D_MODEL_BERKELEY_AZIM, &
     USE_OLD_VERSION_FORMAT
 
   use meshfem_models_par, only: &
@@ -528,7 +528,7 @@
     if (USE_OLD_VERSION_FORMAT) then
       if (elem_in_mantle) elem_is_tiso = .true.
       ! adds special case for Berkeley SEMUCB model
-      if (THREE_D_MODEL == THREE_D_MODEL_BERKELEY) then
+      if (THREE_D_MODEL == THREE_D_MODEL_BERKELEY .or. THREE_D_MODEL == THREE_D_MODEL_BERKELEY_AZIM) then
         if (elem_in_crust) elem_is_tiso = .true.
       endif
     else
@@ -659,7 +659,7 @@
     ! note: THREE_D_MODEL_SGLOBE_ISO
     !       sgloberani_iso model based on PREM, it will have tiso already set from crust down to 220
 
-  case (THREE_D_MODEL_BERKELEY)
+  case (THREE_D_MODEL_BERKELEY,THREE_D_MODEL_BERKELEY_AZIM)
     ! SEMUCB
     ! double-check to use tiso for elements fully in crust
     if (elem_in_crust) elem_is_tiso = .true.

@@ -78,8 +78,8 @@ contains
 
   real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
   real(kind=CUSTOM_REAL) :: duxdxl,duydyl,duzdzl,duxdyl,duydxl,duzdxl,duxdzl,duzdyl,duydzl, &
-                            duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl, &
                             duxdyl_plus_duydxl,duzdxl_plus_duxdzl,duzdyl_plus_duydzl
+                            ! duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl
 
 #ifdef FORCE_VECTORIZATION
   integer :: ijk
@@ -130,9 +130,9 @@ contains
     duzdzl = xizl*tempz1(INDEX_IJK) + etazl*tempz2(INDEX_IJK) + gammazl*tempz3(INDEX_IJK)
 
     ! precompute some sums to save CPU time
-    duxdxl_plus_duydyl = duxdxl + duydyl
-    duxdxl_plus_duzdzl = duxdxl + duzdzl
-    duydyl_plus_duzdzl = duydyl + duzdzl
+    !duxdxl_plus_duydyl = duxdxl + duydyl
+    !duxdxl_plus_duzdzl = duxdxl + duzdzl
+    !duydyl_plus_duzdzl = duydyl + duzdzl
     duxdyl_plus_duydxl = duxdyl + duydxl
     duzdxl_plus_duxdzl = duzdxl + duxdzl
     duzdyl_plus_duydzl = duzdyl + duydzl
@@ -342,15 +342,15 @@ contains
   integer :: iglob
   integer :: i,j,k,l
 
-  real(kind=CUSTOM_REAL) tempx1l,tempx2l,tempx3l
-  real(kind=CUSTOM_REAL) tempy1l,tempy2l,tempy3l
-  real(kind=CUSTOM_REAL) tempz1l,tempz2l,tempz3l
+  real(kind=CUSTOM_REAL) :: tempx1l,tempx2l,tempx3l
+  real(kind=CUSTOM_REAL) :: tempy1l,tempy2l,tempy3l
+  real(kind=CUSTOM_REAL) :: tempz1l,tempz2l,tempz3l
 
-  real(kind=CUSTOM_REAL) hp1,hp2,hp3
-  real(kind=CUSTOM_REAL) xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
-  real(kind=CUSTOM_REAL) duxdxl,duxdyl,duxdzl,duydxl,duydyl,duydzl,duzdxl,duzdyl,duzdzl
-  real(kind=CUSTOM_REAL) duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl
-  real(kind=CUSTOM_REAL) duxdyl_plus_duydxl,duzdxl_plus_duxdzl,duzdyl_plus_duydzl
+  real(kind=CUSTOM_REAL) :: hp1,hp2,hp3
+  real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
+  real(kind=CUSTOM_REAL) :: duxdxl,duxdyl,duxdzl,duydxl,duydyl,duydzl,duzdxl,duzdyl,duzdzl
+  !real(kind=CUSTOM_REAL) :: duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl
+  real(kind=CUSTOM_REAL) :: duxdyl_plus_duydxl,duzdxl_plus_duxdzl,duzdyl_plus_duydzl
 
   do k = 1,NGLLZ
     do j = 1,NGLLY
@@ -421,9 +421,9 @@ contains
         duzdzl = xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l
 
         ! precompute some sums to save CPU time
-        duxdxl_plus_duydyl = duxdxl + duydyl
-        duxdxl_plus_duzdzl = duxdxl + duzdzl
-        duydyl_plus_duzdzl = duydyl + duzdzl
+        !duxdxl_plus_duydyl = duxdxl + duydyl
+        !duxdxl_plus_duzdzl = duxdxl + duzdzl
+        !duydyl_plus_duzdzl = duydyl + duzdzl
         duxdyl_plus_duydxl = duxdyl + duydxl
         duzdxl_plus_duxdzl = duzdxl + duxdzl
         duzdyl_plus_duydzl = duzdyl + duydzl
@@ -495,8 +495,8 @@ contains
 
   real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
   real(kind=CUSTOM_REAL) :: duxdxl,duydyl,duzdzl,duxdyl,duydxl,duzdxl,duxdzl,duzdyl,duydzl, &
-                            duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl, &
                             duxdyl_plus_duydxl,duzdxl_plus_duxdzl,duzdyl_plus_duydzl
+                            ! duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl
 
 #ifdef FORCE_VECTORIZATION
   integer :: ijk
@@ -547,9 +547,9 @@ contains
     duzdzl = xizl*tempz1(INDEX_IJK) + etazl*tempz2(INDEX_IJK) + gammazl*tempz3(INDEX_IJK)
 
     ! precompute some sums to save CPU time
-    duxdxl_plus_duydyl = duxdxl + duydyl
-    duxdxl_plus_duzdzl = duxdxl + duzdzl
-    duydyl_plus_duzdzl = duydyl + duzdzl
+    !duxdxl_plus_duydyl = duxdxl + duydyl
+    !duxdxl_plus_duzdzl = duxdxl + duzdzl
+    !duydyl_plus_duzdzl = duydyl + duzdzl
     duxdyl_plus_duydxl = duxdyl + duydxl
     duzdxl_plus_duxdzl = duzdxl + duxdzl
     duzdyl_plus_duydzl = duzdyl + duydzl
@@ -765,17 +765,17 @@ contains
   integer :: i,j,k,l,iglob
   real(kind=CUSTOM_REAL) :: templ
 
-  real(kind=CUSTOM_REAL) tempx1l,tempx2l,tempx3l
-  real(kind=CUSTOM_REAL) tempy1l,tempy2l,tempy3l
-  real(kind=CUSTOM_REAL) tempz1l,tempz2l,tempz3l
+  real(kind=CUSTOM_REAL) :: tempx1l,tempx2l,tempx3l
+  real(kind=CUSTOM_REAL) :: tempy1l,tempy2l,tempy3l
+  real(kind=CUSTOM_REAL) :: tempz1l,tempz2l,tempz3l
 
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: dummyx_loc,dummyy_loc,dummyz_loc
 
-  real(kind=CUSTOM_REAL) hp1,hp2,hp3
-  real(kind=CUSTOM_REAL) xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
-  real(kind=CUSTOM_REAL) duxdxl,duxdyl,duxdzl,duydxl,duydyl,duydzl,duzdxl,duzdyl,duzdzl
-  real(kind=CUSTOM_REAL) duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl
-  real(kind=CUSTOM_REAL) duxdyl_plus_duydxl,duzdxl_plus_duxdzl,duzdyl_plus_duydzl
+  real(kind=CUSTOM_REAL) :: hp1,hp2,hp3
+  real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
+  real(kind=CUSTOM_REAL) :: duxdxl,duxdyl,duxdzl,duydxl,duydyl,duydzl,duzdxl,duzdyl,duzdzl
+  !real(kind=CUSTOM_REAL) :: duxdxl_plus_duydyl,duxdxl_plus_duzdzl,duydyl_plus_duzdzl
+  real(kind=CUSTOM_REAL) :: duxdyl_plus_duydxl,duzdxl_plus_duxdzl,duzdyl_plus_duydzl
 
   do k = 1,NGLLZ
     do j = 1,NGLLY
@@ -849,9 +849,9 @@ contains
         duzdzl = xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l
 
         ! precompute some sums to save CPU time
-        duxdxl_plus_duydyl = duxdxl + duydyl
-        duxdxl_plus_duzdzl = duxdxl + duzdzl
-        duydyl_plus_duzdzl = duydyl + duzdzl
+        !duxdxl_plus_duydyl = duxdxl + duydyl
+        !duxdxl_plus_duzdzl = duxdxl + duzdzl
+        !duydyl_plus_duzdzl = duydyl + duzdzl
         duxdyl_plus_duydxl = duxdyl + duydxl
         duzdxl_plus_duxdzl = duzdxl + duxdzl
         duzdyl_plus_duydzl = duzdyl + duydzl

@@ -395,8 +395,8 @@ void FC_FUNC_(transfer_seismo_from_device_async,
   Mesh *mp = (Mesh *) *Mesh_pointer_f;
 
   int irec,ispec,iglob,i;
-  realw* h_field;
-  int* h_ispec_selected;
+  realw* h_field = NULL;
+  int* h_ispec_selected = NULL;
 
   // checks if anything to do
   if (mp->nrec_local == 0) return;

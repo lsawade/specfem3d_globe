@@ -101,7 +101,7 @@
   ! outer core
   ! to hold pre-computed vectors (different between gravity or no gravity case)
   allocate(gravity_pre_store_outer_core(NDIM,NGLOB_OUTER_CORE),stat=ier)
-  if (ier /= 0) stop 'Error allocating gravity_grad_ln_density_dr array'
+  if (ier /= 0) stop 'Error allocating gravity_pre_store_outer_core array'
   gravity_pre_store_outer_core(:,:) = 0._CUSTOM_REAL
 
   ! for full gravity

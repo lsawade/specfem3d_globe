@@ -32,7 +32,7 @@
   use meshfem_par, only: R220,NX_BATHY,NY_BATHY,R_PLANET
 
   ! for old version Berkeley compatibility
-  use constants, only: USE_OLD_VERSION_FORMAT,ICRUST_BERKELEY,THREE_D_MODEL_BERKELEY
+  use constants, only: USE_OLD_VERSION_FORMAT,ICRUST_BERKELEY,THREE_D_MODEL_BERKELEY,THREE_D_MODEL_BERKELEY_AZIM
   use meshfem_models_par, only: THREE_D_MODEL,REFERENCE_CRUSTAL_MODEL
 
   implicit none
@@ -90,7 +90,7 @@
     ! old version compatility
     if (USE_OLD_VERSION_FORMAT) then
       ! Berkeley model
-      if (THREE_D_MODEL == THREE_D_MODEL_BERKELEY .and. &
+      if ((THREE_D_MODEL == THREE_D_MODEL_BERKELEY .or. THREE_D_MODEL == THREE_D_MODEL_BERKELEY_AZIM) .and. &
           REFERENCE_CRUSTAL_MODEL == ICRUST_BERKELEY) then
         ! convert lat/lon to theta/phi
         call latlon_2_thetaphi_dble(lat,lon,theta,phi)

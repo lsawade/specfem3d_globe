@@ -16,7 +16,7 @@ clang -framework OpenCL -o check_opencl_device check_opencl_device.c -DCL_SILENC
 
 or on linux:
 
-gcc -lOpenCL -o check_opencl_device check_opencl_device.c
+gcc -o check_opencl_device check_opencl_device.c -lOpenCL
 
 execute by:
 

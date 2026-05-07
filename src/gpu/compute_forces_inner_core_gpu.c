@@ -1044,5 +1044,5 @@ void FC_FUNC_ (compute_forces_inner_core_gpu,
                 FORWARD_OR_ADJOINT);
   }
 
-  GPU_ERROR_CHECKING ("compute_forces_inner_core_ocl");
+  GPU_ERROR_CHECKING ("compute_forces_inner_core_gpu");
 }

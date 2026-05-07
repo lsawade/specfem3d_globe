@@ -332,6 +332,7 @@
   real(kind=CUSTOM_REAL) :: tempx1l,tempx2l,tempx3l
   real(kind=CUSTOM_REAL) :: tempy1l,tempy2l,tempy3l
   real(kind=CUSTOM_REAL) :: tempz1l,tempz2l,tempz3l
+  real(kind=CUSTOM_REAL) :: eps_trace_over_3,b_eps_trace_over_3
   real(kind=CUSTOM_REAL), dimension(5) :: b_epsilondev_loc
   real(kind=CUSTOM_REAL), dimension(5) :: epsilondev_loc
   real(kind=CUSTOM_REAL) :: div_displ,b_div_displ
@@ -351,6 +352,9 @@
   ! full gravity warning
   logical, save :: do_warn = .true.
 
+  ! safety check
+  if (.not. SAVE_KERNELS_OC) return
+
   if (UNDO_ATTENUATION .and. NTSTEP_BETWEEN_COMPUTE_KERNELS > 1) then
     deltat_kl = deltat * NTSTEP_BETWEEN_COMPUTE_KERNELS
   else
@@ -358,9 +362,6 @@
   endif
 
   ! outer_core -- compute the actual displacement and acceleration (NDIM,NGLOBMAX_OUTER_CORE)
-
-  ! safety check
-  if (.not. SAVE_KERNELS_OC) return
 
   ! full gravity
   if (FULL_GRAVITY_VAL) then
@@ -587,33 +588,22 @@
               enddo
 
               !deviatoric strain
-              b_epsilondev_loc(1) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
-              b_epsilondev_loc(2) = xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
+              b_eps_trace_over_3 = ONE_THIRD * (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
+                                              + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
+                                              + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
+              ! epsdev_xx
+              b_epsilondev_loc(1) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l - b_eps_trace_over_3
+              ! epsdev_yy
+              b_epsilondev_loc(2) = xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l - b_eps_trace_over_3
+              ! epsdev_xy
               b_epsilondev_loc(3) = 0.5*( xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l &
-                                        + xixl*tempy1l + etaxl*tempy2l + gammaxl*tempy3l ) &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
+                                        + xixl*tempy1l + etaxl*tempy2l + gammaxl*tempy3l ) - b_eps_trace_over_3
+              ! epsdev_xz
               b_epsilondev_loc(4) = 0.5*( xixl*tempz1l + etaxl*tempz2l + gammaxl*tempz3l &
-                                        + xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l ) &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
+                                        + xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l ) - b_eps_trace_over_3
+              ! epsdev_yz
               b_epsilondev_loc(5) = 0.5*( xiyl*tempz1l + etayl*tempz2l + gammayl*tempz3l &
-                                        + xizl*tempy1l + etazl*tempy2l + gammazl*tempy3l ) &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
+                                        + xizl*tempy1l + etazl*tempy2l + gammazl*tempy3l ) - b_eps_trace_over_3
 
               tempx1l = 0._CUSTOM_REAL
               tempx2l = 0._CUSTOM_REAL
@@ -643,33 +633,22 @@
               enddo
 
               !deviatoric strain
-              epsilondev_loc(1) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
-              epsilondev_loc(2) = xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
+              eps_trace_over_3 = ONE_THIRD * (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
+                                            + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
+                                            + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
+              ! epsdev_xx
+              epsilondev_loc(1) = xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l - eps_trace_over_3
+              ! epsdev_yy
+              epsilondev_loc(2) = xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l - eps_trace_over_3
+              ! epsdev_xy
               epsilondev_loc(3) = 0.5*( xiyl*tempx1l + etayl*tempx2l + gammayl*tempx3l &
-                                        + xixl*tempy1l + etaxl*tempy2l + gammaxl*tempy3l ) &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
+                                        + xixl*tempy1l + etaxl*tempy2l + gammaxl*tempy3l ) - eps_trace_over_3
+              ! epsdev_xz
               epsilondev_loc(4) = 0.5*( xixl*tempz1l + etaxl*tempz2l + gammaxl*tempz3l &
-                                        + xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l ) &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
-
+                                        + xizl*tempx1l + etazl*tempx2l + gammazl*tempx3l ) - eps_trace_over_3
+              ! epsdev_yz
               epsilondev_loc(5) = 0.5*( xiyl*tempz1l + etayl*tempz2l + gammayl*tempz3l &
-                                        + xizl*tempy1l + etazl*tempy2l + gammazl*tempy3l ) &
-                  - ONE_THIRD* (xixl*tempx1l + etaxl*tempx2l + gammaxl*tempx3l &
-                                + xiyl*tempy1l + etayl*tempy2l + gammayl*tempy3l &
-                                + xizl*tempz1l + etazl*tempz2l + gammazl*tempz3l )
+                                        + xizl*tempy1l + etazl*tempy2l + gammazl*tempy3l ) - eps_trace_over_3
 
               beta_kl_outer_core(i,j,k,ispec) =  beta_kl_outer_core(i,j,k,ispec) &
                  + deltat_kl * (epsilondev_loc(1)*b_epsilondev_loc(1) + epsilondev_loc(2)*b_epsilondev_loc(2) &
@@ -703,7 +682,7 @@
 
   use constants_solver
 
-  use specfem_par, only: deltat,GPU_MODE,Mesh_pointer,UNDO_ATTENUATION, &
+  use specfem_par, only: deltat,GPU_MODE,Mesh_pointer,ANISOTROPIC_KL,UNDO_ATTENUATION, &
     hprime_xx,hprime_xxT,hprime_yy,hprime_zz
 
   use specfem_par_innercore
@@ -716,6 +695,7 @@
   ! local parameters
   real(kind=CUSTOM_REAL), dimension(5) :: b_epsilondev_loc
   real(kind=CUSTOM_REAL), dimension(5) :: epsilondev_loc
+  real(kind=CUSTOM_REAL),dimension(9) :: prod_ic
 
   real(kind=CUSTOM_REAL), dimension(5,NGLLX,NGLLY,NGLLZ) :: b_epsilondev_loc_matrix
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ) :: b_eps_trace_over_3_loc_matrix
@@ -731,14 +711,14 @@
   ! full gravity warning
   logical, save :: do_warn = .true.
 
+  ! safety check
+  if (.not. SAVE_KERNELS_IC) return
+
   if (UNDO_ATTENUATION .and. NTSTEP_BETWEEN_COMPUTE_KERNELS > 1) then
     deltat_kl = deltat * NTSTEP_BETWEEN_COMPUTE_KERNELS
   else
     deltat_kl = deltat
   endif
-
-  ! safety check
-  if (.not. SAVE_KERNELS_IC) return
 
   ! full gravity
   if (FULL_GRAVITY_VAL) then
@@ -763,71 +743,167 @@
 !$OMP i,j,k, &
 #endif
 !$OMP b_eps_trace_over_3_loc_matrix,b_epsilondev_loc_matrix, &
-!$OMP epsilondev_loc,b_epsilondev_loc, &
+!$OMP prod_ic,epsilondev_loc,b_epsilondev_loc, &
 !$OMP iglob)
+
+    ! density kernel (rho)
 
 !$OMP DO SCHEDULE(GUIDED)
     do ispec = 1, NSPEC_INNER_CORE
-
-      ! gets element strain
-      if (UNDO_ATTENUATION) then
-        if (USE_DEVILLE_PRODUCTS_VAL) then
-          call compute_element_strain_undoatt_Dev(ispec,NGLOB_inner_core,NSPEC_inner_core, &
-                                                  b_displ_inner_core,ibool_inner_core, &
-                                                  hprime_xx,hprime_xxT, &
-                                                  deriv_mapping_inner_core, &
-                                                  b_epsilondev_loc_matrix,b_eps_trace_over_3_loc_matrix)
-        else
-          call compute_element_strain_undoatt_noDev(ispec,NGLOB_inner_core,NSPEC_inner_core, &
-                                                    b_displ_inner_core, &
-                                                    hprime_xx,hprime_yy,hprime_zz,ibool_inner_core, &
-                                                    xix_inner_core,xiy_inner_core,xiz_inner_core, &
-                                                    etax_inner_core,etay_inner_core,etaz_inner_core, &
-                                                    gammax_inner_core,gammay_inner_core,gammaz_inner_core, &
-                                                    b_epsilondev_loc_matrix,b_eps_trace_over_3_loc_matrix)
-        endif
-      else
-        ! backward/reconstructed strain arrays
-        b_eps_trace_over_3_loc_matrix(:,:,:) = b_eps_trace_over_3_inner_core(:,:,:,ispec)
-        b_epsilondev_loc_matrix(1,:,:,:) = b_epsilondev_xx_inner_core(:,:,:,ispec)
-        b_epsilondev_loc_matrix(2,:,:,:) = b_epsilondev_yy_inner_core(:,:,:,ispec)
-        b_epsilondev_loc_matrix(3,:,:,:) = b_epsilondev_xy_inner_core(:,:,:,ispec)
-        b_epsilondev_loc_matrix(4,:,:,:) = b_epsilondev_xz_inner_core(:,:,:,ispec)
-        b_epsilondev_loc_matrix(5,:,:,:) = b_epsilondev_yz_inner_core(:,:,:,ispec)
-      endif
-
       DO_LOOP_IJK
-
         iglob = ibool_inner_core(INDEX_IJK,ispec)
-
+        ! density kernel: see e.g. Tromp et al.(2005), equation (14)
         rho_kl_inner_core(INDEX_IJK,ispec) =  rho_kl_inner_core(INDEX_IJK,ispec) &
            + deltat_kl * (accel_inner_core(1,iglob) * b_displ_inner_core(1,iglob) + &
                           accel_inner_core(2,iglob) * b_displ_inner_core(2,iglob) + &
                           accel_inner_core(3,iglob) * b_displ_inner_core(3,iglob) )
-
-        epsilondev_loc(1) = epsilondev_xx_inner_core(INDEX_IJK,ispec)
-        epsilondev_loc(2) = epsilondev_yy_inner_core(INDEX_IJK,ispec)
-        epsilondev_loc(3) = epsilondev_xy_inner_core(INDEX_IJK,ispec)
-        epsilondev_loc(4) = epsilondev_xz_inner_core(INDEX_IJK,ispec)
-        epsilondev_loc(5) = epsilondev_yz_inner_core(INDEX_IJK,ispec)
-
-        b_epsilondev_loc(:) = b_epsilondev_loc_matrix(:,INDEX_IJK)
-
-        beta_kl_inner_core(INDEX_IJK,ispec) =  beta_kl_inner_core(INDEX_IJK,ispec) &
-           + deltat_kl * (epsilondev_loc(1)*b_epsilondev_loc(1) + epsilondev_loc(2)*b_epsilondev_loc(2) &
-                       + (epsilondev_loc(1)+epsilondev_loc(2)) * (b_epsilondev_loc(1)+b_epsilondev_loc(2)) &
-                       + 2 * (epsilondev_loc(3)*b_epsilondev_loc(3) + &
-                              epsilondev_loc(4)*b_epsilondev_loc(4) + &
-                              epsilondev_loc(5)*b_epsilondev_loc(5)) )
-
-        alpha_kl_inner_core(INDEX_IJK,ispec) = alpha_kl_inner_core(INDEX_IJK,ispec) &
-           + deltat_kl * (9 * eps_trace_over_3_inner_core(INDEX_IJK,ispec) * &
-                           b_eps_trace_over_3_loc_matrix(INDEX_IJK))
-
       ENDDO_LOOP_IJK
-
     enddo
 !$OMP ENDDO
+
+    ! For anisotropic kernels
+    if (ANISOTROPIC_KL) then
+
+!$OMP DO SCHEDULE(GUIDED)
+      do ispec = 1, NSPEC_INNER_CORE
+
+        ! gets element strain
+        if (UNDO_ATTENUATION) then
+          if (USE_DEVILLE_PRODUCTS_VAL) then
+            call compute_element_strain_undoatt_Dev(ispec,NGLOB_inner_core,NSPEC_inner_core, &
+                                                    b_displ_inner_core,ibool_inner_core, &
+                                                    hprime_xx,hprime_xxT, &
+                                                    deriv_mapping_inner_core, &
+                                                    b_epsilondev_loc_matrix,b_eps_trace_over_3_loc_matrix)
+          else
+            call compute_element_strain_undoatt_noDev(ispec,NGLOB_inner_core,NSPEC_inner_core, &
+                                                      b_displ_inner_core, &
+                                                      hprime_xx,hprime_yy,hprime_zz,ibool_inner_core, &
+                                                      xix_inner_core,xiy_inner_core,xiz_inner_core, &
+                                                      etax_inner_core,etay_inner_core,etaz_inner_core, &
+                                                      gammax_inner_core,gammay_inner_core,gammaz_inner_core, &
+                                                      b_epsilondev_loc_matrix,b_eps_trace_over_3_loc_matrix)
+          endif
+        else
+          ! backward/reconstructed strain arrays
+          b_eps_trace_over_3_loc_matrix(:,:,:) = b_eps_trace_over_3_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(1,:,:,:) = b_epsilondev_xx_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(2,:,:,:) = b_epsilondev_yy_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(3,:,:,:) = b_epsilondev_xy_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(4,:,:,:) = b_epsilondev_xz_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(5,:,:,:) = b_epsilondev_yz_inner_core(:,:,:,ispec)
+        endif
+
+        ! computes fully anisotropic kernel cijkl_kl
+        DO_LOOP_IJK
+
+          iglob = ibool_inner_core(INDEX_IJK,ispec)
+
+          epsilondev_loc(1) = epsilondev_xx_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(2) = epsilondev_yy_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(3) = epsilondev_xy_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(4) = epsilondev_xz_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(5) = epsilondev_yz_inner_core(INDEX_IJK,ispec)
+
+          b_epsilondev_loc(:) = b_epsilondev_loc_matrix(:,INDEX_IJK)
+
+          call compute_strain_product_ic(prod_ic,eps_trace_over_3_inner_core(INDEX_IJK,ispec),epsilondev_loc, &
+                                         b_eps_trace_over_3_loc_matrix(INDEX_IJK),b_epsilondev_loc)
+
+          ! elastic tensor for hexagonal symmetry in reduced notation:
+          !
+          !      c11 c12 c13  0   0        0
+          !      c12 c11 c13  0   0        0
+          !      c13 c13 c33  0   0        0
+          !       0   0   0  c44  0        0
+          !       0   0   0   0  c44       0
+          !       0   0   0   0   0  (c11-c12)/2
+          !
+          ! we handle following 9 kernels K_Cij independently as they are derived from (non-symmetric) products
+          ! of forward and backward strain:
+          !   K_C11, K_C12, K_C13, K_C22, K_C23,
+          !   K_C33, K_C44, K_C55, K_C66
+          ! with
+          !   cijkl_kl(1) -> K_C11
+          !   cijkl_kl(2) -> K_C12
+          !   cijkl_kl(3) -> K_C13
+          !   cijkl_kl(4) -> K_C22
+          !   cijkl_kl(5) -> K_C23
+          !   cijkl_kl(6) -> K_C33
+          !   cijkl_kl(7) -> K_C44
+          !   cijkl_kl(8) -> K_C55
+          !   cijkl_kl(9) -> K_C66
+          cijkl_kl_inner_core(:,INDEX_IJK,ispec) = cijkl_kl_inner_core(:,INDEX_IJK,ispec) + deltat_kl * prod_ic(:)
+
+        ENDDO_LOOP_IJK
+      enddo
+!$OMP ENDDO
+
+    else
+
+      ! isotropic kernels
+
+!$OMP DO SCHEDULE(GUIDED)
+      do ispec = 1, NSPEC_INNER_CORE
+
+        ! gets element strain
+        if (UNDO_ATTENUATION) then
+          if (USE_DEVILLE_PRODUCTS_VAL) then
+            call compute_element_strain_undoatt_Dev(ispec,NGLOB_inner_core,NSPEC_inner_core, &
+                                                    b_displ_inner_core,ibool_inner_core, &
+                                                    hprime_xx,hprime_xxT, &
+                                                    deriv_mapping_inner_core, &
+                                                    b_epsilondev_loc_matrix,b_eps_trace_over_3_loc_matrix)
+          else
+            call compute_element_strain_undoatt_noDev(ispec,NGLOB_inner_core,NSPEC_inner_core, &
+                                                      b_displ_inner_core, &
+                                                      hprime_xx,hprime_yy,hprime_zz,ibool_inner_core, &
+                                                      xix_inner_core,xiy_inner_core,xiz_inner_core, &
+                                                      etax_inner_core,etay_inner_core,etaz_inner_core, &
+                                                      gammax_inner_core,gammay_inner_core,gammaz_inner_core, &
+                                                      b_epsilondev_loc_matrix,b_eps_trace_over_3_loc_matrix)
+          endif
+        else
+          ! backward/reconstructed strain arrays
+          b_eps_trace_over_3_loc_matrix(:,:,:) = b_eps_trace_over_3_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(1,:,:,:) = b_epsilondev_xx_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(2,:,:,:) = b_epsilondev_yy_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(3,:,:,:) = b_epsilondev_xy_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(4,:,:,:) = b_epsilondev_xz_inner_core(:,:,:,ispec)
+          b_epsilondev_loc_matrix(5,:,:,:) = b_epsilondev_yz_inner_core(:,:,:,ispec)
+        endif
+
+        ! isotropic kernels
+        DO_LOOP_IJK
+
+          iglob = ibool_inner_core(INDEX_IJK,ispec)
+
+          epsilondev_loc(1) = epsilondev_xx_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(2) = epsilondev_yy_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(3) = epsilondev_xy_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(4) = epsilondev_xz_inner_core(INDEX_IJK,ispec)
+          epsilondev_loc(5) = epsilondev_yz_inner_core(INDEX_IJK,ispec)
+
+          b_epsilondev_loc(:) = b_epsilondev_loc_matrix(:,INDEX_IJK)
+
+          beta_kl_inner_core(INDEX_IJK,ispec) =  beta_kl_inner_core(INDEX_IJK,ispec) &
+             + deltat_kl * (epsilondev_loc(1)*b_epsilondev_loc(1) + epsilondev_loc(2)*b_epsilondev_loc(2) &
+                         + (epsilondev_loc(1)+epsilondev_loc(2)) * (b_epsilondev_loc(1)+b_epsilondev_loc(2)) &
+                         + 2 * (epsilondev_loc(3)*b_epsilondev_loc(3) + &
+                                epsilondev_loc(4)*b_epsilondev_loc(4) + &
+                                epsilondev_loc(5)*b_epsilondev_loc(5)) )
+
+          alpha_kl_inner_core(INDEX_IJK,ispec) = alpha_kl_inner_core(INDEX_IJK,ispec) &
+             + deltat_kl * (9 * eps_trace_over_3_inner_core(INDEX_IJK,ispec) * &
+                             b_eps_trace_over_3_loc_matrix(INDEX_IJK))
+
+        ENDDO_LOOP_IJK
+
+      enddo
+!$OMP ENDDO
+
+    endif ! ANISOTROPIC_KL
+
 !$OMP END PARALLEL
 
   else
@@ -853,9 +929,9 @@
   ! Purpose: compute the 21 strain products at a grid point
   ! (ispec,i,j,k fixed) and at a time t to compute then the kernels cij_kl (Voigt notation)
   ! (eq. 15 of Tromp et al., 2005)
-  ! prod(1)=eps11*eps11 -> c11, prod(2)=eps11eps22 -> c12, prod(3)=eps11eps33 -> c13, ...
-  ! prod(7)=eps22*eps22 -> c22, prod(8)=eps22eps33 -> c23, prod(9)=eps22eps23 -> c24, ...
-  ! prod(19)=eps13*eps13 -> c55, prod(20)=eps13eps12 -> c56, prod(21)=eps12eps12 -> c66
+  ! prod(1) = eps11*eps11 -> c11, prod(2) = eps11*eps22 -> c12, prod(3) = eps11*eps33 -> c13, ...
+  ! prod(7) = eps22*eps22 -> c22, prod(8) = eps22*eps33 -> c23, prod(9) = eps22*eps23 -> c24, ...
+  ! prod(19)= eps13*eps13 -> c55, prod(20)= eps13*eps12 -> c56, prod(21)= eps12*eps12 -> c66
   ! This then gives how the 21 kernels are organized
   ! For crust_mantle
 
@@ -872,12 +948,21 @@
 
   ! Building of the local matrix of the strain tensor
   ! for the adjoint field and the regular backward field
-  eps(1) = epsdev(1) + eps_trace_over_3           !eps11 et eps22
-  eps(2) = epsdev(2) + eps_trace_over_3           !eps11 et eps22
+  !
+  ! Voigt notation:
+  ! index 1 == eps11 == eps_xx = duxdx               since epsdev(1) = duxdx - (duxdx+duydy+duzdz)/3
+  !       2 == eps22 == eps_yy = duydy                     epsdev(2) = duydy - (duxdx+duydy+duzdz)/3
+  !       3 == eps33 == eps_zz = duzdz                     - (duxdx + duydy) + 3*(duxdx+duydy+duzdz)/3 == duzdz
+  !       4 == eps23 == eps_yz = 1/2(duzdy + duydz)  since epsdev(5) = 1/2(duzdy + duydz)
+  !       5 == eps13 == eps_xz = 1/2(duzdx + duxdz)        epsdev(4) = 1/2(duzdx + duxdz)
+  !       6 == eps12 == eps_xy = 1/2(duydx + duxdy)        epsdev(3) = 1/2(duydx + duxdy)
+  !
+  eps(1) = epsdev(1) + eps_trace_over_3                               !eps11
+  eps(2) = epsdev(2) + eps_trace_over_3                               !eps22
   eps(3) = -(eps(1) + eps(2)) + 3._CUSTOM_REAL * eps_trace_over_3     !eps33
-  eps(4) = epsdev(5)                                !eps23
-  eps(5) = epsdev(4)                                !eps13
-  eps(6) = epsdev(3)                                !eps12
+  eps(4) = epsdev(5)                                                  !eps23
+  eps(5) = epsdev(4)                                                  !eps13
+  eps(6) = epsdev(3)                                                  !eps12
 
   b_eps(1) = b_epsdev(1) + b_eps_trace_over_3
   b_eps(2) = b_epsdev(2) + b_eps_trace_over_3
@@ -887,6 +972,42 @@
   b_eps(6) = b_epsdev(3)
 
   ! Computing the 21 strain products without assuming eps(i)*b_eps(j) = eps(j)*b_eps(i)
+  !
+  ! without do-loops
+  ! i==1, j: 1 to 6
+  !prod(1) = eps(1) * b_eps(1)                                           ! i == 1, j == 1: c11
+  !prod(2) = eps(1) * b_eps(2) + eps(2) * b_eps(1)                       ! i == 1, j == 2: c12
+  !prod(3) = eps(1) * b_eps(3) + eps(3) * b_eps(1)                       ! i == 1, j == 3: c13
+  !prod(4) = 2._CUSTOM_REAL * (eps(1) * b_eps(4) + eps(4) * b_eps(1))    ! i == 1, j == 4: c14
+  !prod(5) = 2._CUSTOM_REAL * (eps(1) * b_eps(5) + eps(5) * b_eps(1))    ! i == 1, j == 5: c15
+  !prod(6) = 2._CUSTOM_REAL * (eps(1) * b_eps(6) + eps(6) * b_eps(1))    ! i == 1, j == 6: c16
+  !
+  ! i==2, j: 2 to 6
+  !prod(7) = eps(2) * b_eps(2)                                           ! i == 2, j == 2: c22
+  !prod(8) = eps(2) * b_eps(3) + eps(3) * b_eps(2)
+  !prod(9) = 2._CUSTOM_REAL * (eps(2) * b_eps(4) + eps(4) * b_eps(2))
+  !prod(10) = 2._CUSTOM_REAL * (eps(2) * b_eps(5) + eps(5) * b_eps(2))
+  !prod(11) = 2._CUSTOM_REAL * (eps(2) * b_eps(6) + eps(6) * b_eps(2))
+  !
+  ! i==3, j: 3 to 6
+  !prod(12) = eps(3) * b_eps(3)                                          ! i == 3, j == 3: c33
+  !prod(13) = 2._CUSTOM_REAL * (eps(3) * b_eps(4) + eps(4) * b_eps(3))
+  !prod(14) = 2._CUSTOM_REAL * (eps(3) * b_eps(5) + eps(5) * b_eps(3))
+  !prod(15) = 2._CUSTOM_REAL * (eps(3) * b_eps(6) + eps(6) * b_eps(3))
+  !
+  ! i==4, j: 4 to 6
+  !prod(16) = 4._CUSTOM_REAL * eps(4) * b_eps(4)                         ! i == 4, j == 4: c44
+  !prod(17) = 4._CUSTOM_REAL * (eps(4) * b_eps(5) + eps(5) * b_eps(4))
+  !prod(18) = 4._CUSTOM_REAL * (eps(4) * b_eps(6) + eps(6) * b_eps(4))
+  !
+  ! i==5, j: 5 to 6
+  !prod(19) = 4._CUSTOM_REAL * eps(5) * b_eps(5)                         ! i == 5, j == 5: c55
+  !prod(20) = 4._CUSTOM_REAL * (eps(5) * b_eps(6) + eps(6) * b_eps(4))
+  !
+  ! i==6, j: 6 to 6
+  !prod(21) = 4._CUSTOM_REAL * eps(6) * b_eps(6)                         ! i == 6, j == 6: c66
+  !
+  ! with do-loops
   p = 1
   do i = 1,6
     do j = i,6
@@ -901,6 +1022,94 @@
   enddo
 
   end subroutine compute_strain_product
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine compute_strain_product_ic(prod,eps_trace_over_3,epsdev,b_eps_trace_over_3,b_epsdev)
+
+  ! for inner core
+  ! uses hexagonal symmetry of the elastic tensor Cijkl
+  !
+  ! elastic tensor for hexagonal symmetry in reduced notation:
+  !
+  !      c11 c12 c13  0   0        0
+  !      c12 c11 c13  0   0        0
+  !      c13 c13 c33  0   0        0
+  !       0   0   0  c44  0        0
+  !       0   0   0   0  c44       0
+  !       0   0   0   0   0  (c11-c12)/2
+  !
+  ! (eq. 15 of Tromp et al., 2005)
+  ! full 21 products
+  ! prod(1) = eps11*eps11 -> c11, prod(2) = eps11*eps22 -> c12, prod(3) = eps11*eps33 -> c13, ...
+  ! prod(7) = eps22*eps22 -> c22, prod(8) = eps22*eps33 -> c23, prod(9) = eps22*eps23 -> c24, ...
+  ! prod(12)= eps33*eps33 -> c33, prod(13)= eps33*eps23 -> c34, prod(14)= eps33*eps13 -> c35, ...
+  ! prod(16)= eps23*eps23 -> c44, prod(17)= eps23*eps13 -> c45, prod(18)= eps23*eps12 -> c46
+  ! prod(19)= eps13*eps13 -> c55, prod(20)= eps13*eps12 -> c56, prod(21)= eps12*eps12 -> c66
+  !
+  ! we reduce them here to 9 (independent) kernel expressions for
+  !      c11 c12 c13  0   0   0
+  !      c12 c22 c23  0   0   0
+  !      c13 c23 c33  0   0   0
+  !       0   0   0  c44  0   0
+  !       0   0   0   0  c55  0
+  !       0   0   0   0   0   c66
+  !
+  use constants_solver
+
+  implicit none
+
+  real(kind=CUSTOM_REAL),dimension(9),intent(out) :: prod
+  real(kind=CUSTOM_REAL),intent(in) :: eps_trace_over_3,b_eps_trace_over_3
+  real(kind=CUSTOM_REAL),dimension(5),intent(in) :: epsdev,b_epsdev
+  ! local parameters
+  real(kind=CUSTOM_REAL), dimension(6) :: eps,b_eps
+
+  ! Building of the local matrix of the strain tensor
+  ! for the adjoint field and the regular backward field
+  !
+  ! Voigt notation:
+  ! index 1 == eps11 == eps_xx = duxdx               since epsdev(1) = duxdx - (duxdx+duydy+duzdz)/3
+  !       2 == eps22 == eps_yy = duydy                     epsdev(2) = duydy - (duxdx+duydy+duzdz)/3
+  !       3 == eps33 == eps_zz = duzdz                     - (duxdx + duydy) + 3*(duxdx+duydy+duzdz)/3 == duzdz
+  !       4 == eps23 == eps_yz = 1/2(duzdy + duydz)  since epsdev(5) = 1/2(duzdy + duydz)
+  !       5 == eps13 == eps_xz = 1/2(duzdx + duxdz)        epsdev(4) = 1/2(duzdx + duxdz)
+  !       6 == eps12 == eps_xy = 1/2(duydx + duxdy)        epsdev(3) = 1/2(duydx + duxdy)
+  !
+  eps(1) = epsdev(1) + eps_trace_over_3                               !eps11
+  eps(2) = epsdev(2) + eps_trace_over_3                               !eps22
+  eps(3) = -(eps(1) + eps(2)) + 3._CUSTOM_REAL * eps_trace_over_3     !eps33
+  eps(4) = epsdev(5)                                                  !eps23
+  eps(5) = epsdev(4)                                                  !eps13 - not used
+  eps(6) = epsdev(3)                                                  !eps12 - not used
+
+  b_eps(1) = b_epsdev(1) + b_eps_trace_over_3
+  b_eps(2) = b_epsdev(2) + b_eps_trace_over_3
+  b_eps(3) = -(b_eps(1) + b_eps(2)) + 3._CUSTOM_REAL * b_eps_trace_over_3
+  b_eps(4) = b_epsdev(5)
+  b_eps(5) = b_epsdev(4)
+  b_eps(6) = b_epsdev(3)
+
+  ! reduced products
+  !   prod(1) = eps11*eps11 -> c11, prod(2) = eps11*eps22 -> c12, prod(3) = eps11*eps33 -> c13
+  !   prod(4) = eps22*eps22 -> c22, prod(5) = eps22*eps23 -> c23,
+  !   prod(6) = eps33*eps33 -> c33, prod(7) = eps23*eps23 -> c44,
+  !   prod(8) = eps13*eps13 -> c55, prod(9) = eps12*eps12 -> c66
+  !
+  ! without assuming eps(i)*b_eps(j) = eps(j)*b_eps(i)
+  prod(1) = eps(1) * b_eps(1)                                   ! i = 1,j = 1 - > c11: eps_xx * b_eps_xx
+  prod(2) = eps(1) * b_eps(2) + eps(2) * b_eps(1)               ! i = 1,j = 2 - > c12: eps_xx * b_eps_yy + eps_yy * b_eps_xx
+  prod(3) = eps(1) * b_eps(3) + eps(3) * b_eps(1)               ! i = 1,j = 3 - > c13: eps_xx * b_eps_zz + eps_zz * b_eps_xx
+  prod(4) = eps(2) * b_eps(2)                                   ! i = 2,j = 2 - > c22: eps_yy * b_eps_yy
+  prod(5) = eps(2) * b_eps(3) + eps(3) * b_eps(2)               ! i = 2,j = 3 - > c23: eps_yy * b_eps_zz + eps_zz * b_eps_yy
+  prod(6) = eps(3) * b_eps(3)                                   ! i = 3,j = 3 - > c33: eps_zz * b_eps_zz
+  prod(7) = 4._CUSTOM_REAL * eps(4) * b_eps(4)                  ! i = 4,j = 4 - > c44: eps_yz * b_eps_yz
+  prod(8) = 4._CUSTOM_REAL * eps(5) * b_eps(5)                  ! i = 5,j = 5 - > c55: eps_xz * b_eps_xz
+  prod(9) = 4._CUSTOM_REAL * eps(6) * b_eps(6)                  ! i = 6,j = 6 - > c66: eps_xy * b_eps_xy
+
+  end subroutine compute_strain_product_ic
 
 !
 !-------------------------------------------------------------------------------------------------
