@@ -33,21 +33,6 @@
 ! filtering for zero-phase response (equivalent to scipy filtfilt).
 !----------------------------------------------------------------------
 
-  subroutine prepare_greenfunction_stf()
-
-! Wrapper called from prepare_timerun().
-! Checks if GF database is enabled and computes the STF.
-
-  use shared_parameters, only: GF_DATABASE_ENABLED
-
-  implicit none
-
-  if (.not. GF_DATABASE_ENABLED) return
-
-  call gf_compute_stf()
-
-  end subroutine prepare_greenfunction_stf
-
 !
 !----------------------------------------------------------------------
 !

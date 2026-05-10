@@ -94,8 +94,9 @@
   ! prepares VTK window visualization
   call prepare_vtk_window()
 
-  ! Green function database: precompute Butterworth-filtered STF
-  call prepare_greenfunction_stf()
+  ! Green function database: STF, Morton codes, directories, manifest
+  ! (must be called before xstore/ystore/zstore_crust_mantle are deallocated)
+  call prepare_green_function_storage()
 
   ! optimizes array memory layout for better performance
   call prepare_optimized_arrays()

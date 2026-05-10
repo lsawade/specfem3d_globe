@@ -51,4 +51,9 @@ module green_function_par
   integer :: gf_nelem_local = 0                                    ! unique tagged elements on this rank
   integer, dimension(:), allocatable :: gf_local_elements          ! unique local element indices
 
+  ! Morton codes (Stage 6)
+  integer(8), dimension(:), allocatable :: gf_morton_codes          ! Morton code per local element
+  character(len=16), dimension(:), allocatable :: gf_morton_hex     ! hex string per local element
+  real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: gf_center_xyz  ! (3, gf_nelem_local) center coords
+
 end module green_function_par
