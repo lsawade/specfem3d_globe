@@ -401,6 +401,7 @@
     call read_value_integer(GF_SUBSAMPLE_STEP, 'GF_SUBSAMPLE_STEP', ier); ier = 0
     call read_value_integer(GF_BUFFER_SIZE, 'GF_BUFFER_SIZE', ier); ier = 0
     call read_value_integer(GF_NEIGHBOR_SHELLS, 'GF_NEIGHBOR_SHELLS', ier); ier = 0
+    call read_value_logical(GF_OVERWRITE, 'GF_OVERWRITE', ier); ier = 0
   endif
 
   ! closes parameter file

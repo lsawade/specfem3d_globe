@@ -641,6 +641,11 @@
       ! reconstructed wavefield together with +/- b_deltat will spin backward/forward
       b_two_omega_earth = real(2.d0 * TWO_PI / (HOURS_PER_DAY * SECONDS_PER_HOUR * scale_t_inv), kind=CUSTOM_REAL)
     endif
+
+    ! Green function database: reciprocity requires reversed rotation
+    if (GF_DATABASE_ENABLED) then
+      two_omega_earth = -two_omega_earth
+    endif
   endif
 
   ! synchronizes processes

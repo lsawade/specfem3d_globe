@@ -67,13 +67,14 @@
 
   use specfem_par, only: NSTEP,DT,myrank
 
-  use shared_parameters, only: GF_DATABASE_PATH,GF_SUBSAMPLE_STEP,GF_BUFFER_SIZE
+  use shared_parameters, only: GF_DATABASE_PATH,GF_SUBSAMPLE_STEP,GF_BUFFER_SIZE,GF_OVERWRITE
 
   use green_function_par, only: &
     gf_nelem_local, gf_morton_hex, gf_center_xyz, &
     gf_buffer, gf_isnap, gf_ibuf, gf_nt_sub, &
     gf_network_name, gf_station_name, &
-    gf_force_component, gf_f_cutoff, gf_hdur
+    gf_force_component, gf_f_cutoff, gf_hdur, &
+    gf_elem_active
 
   implicit none
 
@@ -82,6 +83,7 @@
   integer :: hdferr
   character(len=MAX_STRING_LEN) :: filepath
   logical :: file_exists
+  integer :: nskipped
 
   ! HDF5 identifiers (local — each file is opened and closed immediately)
   integer(HID_T) :: fid, dspace_id, dset_id, dcpl_id
@@ -115,6 +117,11 @@
            stat=ier)
   if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_buffer')
   gf_buffer(:,:,:,:,:,:) = 0.0_CUSTOM_REAL
+
+  ! allocate element active mask (completion tracking)
+  allocate(gf_elem_active(gf_nelem_local), stat=ier)
+  if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_elem_active')
+  gf_elem_active(:) = .true.
 
   ! initialize HDF5 Fortran interface
   call h5open_f(hdferr)
@@ -150,7 +157,19 @@
       ! open existing file — preserves data from other force components
       call h5fopen_f(trim(filepath), H5F_ACC_RDWR_F, fid, hdferr)
       if (hdferr /= 0) call exit_MPI(myrank, 'Error opening existing GF HDF5 file')
-      ! close immediately — we just verified it opens correctly
+
+      ! check completion: if computed_ALL == 1 and not overwriting, skip this element
+      if (.not. GF_OVERWRITE) then
+        call h5aopen_f(fid, 'computed_ALL', attr_id, hdferr)
+        if (hdferr == 0) then
+          call h5aread_f(attr_id, H5T_NATIVE_INTEGER, attr_int, adim, hdferr)
+          call h5aclose_f(attr_id, hdferr)
+          if (attr_int(1) == 1) then
+            gf_elem_active(i) = .false.
+          endif
+        endif
+      endif
+
       call h5fclose_f(fid, hdferr)
     else
       ! create new file with dataset
@@ -260,12 +279,46 @@
       call h5aclose_f(attr_id, hdferr)
       call h5sclose_f(aspace_id, hdferr)
 
-      ! close dataset, property list, dataspace, file
+      ! close dataset, property list, dataspace
       call h5dclose_f(dset_id, hdferr)
       call h5pclose_f(dcpl_id, hdferr)
       call h5sclose_f(dspace_id, hdferr)
+
+      ! completion tracking attributes (on the file root, all zero initially)
+      attr_int(1) = 0
+
+      call h5screate_simple_f(1, adim, aspace_id, hdferr)
+      call h5acreate_f(fid, 'computed_N', H5T_NATIVE_INTEGER, aspace_id, attr_id, hdferr)
+      call h5awrite_f(attr_id, H5T_NATIVE_INTEGER, attr_int, adim, hdferr)
+      call h5aclose_f(attr_id, hdferr)
+      call h5sclose_f(aspace_id, hdferr)
+
+      call h5screate_simple_f(1, adim, aspace_id, hdferr)
+      call h5acreate_f(fid, 'computed_E', H5T_NATIVE_INTEGER, aspace_id, attr_id, hdferr)
+      call h5awrite_f(attr_id, H5T_NATIVE_INTEGER, attr_int, adim, hdferr)
+      call h5aclose_f(attr_id, hdferr)
+      call h5sclose_f(aspace_id, hdferr)
+
+      call h5screate_simple_f(1, adim, aspace_id, hdferr)
+      call h5acreate_f(fid, 'computed_Z', H5T_NATIVE_INTEGER, aspace_id, attr_id, hdferr)
+      call h5awrite_f(attr_id, H5T_NATIVE_INTEGER, attr_int, adim, hdferr)
+      call h5aclose_f(attr_id, hdferr)
+      call h5sclose_f(aspace_id, hdferr)
+
+      call h5screate_simple_f(1, adim, aspace_id, hdferr)
+      call h5acreate_f(fid, 'computed_ALL', H5T_NATIVE_INTEGER, aspace_id, attr_id, hdferr)
+      call h5awrite_f(attr_id, H5T_NATIVE_INTEGER, attr_int, adim, hdferr)
+      call h5aclose_f(attr_id, hdferr)
+      call h5sclose_f(aspace_id, hdferr)
+
       call h5fclose_f(fid, hdferr)
     endif
+  enddo
+
+  ! count skipped elements
+  nskipped = 0
+  do i = 1, gf_nelem_local
+    if (.not. gf_elem_active(i)) nskipped = nskipped + 1
   enddo
 
   ! user output
@@ -278,6 +331,9 @@
     write(IMAIN,*) '  chunk time dimension:  ', min(GF_BUFFER_SIZE, gf_nt_sub)
     write(IMAIN,*) '  dataset shape:         (', GF_NCOMP_FORCE, ',', GF_NCOMP_DISP, ',', &
                    NGLLX, ',', NGLLY, ',', NGLLZ, ',', gf_nt_sub, ')'
+    if (nskipped > 0) then
+      write(IMAIN,*) '  elements skipped (already completed): ', nskipped
+    endif
     write(IMAIN,*)
     call flush_IMAIN()
   endif
@@ -311,13 +367,15 @@
 
   use shared_parameters, only: GF_DATABASE_ENABLED,GF_SUBSAMPLE_STEP,GF_BUFFER_SIZE
 
+  use specfem_par, only: scale_displ
+
   use specfem_par_crustmantle, only: &
     ibool => ibool_crust_mantle, &
     displ => displ_crust_mantle
 
   use green_function_par, only: &
     gf_nelem_local, gf_local_elements, &
-    gf_buffer, gf_isnap, gf_ibuf
+    gf_buffer, gf_isnap, gf_ibuf, gf_elem_active
 
   implicit none
 
@@ -325,6 +383,7 @@
 
   ! local variables
   integer :: ielem, ispec, i, j, k, iglob
+  real(kind=CUSTOM_REAL) :: scale
 
   ! skip if no local elements or GF not enabled
   if (.not. GF_DATABASE_ENABLED) return
@@ -337,16 +396,20 @@
   gf_ibuf = gf_ibuf + 1
   gf_isnap = gf_isnap + 1
 
+  ! scale_displ converts non-dimensional displacement to meters
+  scale = real(scale_displ, kind=CUSTOM_REAL)
+
   ! extract displacement for all tagged elements into buffer
   do ielem = 1, gf_nelem_local
+    if (.not. gf_elem_active(ielem)) cycle
     ispec = gf_local_elements(ielem)
     do k = 1, NGLLZ
       do j = 1, NGLLY
         do i = 1, NGLLX
           iglob = ibool(i, j, k, ispec)
-          gf_buffer(1, i, j, k, gf_ibuf, ielem) = displ(1, iglob)
-          gf_buffer(2, i, j, k, gf_ibuf, ielem) = displ(2, iglob)
-          gf_buffer(3, i, j, k, gf_ibuf, ielem) = displ(3, iglob)
+          gf_buffer(1, i, j, k, gf_ibuf, ielem) = displ(1, iglob) * scale
+          gf_buffer(2, i, j, k, gf_ibuf, ielem) = displ(2, iglob) * scale
+          gf_buffer(3, i, j, k, gf_ibuf, ielem) = displ(3, iglob) * scale
         enddo
       enddo
     enddo
@@ -395,7 +458,7 @@
     gf_nelem_local, gf_morton_hex, &
     gf_buffer, gf_isnap, gf_ibuf, &
     gf_network_name, gf_station_name, &
-    gf_force_component
+    gf_force_component, gf_elem_active
 
   implicit none
 
@@ -441,6 +504,8 @@
   hs_offset(6) = gf_isnap - gf_ibuf       ! time offset
 
   do ielem = 1, gf_nelem_local
+    if (.not. gf_elem_active(ielem)) cycle
+
     filepath = trim(GF_DATABASE_PATH) // '/elements/' // &
                gf_morton_hex(ielem) // '/' // &
                trim(gf_network_name) // '.' // trim(gf_station_name) // '.h5'
@@ -510,7 +575,7 @@
   use shared_parameters, only: GF_DATABASE_ENABLED
 
   use green_function_par, only: &
-    gf_nelem_local, gf_buffer, gf_ibuf, gf_isnap, gf_nt_sub
+    gf_nelem_local, gf_buffer, gf_ibuf, gf_isnap, gf_nt_sub, gf_elem_active
 
   implicit none
 
@@ -522,6 +587,9 @@
     call gf_flush_buffer()
   endif
 
+  ! update completion flags on element and station files
+  call gf_update_completion_flags()
+
   ! verify all snapshots were written
   if (myrank == 0) then
     write(IMAIN,*)
@@ -531,8 +599,9 @@
     call flush_IMAIN()
   endif
 
-  ! deallocate buffer
+  ! deallocate buffer and active mask
   if (allocated(gf_buffer)) deallocate(gf_buffer)
+  if (allocated(gf_elem_active)) deallocate(gf_elem_active)
 
 #else
   implicit none

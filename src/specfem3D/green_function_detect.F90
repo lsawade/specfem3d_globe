@@ -41,13 +41,14 @@
   use specfem_par, only: myrank, &
     comp_dir_vect_source_E,comp_dir_vect_source_N,comp_dir_vect_source_Z_UP
 
-  use green_function_par, only: gf_force_component,gf_network_name,gf_station_name
+  use green_function_par, only: gf_force_component,gf_network_name,gf_station_name, &
+    gf_station_lat,gf_station_lon,gf_station_depth
 
   implicit none
 
   ! local variables
-  character(len=MAX_STRING_LEN) :: string,FORCESOLUTION,path_to_add
-  integer :: ier,idot
+  character(len=MAX_STRING_LEN) :: string,header_line,FORCESOLUTION,path_to_add
+  integer :: ier,idot,ipos
   logical :: has_N,has_E,has_Z
   integer :: ncomp
 
@@ -93,17 +94,50 @@
     endif
 
     ! read header line (e.g., "FORCE  IU.SJG")
-    read(IIN,"(a)") string
+    read(IIN,"(a)") header_line
     ! skip empty lines
-    do while (len_trim(string) == 0)
-      read(IIN,"(a)") string
+    do while (len_trim(header_line) == 0)
+      read(IIN,"(a)") header_line
     enddo
+
+    ! skip time shift line
+    read(IIN,"(a)") string
+    ! skip f0/hdur line
+    read(IIN,"(a)") string
+
+    ! read latitude
+    read(IIN,"(a)") string
+    ipos = index(string,':')
+    if (ipos > 1 .and. ipos < len_trim(string)) then
+      read(string(ipos+1:len_trim(string)),*) gf_station_lat
+    else
+      read(string(10:len_trim(string)),*) gf_station_lat
+    endif
+
+    ! read longitude
+    read(IIN,"(a)") string
+    ipos = index(string,':')
+    if (ipos > 1 .and. ipos < len_trim(string)) then
+      read(string(ipos+1:len_trim(string)),*) gf_station_lon
+    else
+      read(string(11:len_trim(string)),*) gf_station_lon
+    endif
+
+    ! read depth
+    read(IIN,"(a)") string
+    ipos = index(string,':')
+    if (ipos > 1 .and. ipos < len_trim(string)) then
+      read(string(ipos+1:len_trim(string)),*) gf_station_depth
+    else
+      read(string(7:len_trim(string)),*) gf_station_depth
+    endif
+
     close(IIN)
 
-    ! extract station identity: everything after "FORCE" prefix, trimmed
+    ! extract station identity from the saved header line
     ! header format: "FORCE  IU.SJG" or "FORCE  001"
     ! skip the first 5 characters ("FORCE"), then trim leading spaces
-    string = adjustl(string(6:))
+    string = adjustl(header_line(6:))
 
     ! split on '.' to get network and station
     idot = index(trim(string), '.')
@@ -132,8 +166,11 @@
     call flush_IMAIN()
   endif
 
-  ! broadcast station identity to all ranks
+  ! broadcast station identity and location to all ranks
   call bcast_all_ch(gf_network_name, 8)
   call bcast_all_ch(gf_station_name, 32)
+  call bcast_all_dp(gf_station_lat, 1)
+  call bcast_all_dp(gf_station_lon, 1)
+  call bcast_all_dp(gf_station_depth, 1)
 
   end subroutine gf_detect_force_component

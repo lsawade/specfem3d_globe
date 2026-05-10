@@ -237,6 +237,7 @@
   integer :: GF_SUBSAMPLE_STEP = 4
   integer :: GF_BUFFER_SIZE = 100
   integer :: GF_NEIGHBOR_SHELLS = 1
+  logical :: GF_OVERWRITE = .false.
 
   end module shared_input_parameters
 

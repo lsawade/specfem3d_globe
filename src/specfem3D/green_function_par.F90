@@ -36,6 +36,9 @@ module green_function_par
   integer :: gf_force_component = 0
   character(len=8) :: gf_network_name = ''
   character(len=32) :: gf_station_name = ''
+  double precision :: gf_station_lat = 0.d0
+  double precision :: gf_station_lon = 0.d0
+  double precision :: gf_station_depth = 0.d0
 
   ! STF (Stage 3)
   ! precomputed source time function: Gaussian filtered with Butterworth lowpass
@@ -55,6 +58,9 @@ module green_function_par
   integer(8), dimension(:), allocatable :: gf_morton_codes          ! Morton code per local element
   character(len=16), dimension(:), allocatable :: gf_morton_hex     ! hex string per local element
   real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: gf_center_xyz  ! (3, gf_nelem_local) center coords
+
+  ! Completion tracking (Stage 8)
+  logical, dimension(:), allocatable :: gf_elem_active     ! .true. if element should be written
 
   ! HDF5 I/O (Stage 7)
   ! write buffer: (3, NGLLX, NGLLY, NGLLZ, GF_BUFFER_SIZE, gf_nelem_local)

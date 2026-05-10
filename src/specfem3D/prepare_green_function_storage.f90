@@ -45,8 +45,14 @@
   ! create directory structure
   call gf_create_directories()
 
-  ! write centroids.bin and manifest.csv
-  call gf_write_manifest()
+  ! write per-element coordinate files (idempotent — skips if exists)
+  call gf_write_coordinates()
+
+  ! write shared mesh info file (topography + ellipticity, rank 0, idempotent)
+  call gf_write_mesh_info()
+
+  ! write per-station metadata file (rank 0, create-or-skip)
+  call gf_write_station_metadata()
 
   ! initialize HDF5 files and allocate write buffer
   call gf_init_hdf5()

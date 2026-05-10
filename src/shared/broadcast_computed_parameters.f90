@@ -37,7 +37,7 @@
   integer, parameter :: nparam_i = 54
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 82
+  integer, parameter :: nparam_l = 83
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 42
@@ -117,7 +117,8 @@
             FULL_GRAVITY, USE_SINSQ_STF, &
             HDF5_ENABLED, HDF5_FOR_MOVIES, OUTPUT_SEISMOS_HDF5, &
             ATTENUATION_3D_BERKELEY, &
-            GF_DATABASE_ENABLED /)
+            GF_DATABASE_ENABLED, &
+            GF_OVERWRITE /)
 
     bcast_double_precision = (/ &
             DT, &
@@ -381,6 +382,7 @@
     OUTPUT_SEISMOS_HDF5 = bcast_logical(80)
     ATTENUATION_3D_BERKELEY = bcast_logical(81)
     GF_DATABASE_ENABLED = bcast_logical(82)
+    GF_OVERWRITE = bcast_logical(83)
 
     ! double precisions
     DT = bcast_double_precision(1)
