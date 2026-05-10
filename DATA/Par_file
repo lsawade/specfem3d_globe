@@ -13,10 +13,10 @@ SAVE_FORWARD                    = .false.   # save last frame of forward simulat
 NCHUNKS                         = 1
 
 # angular width of the first chunk (not used if full sphere with six chunks)
-ANGULAR_WIDTH_XI_IN_DEGREES     = 20.d0   # angular size of a chunk
-ANGULAR_WIDTH_ETA_IN_DEGREES    = 20.d0
-CENTER_LATITUDE_IN_DEGREES      = 40.d0
-CENTER_LONGITUDE_IN_DEGREES     = 25.d0
+ANGULAR_WIDTH_XI_IN_DEGREES     = 90.d0   # angular size of a chunk
+ANGULAR_WIDTH_ETA_IN_DEGREES    = 90.d0
+CENTER_LATITUDE_IN_DEGREES      = -13.8200d0
+CENTER_LONGITUDE_IN_DEGREES     = -67.2500
 GAMMA_ROTATION_AZIMUTH          = 0.d0
 
 # number of elements at the surface along the two sides of the first chunk
@@ -68,12 +68,12 @@ NPROC_ETA                       = 2
 MODEL                           = 1D_isotropic_prem
 
 # parameters describing the Earth model
-OCEANS                          = .true.
-ELLIPTICITY                     = .true.
-TOPOGRAPHY                      = .true.
-GRAVITY                         = .true.
-ROTATION                        = .true.
-ATTENUATION                     = .true.
+OCEANS                          = .false.
+ELLIPTICITY                     = .false.
+TOPOGRAPHY                      = .false.
+GRAVITY                         = .false.
+ROTATION                        = .false.
+ATTENUATION                     = .false.
 
 # full gravity calculation by solving Poisson's equation for gravity potential instead of using a Cowling approximation
 # (must have also GRAVITY flag set to .true. to become active)
@@ -83,7 +83,7 @@ FULL_GRAVITY                    = .false.
 POISSON_SOLVER                  = 0
 
 # record length in minutes
-RECORD_LENGTH_IN_MINUTES        = 2.5d0
+RECORD_LENGTH_IN_MINUTES        = 20.0d0
 
 #-----------------------------------------------------------
 #
@@ -94,11 +94,11 @@ RECORD_LENGTH_IN_MINUTES        = 2.5d0
 ## regional mesh cut-off
 # using this flag will cut-off the mesh in the mantle at a layer matching to the given cut-off depth.
 # this flag only has an effect for regional simulations, i.e., for NCHUNKS values less than 6.
-REGIONAL_MESH_CUTOFF            = .false.
+REGIONAL_MESH_CUTOFF            = .true.
 
 # regional mesh cut-off depth (in km)
 # possible selections are: 24.4d0, 80.d0, 220.d0, 400.d0, 600.d0, 670.d0, 771.d0
-REGIONAL_MESH_CUTOFF_DEPTH      = 400.d0
+REGIONAL_MESH_CUTOFF_DEPTH      = 771.d0
 
 # regional mesh cut-off w/ a second doubling layer below 220km interface
 # (by default, a first doubling layer will be added below the Moho, and a second one below the 771km-depth layer.
@@ -133,7 +133,7 @@ SPONGE_RADIUS_IN_DEGREES        = 25.d0
 # to undo attenuation for sensitivity kernel calculations or forward runs with SAVE_FORWARD
 # use one (and only one) of the two flags below. UNDO_ATTENUATION is much better (it is exact)
 # but requires a significant amount of disk space for temporary storage.
-PARTIAL_PHYS_DISPERSION_ONLY    = .true.
+PARTIAL_PHYS_DISPERSION_ONLY    = .false.
 UNDO_ATTENUATION                = .false.
 
 ## undo attenuation memory
@@ -298,9 +298,9 @@ SAVE_SEISMOGRAMS_STRAIN         = .false.
 SAVE_SEISMOGRAMS_IN_ADJOINT_RUN = .false.
 
 # output format for the seismograms (one can use either or all of the three formats)
-OUTPUT_SEISMOS_ASCII_TEXT       = .true.
+OUTPUT_SEISMOS_ASCII_TEXT       = .false.
 OUTPUT_SEISMOS_SAC_ALPHANUM     = .false.
-OUTPUT_SEISMOS_SAC_BINARY       = .false.
+OUTPUT_SEISMOS_SAC_BINARY       = .true.
 OUTPUT_SEISMOS_ASDF             = .false.
 OUTPUT_SEISMOS_3D_ARRAY         = .false.
 OUTPUT_SEISMOS_HDF5             = .false.
@@ -439,5 +439,12 @@ ADIOS_FOR_UNDO_ATTENUATION      = .true.
 
 # HDF5 Database I/O
 # (note the flags for HDF5 and ADIOS are mutually exclusive, only one can be used)
-HDF5_ENABLED                    = .false.
+HDF5_ENABLED                    = .true.
+
+# Green function database
+GF_DATABASE_ENABLED             = .false.
+GF_DATABASE_PATH                = OUTPUT_FILES/gf_database/
+GF_SUBSAMPLE_STEP               = 4
+GF_BUFFER_SIZE                  = 100
+GF_NEIGHBOR_SHELLS              = 1
 

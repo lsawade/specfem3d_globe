@@ -394,6 +394,15 @@
     call read_value_integer(HDF5_IO_NODES, 'HDF5_IO_NODES', ier); ier = 0
   endif
 
+  ! (optional) Green function database
+  call read_value_logical(GF_DATABASE_ENABLED, 'GF_DATABASE_ENABLED', ier); ier = 0
+  if (GF_DATABASE_ENABLED) then
+    call read_value_string(GF_DATABASE_PATH, 'GF_DATABASE_PATH', ier); ier = 0
+    call read_value_integer(GF_SUBSAMPLE_STEP, 'GF_SUBSAMPLE_STEP', ier); ier = 0
+    call read_value_integer(GF_BUFFER_SIZE, 'GF_BUFFER_SIZE', ier); ier = 0
+    call read_value_integer(GF_NEIGHBOR_SHELLS, 'GF_NEIGHBOR_SHELLS', ier); ier = 0
+  endif
+
   ! closes parameter file
   call close_parameter_file()
 
@@ -440,6 +449,28 @@
     print *
     stop 'an error occurred while reading the parameter file: HDF5 is enabled but code not built with HDF5'
   endif
+
+  if (GF_DATABASE_ENABLED) then
+    print *
+    print *,'**************'
+    print *,'**************'
+    print *,'GF_DATABASE_ENABLED requires HDF5 support, but the code was not compiled with HDF5'
+    print *,'See --with-hdf5 configure options.'
+    print *,'**************'
+    print *,'**************'
+    print *
+    stop 'an error occurred while reading the parameter file: GF_DATABASE_ENABLED requires HDF5'
+  endif
 #endif
+
+  ! checks GF database parameter validity
+  if (GF_DATABASE_ENABLED) then
+    if (GF_SUBSAMPLE_STEP < 1) &
+      stop 'Error reading Par_file: GF_SUBSAMPLE_STEP must be >= 1'
+    if (GF_BUFFER_SIZE < 1) &
+      stop 'Error reading Par_file: GF_BUFFER_SIZE must be >= 1'
+    if (GF_NEIGHBOR_SHELLS < 0) &
+      stop 'Error reading Par_file: GF_NEIGHBOR_SHELLS must be >= 0'
+  endif
 
   end subroutine read_parameter_file

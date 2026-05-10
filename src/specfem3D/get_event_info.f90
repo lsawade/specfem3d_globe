@@ -221,7 +221,9 @@
       enddo
 
       ! read header with event information
-      read(string,"(a6,i4)") e_n(isource),idummy
+      ! format: FORCE id (e.g., FORCE 001 or FORCE IU.SJG)
+      ! reads first 6 chars as event name label, rest is id (discarded)
+      read(string,"(a6)") e_n(isource)
 
       ! read time shift
       read(IIN,"(a)") string

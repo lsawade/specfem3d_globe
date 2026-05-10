@@ -31,6 +31,8 @@
     TOPOGRAPHY,ibathy_topo, &
     USE_DISTANCE_CRITERION,xyz_midpoints,xadj,adjncy
 
+  use shared_parameters, only: GF_DATABASE_ENABLED,USE_FORCE_POINT_SOURCE
+
   use kdtree_search, only: kdtree_delete,kdtree_nodes_location,kdtree_nodes_index
 
   implicit none
@@ -40,6 +42,14 @@
 
   ! locates sources and determines simulation start time t0
   call setup_sources()
+
+  ! Green function database: detect force component and station identity
+  if (GF_DATABASE_ENABLED) then
+    if (.not. USE_FORCE_POINT_SOURCE) then
+      stop 'Error: GF_DATABASE_ENABLED requires USE_FORCE_POINT_SOURCE = .true.'
+    endif
+    call gf_detect_force_component()
+  endif
 
   ! reads in stations file and locates receivers
   call setup_receivers()
@@ -722,6 +732,7 @@
 
   use specfem_par
   use specfem_par_movie
+  use shared_parameters, only: GF_DATABASE_ENABLED
   implicit none
 
   ! local parameters
@@ -823,6 +834,14 @@
     do isource = 1,NSOURCES
       t0 = - min(t0,tshift_src(isource) - hdur(isource))
     enddo
+  endif
+
+  ! Green function database: ensure sufficient time buffer before source
+  ! The Butterworth lowpass filter introduces ringing that extends well
+  ! beyond the Gaussian's natural decay. We need a large buffer so the
+  ! filtered STF is essentially zero at the simulation start.
+  if (GF_DATABASE_ENABLED) then
+    t0 = max(t0, 15.0d0 * hdur(1))
   endif
 
   ! checks if user set USER_T0 to fix simulation start time

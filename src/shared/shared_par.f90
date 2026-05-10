@@ -231,6 +231,13 @@
   double precision :: UCB_SOURCE_T1 = 400.d0, UCB_SOURCE_T2 = 250.d0, UCB_SOURCE_T3 = 53.d0, UCB_SOURCE_T4 = 40.d0
   double precision :: UCB_TAU = 400.d0
 
+  ! Green function database
+  logical :: GF_DATABASE_ENABLED = .false.
+  character(len=MAX_STRING_LEN) :: GF_DATABASE_PATH = 'OUTPUT_FILES/gf_database/'
+  integer :: GF_SUBSAMPLE_STEP = 4
+  integer :: GF_BUFFER_SIZE = 100
+  integer :: GF_NEIGHBOR_SHELLS = 1
+
   end module shared_input_parameters
 
 !

@@ -29,6 +29,8 @@
 
   use specfem_par
   use specfem_par_crustmantle, only: accel_crust_mantle,ibool_crust_mantle
+  use shared_parameters, only: GF_DATABASE_ENABLED
+  use green_function_par, only: gf_stf
 
   implicit none
 
@@ -76,10 +78,14 @@
         timeval = time_t - tshift_src(isource)
 
         ! determines source time function value
-        stf = get_stf_viscoelastic(timeval,isource,it)
-
-        ! distinguishes between single and double precision for reals
-        stf_used = real(stf,kind=CUSTOM_REAL)
+        if (GF_DATABASE_ENABLED) then
+          ! use precomputed Butterworth-filtered Gaussian STF
+          stf_used = gf_stf(it)
+        else
+          stf = get_stf_viscoelastic(timeval,isource,it)
+          ! distinguishes between single and double precision for reals
+          stf_used = real(stf,kind=CUSTOM_REAL)
+        endif
 
         ! adds source contribution
         do k = 1,NGLLZ

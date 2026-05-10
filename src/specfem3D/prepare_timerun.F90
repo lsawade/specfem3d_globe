@@ -94,6 +94,9 @@
   ! prepares VTK window visualization
   call prepare_vtk_window()
 
+  ! Green function database: precompute Butterworth-filtered STF
+  call prepare_greenfunction_stf()
+
   ! optimizes array memory layout for better performance
   call prepare_optimized_arrays()
 

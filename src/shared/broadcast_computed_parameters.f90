@@ -34,10 +34,10 @@
 
   ! local parameters
   ! broadcast parameter arrays
-  integer, parameter :: nparam_i = 51
+  integer, parameter :: nparam_i = 54
   integer, dimension(nparam_i) :: bcast_integer
 
-  integer, parameter :: nparam_l = 81
+  integer, parameter :: nparam_l = 82
   logical, dimension(nparam_l) :: bcast_logical
 
   integer, parameter :: nparam_dp = 42
@@ -78,7 +78,8 @@
             MODEL_GLL_TYPE,USER_NSTEP, &
             NSTEP_STEADY_STATE,NTSTEP_BETWEEN_OUTPUT_SAMPLE, &
             POISSON_SOLVER, &
-            HDF5_IO_NODES /)
+            HDF5_IO_NODES, &
+            GF_SUBSAMPLE_STEP, GF_BUFFER_SIZE, GF_NEIGHBOR_SHELLS /)
 
     bcast_logical = (/ &
             TRANSVERSE_ISOTROPY,ANISOTROPIC_3D_MANTLE,ANISOTROPIC_INNER_CORE, &
@@ -115,7 +116,8 @@
             EMC_MODEL,EMC_MODEL_TISO,EMC_MODEL_QMU, &
             FULL_GRAVITY, USE_SINSQ_STF, &
             HDF5_ENABLED, HDF5_FOR_MOVIES, OUTPUT_SEISMOS_HDF5, &
-            ATTENUATION_3D_BERKELEY /)
+            ATTENUATION_3D_BERKELEY, &
+            GF_DATABASE_ENABLED /)
 
     bcast_double_precision = (/ &
             DT, &
@@ -228,6 +230,9 @@
   call bcast_all_singlel(SHIFT_SIMULTANEOUS_RUNS)
   call bcast_all_singledp(FILESYSTEM_IO_BANDWIDTH)
 
+  ! (optional) Green function database
+  call bcast_all_ch(GF_DATABASE_PATH,MAX_STRING_LEN)
+
   ! empirical minimum period resolved estimation
   call bcast_all_singledp(T_min_period)
   ! empirical minimum wavelength resolved estimation
@@ -289,6 +294,9 @@
     NTSTEP_BETWEEN_OUTPUT_SAMPLE = bcast_integer(49)
     POISSON_SOLVER = bcast_integer(50)
     HDF5_IO_NODES = bcast_integer(51)
+    GF_SUBSAMPLE_STEP = bcast_integer(52)
+    GF_BUFFER_SIZE = bcast_integer(53)
+    GF_NEIGHBOR_SHELLS = bcast_integer(54)
 
     ! logicals
     TRANSVERSE_ISOTROPY = bcast_logical(1)
@@ -372,6 +380,7 @@
     HDF5_FOR_MOVIES = bcast_logical(79)
     OUTPUT_SEISMOS_HDF5 = bcast_logical(80)
     ATTENUATION_3D_BERKELEY = bcast_logical(81)
+    GF_DATABASE_ENABLED = bcast_logical(82)
 
     ! double precisions
     DT = bcast_double_precision(1)
