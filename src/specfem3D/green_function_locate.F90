@@ -155,7 +155,7 @@
   use constants_solver, only: &
     ELLIPTICITY_VAL,NDIM,HUGEVAL,IMAIN, &
     DEGREES_TO_RADIANS,R_UNIT_SPHERE, &
-    nrec_SUBSET_MAX
+    nrec_SUBSET_MAX,NPROCTOT_VAL
 
   use shared_parameters, only: R_PLANET
 
@@ -396,12 +396,122 @@
 
   deallocate(ispec_tagged)
 
-  ! report per-rank element counts
-  if (myrank == 0) then
-    write(IMAIN,*) 'Green function database: element tagging summary'
-    write(IMAIN,*) '  Rank 0 has ',gf_nelem_local,' unique tagged elements'
-    write(IMAIN,*)
-    call flush_IMAIN()
-  endif
+  ! gather and report per-rank element counts and IDs on rank 0
+  call gf_report_tagged_elements('initial tagging')
 
   end subroutine gf_locate_elements
+
+!
+!-------------------------------------------------------------------------------------------------
+!
+
+  subroutine gf_report_tagged_elements(label)
+
+! Gathers per-rank tagged element counts and element IDs on rank 0 and prints them.
+! Called after initial tagging (Stage 4) and after neighbor expansion (Stage 5).
+
+  use constants_solver, only: IMAIN,NPROCTOT_VAL
+
+  use specfem_par, only: myrank
+
+  use green_function_par, only: gf_nelem_local,gf_local_elements
+
+  implicit none
+
+  character(len=*), intent(in) :: label
+
+  ! number of element IDs to print per line
+  integer, parameter :: ELEMS_PER_LINE = 10
+
+  ! local parameters
+  integer :: irank, ier, j, nelem_total
+  integer, allocatable :: counts_all(:)       ! element count per rank (on rank 0)
+  integer, allocatable :: offsets(:)           ! offsets for gatherv
+  integer, allocatable :: elems_all(:)         ! all element IDs gathered (on rank 0)
+  integer :: sendcount_dummy(1)
+
+  if (myrank == 0) then
+    allocate(counts_all(0:NPROCTOT_VAL-1),stat=ier)
+    if (ier /= 0) call exit_MPI(myrank,'Error allocating counts_all')
+  else
+    allocate(counts_all(1),stat=ier)
+  endif
+
+  ! gather element counts from all ranks to rank 0
+  sendcount_dummy(1) = gf_nelem_local
+  call gather_all_i(sendcount_dummy, 1, counts_all, 1, NPROCTOT_VAL)
+
+  ! gather element IDs using gatherv
+  if (myrank == 0) then
+    nelem_total = sum(counts_all)
+
+    allocate(offsets(0:NPROCTOT_VAL-1),stat=ier)
+    if (ier /= 0) call exit_MPI(myrank,'Error allocating offsets')
+
+    ! compute offsets for gatherv
+    offsets(0) = 0
+    do irank = 1, NPROCTOT_VAL - 1
+      offsets(irank) = offsets(irank - 1) + counts_all(irank - 1)
+    enddo
+
+    if (nelem_total > 0) then
+      allocate(elems_all(nelem_total),stat=ier)
+    else
+      allocate(elems_all(1),stat=ier)
+    endif
+    if (ier /= 0) call exit_MPI(myrank,'Error allocating elems_all')
+  else
+    allocate(offsets(1),stat=ier)
+    allocate(elems_all(1),stat=ier)
+    nelem_total = 0
+  endif
+
+  ! gatherv: each rank sends its gf_local_elements
+  if (gf_nelem_local > 0) then
+    call gatherv_all_i(gf_local_elements, gf_nelem_local, &
+                       elems_all, counts_all, offsets, &
+                       max(nelem_total,1), NPROCTOT_VAL)
+  else
+    ! send a dummy (zero-length send is handled by MPI)
+    call gatherv_all_i(sendcount_dummy, 0, &
+                       elems_all, counts_all, offsets, &
+                       max(nelem_total,1), NPROCTOT_VAL)
+  endif
+
+  ! print on rank 0
+  if (myrank == 0) then
+    write(IMAIN,*)
+    write(IMAIN,*) 'Green function database: tagged elements (',trim(label),')'
+    write(IMAIN,*) '  Total elements across all ranks: ',nelem_total
+    write(IMAIN,*)
+
+    do irank = 0, NPROCTOT_VAL - 1
+      write(IMAIN,'(a,i6,a,i6,a)') &
+        '  Rank ',irank,': ',counts_all(irank),' elements'
+      if (counts_all(irank) > 0) then
+        write(IMAIN,'(a)',advance='no') '    ['
+        do j = 1, counts_all(irank)
+          if (j > 1) write(IMAIN,'(a)',advance='no') ', '
+          ! line break every ELEMS_PER_LINE elements
+          if (j > 1 .and. mod(j - 1, ELEMS_PER_LINE) == 0) then
+            write(IMAIN,*)
+            write(IMAIN,'(a)',advance='no') '     '
+          endif
+          write(IMAIN,'(i0)',advance='no') elems_all(offsets(irank) + j)
+        enddo
+        write(IMAIN,'(a)') ']'
+      endif
+    enddo
+
+    write(IMAIN,*)
+    call flush_IMAIN()
+
+    deallocate(offsets)
+  else
+    deallocate(offsets)
+  endif
+
+  deallocate(counts_all)
+  deallocate(elems_all)
+
+  end subroutine gf_report_tagged_elements

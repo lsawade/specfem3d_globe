@@ -90,6 +90,7 @@ specfem3D_SOLVER_OBJECTS += \
 	$O/green_function_detect.solverstatic.o \
 	$O/green_function_stf.solverstatic.o \
 	$O/green_function_locate.solverstatic.o \
+	$O/green_function_expand.solverstatic.o \
 	$O/initialize_simulation.solverstatic.o \
 	$O/iterate_time.solverstatic.o \
 	$O/iterate_time_undoatt.solverstatic.o \
@@ -465,6 +466,7 @@ $O/prepare_gravity.solverstatic.o: $O/SIEM_math_library.shared.o
 $O/green_function_detect.solverstatic.o: $O/green_function_par.solverstatic_module.o
 $O/green_function_stf.solverstatic.o: $O/green_function_par.solverstatic_module.o
 $O/green_function_locate.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/green_function_expand.solverstatic.o: $O/green_function_par.solverstatic_module.o
 
 ###
 ### specfem3D - optimized flags and dependence on values from mesher here

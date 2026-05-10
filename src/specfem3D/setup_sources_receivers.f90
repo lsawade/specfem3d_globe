@@ -78,6 +78,7 @@
   if (GF_DATABASE_ENABLED) then
     call gf_read_locations()
     call gf_locate_elements()
+    call gf_expand_neighbors()
   endif
 
   ! topography array no more needed
