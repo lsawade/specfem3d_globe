@@ -56,4 +56,13 @@ module green_function_par
   character(len=16), dimension(:), allocatable :: gf_morton_hex     ! hex string per local element
   real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: gf_center_xyz  ! (3, gf_nelem_local) center coords
 
+  ! HDF5 I/O (Stage 7)
+  ! write buffer: (3, NGLLX, NGLLY, NGLLZ, GF_BUFFER_SIZE, gf_nelem_local)
+  ! element index is LAST so each element's time slices are contiguous in memory
+  real(kind=CUSTOM_REAL), dimension(:,:,:,:,:,:), allocatable, target :: gf_buffer
+
+  integer :: gf_isnap = 0          ! total subsampled snapshots written so far
+  integer :: gf_ibuf = 0           ! current position in buffer (1..GF_BUFFER_SIZE)
+  integer :: gf_nt_sub = 0         ! total number of subsampled timesteps
+
 end module green_function_par

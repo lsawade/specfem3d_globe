@@ -218,6 +218,9 @@
     ! write the seismograms with time shift (GPU_MODE transfer included)
     call write_seismograms()
 
+    ! Green function database: buffer displacement at subsampled timesteps
+    call gf_write_timestep(it)
+
     ! adjoint simulations: kernels
     ! attention: for GPU_MODE and ANISOTROPIC_KL it is necessary to use resort_array (see lines 265-268)
     if (SIMULATION_TYPE == 3) then

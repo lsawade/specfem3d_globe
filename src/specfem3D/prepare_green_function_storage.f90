@@ -48,4 +48,7 @@
   ! write centroids.bin and manifest.csv
   call gf_write_manifest()
 
+  ! initialize HDF5 files and allocate write buffer
+  call gf_init_hdf5()
+
   end subroutine prepare_green_function_storage

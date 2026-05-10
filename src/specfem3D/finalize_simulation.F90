@@ -69,6 +69,9 @@
     call close_file_abs(9)
   endif
 
+  ! Green function database: flush remaining buffer and close HDF5
+  call gf_finalize_hdf5()
+
   ! save files to local disk or tape system if restart file
   call save_forward_arrays()
 
