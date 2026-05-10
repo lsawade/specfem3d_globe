@@ -73,6 +73,13 @@
   endif
   call synchronize_all()
 
+  ! Green function database: locate elements containing GF locations
+  ! (must be called before xadj/adjncy are deallocated — needed for Stage 5 neighbor expansion)
+  if (GF_DATABASE_ENABLED) then
+    call gf_read_locations()
+    call gf_locate_elements()
+  endif
+
   ! topography array no more needed
   if (TOPOGRAPHY) then
     if (allocated(ibathy_topo) ) deallocate(ibathy_topo)

@@ -43,4 +43,12 @@ module green_function_par
   double precision :: gf_f_cutoff = 0.d0   ! lowpass cutoff frequency (Hz)
   double precision :: gf_hdur = 0.d0       ! half-duration used for Gaussian
 
+  ! Element location (Stage 4)
+  integer :: gf_nlocations = 0                                     ! total GF locations read
+  double precision, dimension(:), allocatable :: gf_lat, gf_lon, gf_depth  ! location coords
+  integer, dimension(:), allocatable :: gf_ispec_selected          ! element index per location
+  integer, dimension(:), allocatable :: gf_islice_selected         ! MPI rank per location
+  integer :: gf_nelem_local = 0                                    ! unique tagged elements on this rank
+  integer, dimension(:), allocatable :: gf_local_elements          ! unique local element indices
+
 end module green_function_par
