@@ -940,6 +940,7 @@
   integer, parameter :: REFERENCE_MODEL_SEA1D      = 8
   integer, parameter :: REFERENCE_MODEL_CCREM      = 9
   integer, parameter :: REFERENCE_MODEL_SEMUCB     = 10   ! Berkeley reference model
+
   ! Mars
   integer, parameter :: REFERENCE_MODEL_SOHL       = 101
   integer, parameter :: REFERENCE_MODEL_SOHL_B     = 102
@@ -985,6 +986,8 @@
   integer, parameter :: THREE_D_MODEL_HETEROGEN_PREM = 119
   integer, parameter :: THREE_D_MODEL_SH_MARS       = 120
   integer, parameter :: THREE_D_MODEL_BERKELEY      = 121
+  integer, parameter :: THREE_D_MODEL_BERKELEY_AZIM = 122
+
   ! inner core model
   integer, parameter :: THREE_D_MODEL_INNER_CORE_ISHII = 201
 

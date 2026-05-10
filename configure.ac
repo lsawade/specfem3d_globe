@@ -113,18 +113,20 @@ AM_CONDITIONAL([COND_CUDA9], [test x"$want_cuda" = xcuda9])
 AM_CONDITIONAL([COND_CUDA10], [test x"$want_cuda" = xcuda10])
 AM_CONDITIONAL([COND_CUDA11], [test x"$want_cuda" = xcuda11])
 AM_CONDITIONAL([COND_CUDA12], [test x"$want_cuda" = xcuda12])
+AM_CONDITIONAL([COND_CUDA13], [test x"$want_cuda" = xcuda13])
 
 # cuda linking for cuda 5x and 6x and 7x and 8x and ..
 AM_CONDITIONAL([COND_CUDA_PLUS],
- [test "$want_cuda" = cuda4 \
-    -o "$want_cuda" = cuda5 \
-    -o "$want_cuda" = cuda6 \
-    -o "$want_cuda" = cuda7 \
-    -o "$want_cuda" = cuda8 \
-    -o "$want_cuda" = cuda9 \
-    -o "$want_cuda" = cuda10 \
-    -o "$want_cuda" = cuda11 \
-    -o "$want_cuda" = cuda12 \]
+  [test "$want_cuda" = cuda4 \
+     -o "$want_cuda" = cuda5 \
+     -o "$want_cuda" = cuda6 \
+     -o "$want_cuda" = cuda7 \
+     -o "$want_cuda" = cuda8 \
+     -o "$want_cuda" = cuda9 \
+     -o "$want_cuda" = cuda10 \
+     -o "$want_cuda" = cuda11 \
+     -o "$want_cuda" = cuda12 \
+     -o "$want_cuda" = cuda13 \]
 )
 
 # CUDA-aware MPI setting
@@ -172,6 +174,7 @@ AM_CONDITIONAL([COND_HIP_CUDA9], [test x"$want_hip" = xcuda9])
 AM_CONDITIONAL([COND_HIP_CUDA10], [test x"$want_hip" = xcuda10])
 AM_CONDITIONAL([COND_HIP_CUDA11], [test x"$want_hip" = xcuda11])
 AM_CONDITIONAL([COND_HIP_CUDA12], [test x"$want_hip" = xcuda12])
+AM_CONDITIONAL([COND_HIP_CUDA13], [test x"$want_hip" = xcuda13])
 
 ###
 ### MIC (Xeon PHI)
@@ -485,7 +488,7 @@ AS_IF([test x"$want_asdf" != xno], [
 #mpbl: adding flags to config.h.in through autoheader in order to save them into the adios file.
 #configure_flags_str="FC=$FC FCFLAGS=$FCFLAGS $FLAGS_CHECK"
 #AC_DEFINE_UNQUOTED([CONFIGURE_FLAGS],["${configure_flags_str}"],
- #         [configuration flags to be saved in the adios output file.])
+#          [configuration flags to be saved in the adios output file.])
 CONFIGURE_FLAGS="FC=$FC FCFLAGS=$FCFLAGS"
 AC_SUBST([CONFIGURE_FLAGS])
 
@@ -960,9 +963,9 @@ AS_IF([test x"$want_petsc" != xno], [
     AC_SUBST([PETSC_LIBS])
 ])
 
-##
-## HDF5
-##
+###
+### HDF5
+###
 
 AS_IF([test x"$want_hdf5" != xno], [
     AS_BOX([HDF5])

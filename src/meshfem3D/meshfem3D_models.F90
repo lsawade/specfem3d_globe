@@ -247,8 +247,8 @@
         ! Mars spherical harmonics model
         call model_SH_mars_broadcast()
 
-     case(THREE_D_MODEL_BERKELEY)
-        ! Berkeley SEMUCB model (should be used along with the berkeley crust)
+     case(THREE_D_MODEL_BERKELEY,THREE_D_MODEL_BERKELEY_AZIM)
+        ! Berkeley SEMUCB models (should be used along with the Berkeley crust)
         call model_berkeley_broadcast()
 
       case default
@@ -925,7 +925,7 @@
                                    c33,c34,c35,c36,c44,c45,c46,c55,c56,c66)
 
         case (THREE_D_MODEL_BERKELEY)
-          ! 3D Berkeley Model SEMUCB
+          ! 3D Berkeley model SEMUCB
           ! note: passes r/theta/phi (geocentric coordinates)
           call model_berkeley_shsv(r_used,theta,phi,vpv,vph,vsv,vsh,rho, &
                                    dvsh,dvsv,dvph,dvpv,drho,eta_aniso,iregion_code,CRUSTAL)
@@ -957,6 +957,14 @@
             eta_aniso = 1.0d0
             rho = rho*(1.0d0+drho)
           endif
+
+        case (THREE_D_MODEL_BERKELEY_AZIM)
+          ! 3D Berkeley model with azimuthal anisotropy
+          ! note: passes r/theta/phi (geocentric coordinates);
+          !       rotation to global reference inside subroutine as for JP Montagner's model
+          call model_berkeley_3dazim(r_used,theta,phi,vpv,vph,vsv,vsh,rho,eta_aniso, &
+                                     c11,c12,c13,c14,c15,c16,c22,c23,c24,c25,c26, &
+                                     c33,c34,c35,c36,c44,c45,c46,c55,c56,c66,iregion_code,CRUSTAL)
 
         case (THREE_D_MODEL_HETEROGEN_PREM)
           ! chris modif checkers 02/20/21
@@ -1083,6 +1091,19 @@
       else
         ! sets c11,.. in model_mantle_spiral() routine
         ! nothing left to do
+        convert_tiso_to_cij = .false.
+      endif
+    endif
+
+    ! Berkeley anisotropic model with azimuthal anisotropy
+    if (THREE_D_MODEL == THREE_D_MODEL_BERKELEY_AZIM) then
+      ! special case for appended _1Dcrust cases
+      if (suppress_mantle_extension) then
+        ! point is in crust, and CRUSTAL == .false. (no 3D crustal model); model_berkeley_3dazim() hasn't been called.
+        ! we still need to convert the 1D reference crustal values (vpv,vph,..) to full cij coefficients
+        convert_tiso_to_cij = .true.
+      else
+        !c11... already in model_berkeley_3dazim() routine
         convert_tiso_to_cij = .false.
       endif
     endif

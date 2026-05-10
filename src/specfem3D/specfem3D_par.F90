@@ -889,6 +889,8 @@ module specfem_par_innercore
   ! adjoint kernels
   real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: &
     rho_kl_inner_core,beta_kl_inner_core, alpha_kl_inner_core
+  ! For anisotropic kernels
+  real(kind=CUSTOM_REAL), dimension(:,:,:,:,:), allocatable :: cijkl_kl_inner_core
 
   ! Boundary Mesh and Kernels
   real(kind=CUSTOM_REAL), dimension(:,:,:), allocatable :: icb_kl, icb_kl_top, icb_kl_bot
