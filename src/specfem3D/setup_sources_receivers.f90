@@ -740,7 +740,7 @@
 
   use specfem_par
   use specfem_par_movie
-  use shared_parameters, only: GF_DATABASE_ENABLED
+  use shared_parameters, only: GF_DATABASE_ENABLED,T_min_period
   implicit none
 
   ! local parameters
@@ -844,12 +844,11 @@
     enddo
   endif
 
-  ! Green function database: ensure sufficient time buffer before source
-  ! The Butterworth lowpass filter introduces ringing that extends well
-  ! beyond the Gaussian's natural decay. We need a large buffer so the
-  ! filtered STF is essentially zero at the simulation start.
+  ! Green function database: ensure sufficient time buffer before source.
+  ! gf_hdur = T_min_period / 10, and the Gaussian decays to ~zero at ~3*gf_hdur.
+  ! The Butterworth filter broadens this slightly. Use ~5*gf_hdur = T_min/2.
   if (GF_DATABASE_ENABLED) then
-    t0 = max(t0, 15.0d0 * hdur(1))
+    t0 = max(t0, T_min_period / 2.0d0)
   endif
 
   ! checks if user set USER_T0 to fix simulation start time

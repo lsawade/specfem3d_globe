@@ -44,7 +44,7 @@
 
   use constants, only: IMAIN,PI,CUSTOM_REAL,MAX_STRING_LEN
   use specfem_par, only: DT,NSTEP,t0,hdur,hdur_Gaussian,myrank,OUTPUT_FILES
-  use shared_parameters, only: GF_SUBSAMPLE_STEP
+  use shared_parameters, only: GF_SUBSAMPLE_STEP,T_min_period
   use green_function_par, only: gf_stf,gf_f_cutoff,gf_hdur
 
   implicit none
@@ -62,10 +62,11 @@
   double precision, dimension(GF_FILTER_ORDER/2, 6) :: sos
   integer, parameter :: IOUT_STF = 71
 
-  ! set half-duration: use the Gaussian decay half-duration (matching specfem convention)
-  ! hdur_Gaussian = hdur / SOURCE_DECAY_MIMIC_TRIANGLE
-  ! For GF, we use hdur_Gaussian(1) since NSOURCES==1 (validated in Stage 2)
-  gf_hdur = hdur_Gaussian(1)
+  ! set half-duration from mesh resolution: T_min_period / 10
+  ! This keeps the Gaussian broadband while limiting unresolvable energy
+  ! (~14% above 1/T_min). The Butterworth lowpass handles anti-aliasing
+  ! for the subsampled output.
+  gf_hdur = T_min_period / 10.0d0
 
   ! compute cutoff frequency: Nyquist of subsampled output
   gf_f_cutoff = 1.0d0 / (2.0d0 * DT * dble(GF_SUBSAMPLE_STEP))
