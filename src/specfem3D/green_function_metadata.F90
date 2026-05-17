@@ -248,13 +248,26 @@
 
   filepath = trim(GF_DATABASE_PATH) // '/mesh_info.h5'
 
-  ! idempotent: skip if file already exists
+  ! idempotent: skip if file already exists and is valid
   inquire(file=trim(filepath), exist=file_exists)
   if (file_exists) then
-    write(IMAIN,*) 'Green function database: mesh_info.h5 already exists, skipping'
-    write(IMAIN,*)
+    ! validate by trying to open and read a known attribute
+    call h5fopen_f(trim(filepath), H5F_ACC_RDONLY_F, fid, hdferr)
+    if (hdferr == 0) then
+      call h5aopen_f(fid, 'scale_displ', attr_id, hdferr)
+      if (hdferr == 0) then
+        call h5aclose_f(attr_id, hdferr)
+        call h5fclose_f(fid, hdferr)
+        write(IMAIN,*) 'Green function database: mesh_info.h5 already exists, skipping'
+        write(IMAIN,*)
+        call flush_IMAIN()
+        return
+      endif
+      call h5fclose_f(fid, hdferr)
+    endif
+    ! file exists but is corrupt/incomplete — remove and recreate
+    write(IMAIN,*) 'Green function database: mesh_info.h5 is corrupt, recreating'
     call flush_IMAIN()
-    return
   endif
 
   ! create file

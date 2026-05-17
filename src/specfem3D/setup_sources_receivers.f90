@@ -82,7 +82,8 @@
   endif
 
   ! topography array no more needed
-  if (TOPOGRAPHY) then
+  ! (keep it allocated if GF database is enabled — gf_write_mesh_info needs it)
+  if (TOPOGRAPHY .and. .not. GF_DATABASE_ENABLED) then
     if (allocated(ibathy_topo) ) deallocate(ibathy_topo)
   endif
 

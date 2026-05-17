@@ -30,7 +30,9 @@
 ! Central wrapper for all Green function database preparation steps.
 ! Called from prepare_timerun() before coordinate arrays are deallocated.
 
-  use shared_parameters, only: GF_DATABASE_ENABLED
+  use shared_parameters, only: GF_DATABASE_ENABLED, TOPOGRAPHY
+
+  use specfem_par, only: ibathy_topo
 
   implicit none
 
@@ -50,6 +52,11 @@
 
   ! write shared mesh info file (topography + ellipticity, rank 0, idempotent)
   call gf_write_mesh_info()
+
+  ! ibathy_topo was kept alive for gf_write_mesh_info — deallocate now
+  if (TOPOGRAPHY) then
+    if (allocated(ibathy_topo)) deallocate(ibathy_topo)
+  endif
 
   ! write per-station metadata file (rank 0, create-or-skip)
   call gf_write_station_metadata()
