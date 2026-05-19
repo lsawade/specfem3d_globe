@@ -283,6 +283,39 @@ def find_containing_element(gf_db_path, source_xyz):
     return morton, 0.0, 0.0, 0.0, dist
 
 
+def butterworth_highpass_sos(order, fc, fs):
+    """Compute Butterworth highpass SOS coefficients.
+
+    Returns ndarray of shape (order//2, 6) with [b0, b1, b2, a0=1, a1, a2] per section.
+    """
+    nsections = order // 2
+    sos = np.zeros((nsections, 6))
+
+    # Pre-warp cutoff frequency
+    wc = 2.0 * fs * np.tan(pi * fc / fs)
+
+    for k in range(1, nsections + 1):
+        # Analog Butterworth pole angle
+        angle = pi * (2 * k + order - 1) / (2 * order)
+        pole_real = wc * cos(angle)
+
+        # Bilinear transform: highpass has s^2 numerator in analog domain
+        # H_hp(s) = s^2 / (s^2 - 2*Re(p)*s + |p|^2) for each conjugate pair
+        # After bilinear transform z = (1 + s/(2fs)) / (1 - s/(2fs)):
+        b0 = 4.0 * fs * fs
+        b1 = -8.0 * fs * fs
+        b2 = 4.0 * fs * fs
+
+        a0 = 4.0 * fs * fs - 4.0 * fs * pole_real + wc * wc
+        a1 = 2.0 * wc * wc - 8.0 * fs * fs
+        a2 = 4.0 * fs * fs + 4.0 * fs * pole_real + wc * wc
+
+        # Normalize
+        sos[k - 1] = [b0 / a0, b1 / a0, b2 / a0, 1.0, a1 / a0, a2 / a0]
+
+    return sos
+
+
 def butterworth_sos(order, fc, fs):
     """Compute Butterworth lowpass SOS coefficients (matching Fortran implementation).
 
@@ -347,6 +380,32 @@ def sosfiltfilt(x, sos):
     return y
 
 
+def filter_with_taper(x, sos, taper_fraction=0.05, pad_factor=1.0):
+    """Taper signal edges to zero, zero-pad, filter, and trim.
+
+    The taper brings the signal smoothly to zero at both ends so the
+    transition to zero-padding is seamless. The padding then absorbs
+    IIR filter edge transients. After filtering, the result is trimmed
+    back to the original length.
+    """
+    n = len(x)
+    n_taper = max(1, int(taper_fraction * n))
+    n_pad = int(pad_factor * n)
+
+    # Cosine taper to bring edges to zero
+    taper = np.ones(n)
+    taper[:n_taper] = 0.5 * (1.0 - np.cos(np.linspace(0, pi, n_taper)))
+    taper[-n_taper:] = 0.5 * (1.0 - np.cos(np.linspace(pi, 0, n_taper)))
+    tapered = x * taper
+
+    # Zero-pad on both sides
+    padded = np.concatenate([np.zeros(n_pad), tapered, np.zeros(n_pad)])
+
+    # Filter and trim back to original length
+    filtered = sosfiltfilt(padded, sos)
+    return filtered[n_pad:n_pad + n]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Cross-validate GF database against forward simulation"
@@ -380,6 +439,20 @@ def main():
         type=str,
         default=None,
         help="Output plot path (default: gf_cross_validation.png next to forward output)",
+    )
+    parser.add_argument(
+        "--highpass-period",
+        type=float,
+        default=None,
+        help="Apply zero-phase Butterworth highpass filter at this period (in seconds). "
+             "Removes energy at periods longer than this value.",
+    )
+    parser.add_argument(
+        "--lowpass-period",
+        type=float,
+        default=None,
+        help="Override the lowpass filter period (in seconds). "
+             "Default uses the GF database anti-alias cutoff frequency.",
     )
     args = parser.parse_args()
 
@@ -558,7 +631,7 @@ def main():
     # ---------------------------------------------------------------
     print("\nReading forward seismograms...")
     fwd_traces = {}
-    for comp in ["MXN", "MXE", "MXZ"]:
+    for comp in ["BXN", "BXE", "BXZ"]:
         sac_file = fwd_dir / f"{station}.{comp}.sem.sac"
         tr = obspy_read(str(sac_file))[0]
         time = tr.times() + tr.stats.sac.b  # seconds from origin time
@@ -567,20 +640,23 @@ def main():
               f"amp range [{tr.data.min():.6e}, {tr.data.max():.6e}]")
 
     # Apply Butterworth filter to match GF anti-alias filtering, then subsample
-    print(f"\nApplying Butterworth lowpass filter (order=4, fc={f_cutoff:.4f} Hz, fs={1/dt:.4f} Hz)...")
-    sos = butterworth_sos(4, f_cutoff, 1.0 / dt)
+    lp_fc = 1.0 / args.lowpass_period if args.lowpass_period else f_cutoff
+    lp_filter = args.lowpass_period is not None
+    print(f"\nApplying Butterworth lowpass filter (order=4, fc={lp_fc:.4f} Hz"
+          f" [T={1/lp_fc:.1f}s], fs={1/dt:.4f} Hz)...")
+    sos = butterworth_sos(4, lp_fc, 1.0 / dt)
 
     fwd_filtered = {}
-    for comp in ["MXN", "MXE", "MXZ"]:
+    for comp in ["BXN", "BXE", "BXZ"]:
         amp = fwd_traces[comp]["amp"].astype(np.float64)
-        filtered = sosfiltfilt(amp, sos)
+        filtered = filter_with_taper(amp, sos)
         fwd_filtered[comp] = filtered
 
     # Subsample forward traces
     fwd_sub = {}
-    for comp in ["MXN", "MXE", "MXZ"]:
+    for comp in ["BXN", "BXE", "BXZ"]:
         fwd_sub[comp] = fwd_filtered[comp][::subsample_step]
-    time_fwd = fwd_traces["MXN"]["time"][::subsample_step]
+    time_fwd = fwd_traces["BXN"]["time"][::subsample_step]
 
     # Construct GF time axis
     # GF stores at it = subsample_step, 2*subsample_step, ...
@@ -611,7 +687,7 @@ def main():
 
     print(f"  Forward subsampled: {len(time_fwd)} samples, t=[{time_fwd[0]:.2f}, {time_fwd[-1]:.2f}]")
     print(f"  GF: {nt_sub} samples, t=[{time_gf[0]:.2f}, {time_gf[-1]:.2f}]")
-    print(f"  t0_gf={t0_gf:.4f}, t0_fwd={-fwd_traces['MXN']['time'][0]:.4f}")
+    print(f"  t0_gf={t0_gf:.4f}, t0_fwd={-fwd_traces['BXN']['time'][0]:.4f}")
 
     # Align traces using overlapping time window
     # Find common time range
@@ -625,23 +701,54 @@ def main():
     time_common = time_gf[mask_gf]
 
     gf_traces = {
-        "MXN": gf_N[mask_gf],
-        "MXE": gf_E[mask_gf],
-        "MXZ": gf_Z[mask_gf],
+        "BXN": gf_N[mask_gf],
+        "BXE": gf_E[mask_gf],
+        "BXZ": gf_Z[mask_gf],
     }
 
     fwd_interp = {}
-    for comp in ["MXN", "MXE", "MXZ"]:
+    for comp in ["BXN", "BXE", "BXZ"]:
         fwd_interp[comp] = np.interp(time_common, time_fwd, fwd_sub[comp])
 
     n_compare = len(time_common)
     print(f"  Comparison samples: {n_compare}")
 
     # ---------------------------------------------------------------
+    # 7b. Optional lowpass filter on GF traces
+    # ---------------------------------------------------------------
+    # The forward traces are always lowpass-filtered before subsampling (section 7).
+    # The GF traces already have the database anti-alias filter baked in.
+    # When --lowpass-period is explicitly set, apply the same lowpass to GF traces
+    # so both are filtered identically.
+    if lp_filter:
+        lp_fc_sub = 1.0 / args.lowpass_period
+        lp_fs_sub = 1.0 / dt_sub
+        lp_order = 4
+        print(f"\nApplying Butterworth lowpass filter to GF traces (order={lp_order}, "
+              f"period={args.lowpass_period:.1f} s, fc={lp_fc_sub:.6f} Hz, fs={lp_fs_sub:.4f} Hz)...")
+        lp_sos_sub = butterworth_sos(lp_order, lp_fc_sub, lp_fs_sub)
+        for comp in ["BXN", "BXE", "BXZ"]:
+            gf_traces[comp] = filter_with_taper(gf_traces[comp], lp_sos_sub)
+
+    # ---------------------------------------------------------------
+    # 7c. Optional highpass filter
+    # ---------------------------------------------------------------
+    if args.highpass_period is not None:
+        hp_fc = 1.0 / args.highpass_period  # convert period to frequency
+        hp_fs = 1.0 / dt_sub  # sampling rate of subsampled traces
+        hp_order = 4
+        print(f"\nApplying Butterworth highpass filter (order={hp_order}, "
+              f"period={args.highpass_period:.1f} s, fc={hp_fc:.6f} Hz, fs={hp_fs:.4f} Hz)...")
+        hp_sos = butterworth_highpass_sos(hp_order, hp_fc, hp_fs)
+        for comp in ["BXN", "BXE", "BXZ"]:
+            gf_traces[comp] = filter_with_taper(gf_traces[comp], hp_sos)
+            fwd_interp[comp] = filter_with_taper(fwd_interp[comp], hp_sos)
+
+    # ---------------------------------------------------------------
     # 8. Compute residuals
     # ---------------------------------------------------------------
     print("\nResiduals:")
-    for comp in ["MXN", "MXE", "MXZ"]:
+    for comp in ["BXN", "BXE", "BXZ"]:
         fwd = fwd_interp[comp]
         gf = gf_traces[comp]
         residual = np.sqrt(np.sum((fwd - gf) ** 2))
@@ -655,9 +762,9 @@ def main():
     # ---------------------------------------------------------------
     print(f"\nPlotting to {output_plot}...")
     fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
-    comp_labels = {"MXN": "North", "MXE": "East", "MXZ": "Vertical"}
+    comp_labels = {"BXN": "North", "BXE": "East", "BXZ": "Vertical"}
 
-    for ax, comp in zip(axes, ["MXN", "MXE", "MXZ"]):
+    for ax, comp in zip(axes, ["BXN", "BXE", "BXZ"]):
         fwd = fwd_interp[comp]
         gf = gf_traces[comp]
 
@@ -673,8 +780,13 @@ def main():
         ax.grid(True, alpha=0.3)
 
     axes[-1].set_xlabel("Time (s)")
+    filter_info = ""
+    if args.lowpass_period:
+        filter_info += f", lowpass T<{args.lowpass_period:.0f}s"
+    if args.highpass_period:
+        filter_info += f", highpass T>{args.highpass_period:.0f}s"
     fig.suptitle(
-        f"GF Cross-Validation: {station}\n"
+        f"GF Cross-Validation: {station}{filter_info}\n"
         f"Source at element {morton_hex}\n"
         f"(xi={xi:.4f}, eta={eta:.4f}, gamma={gamma:.4f})",
         fontsize=11,
