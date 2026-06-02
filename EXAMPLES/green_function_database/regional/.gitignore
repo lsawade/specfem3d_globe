@@ -1,0 +1,4 @@
+.snakemake
+db_base/DATABASES_MPI
+db_base/OUTPUT_FILES
+db_base/mesher.flag

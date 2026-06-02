@@ -240,6 +240,10 @@
   double precision :: attr_dp(1)
   integer :: attr_int(1)
 
+  ! validation
+  double precision :: existing_dt(1)
+  integer :: existing_nstep(1), existing_subsample(1)
+
   if (myrank /= 0) return
 
   ! initialize HDF5 Fortran interface (reference-counted, safe to call multiple times)
@@ -257,6 +261,48 @@
       call h5aopen_f(fid, 'scale_displ', attr_id, hdferr)
       if (hdferr == 0) then
         call h5aclose_f(attr_id, hdferr)
+
+        ! validate that simulation parameters match the current run
+        call h5aopen_f(fid, 'dt', attr_id, hdferr)
+        if (hdferr == 0) then
+          call h5aread_f(attr_id, H5T_NATIVE_DOUBLE, existing_dt, adim, hdferr)
+          call h5aclose_f(attr_id, hdferr)
+          if (abs(existing_dt(1) - DT) > 1.0d-12) then
+            call h5fclose_f(fid, hdferr)
+            write(IMAIN,*) 'ERROR: mesh_info.h5 has dt =', existing_dt(1), ' but current run has DT =', DT
+            write(IMAIN,*) 'Delete the existing mesh_info.h5 and restart.'
+            call flush_IMAIN()
+            call exit_MPI(myrank, 'mesh_info.h5 dt mismatch — delete and restart')
+          endif
+        endif
+
+        call h5aopen_f(fid, 'nstep', attr_id, hdferr)
+        if (hdferr == 0) then
+          call h5aread_f(attr_id, H5T_NATIVE_INTEGER, existing_nstep, adim, hdferr)
+          call h5aclose_f(attr_id, hdferr)
+          if (existing_nstep(1) /= NSTEP) then
+            call h5fclose_f(fid, hdferr)
+            write(IMAIN,*) 'ERROR: mesh_info.h5 has nstep =', existing_nstep(1), ' but current run has NSTEP =', NSTEP
+            write(IMAIN,*) 'Delete the existing mesh_info.h5 and restart.'
+            call flush_IMAIN()
+            call exit_MPI(myrank, 'mesh_info.h5 nstep mismatch — delete and restart')
+          endif
+        endif
+
+        call h5aopen_f(fid, 'subsample_step', attr_id, hdferr)
+        if (hdferr == 0) then
+          call h5aread_f(attr_id, H5T_NATIVE_INTEGER, existing_subsample, adim, hdferr)
+          call h5aclose_f(attr_id, hdferr)
+          if (existing_subsample(1) /= GF_SUBSAMPLE_STEP) then
+            call h5fclose_f(fid, hdferr)
+            write(IMAIN,*) 'ERROR: mesh_info.h5 has subsample_step =', existing_subsample(1), &
+                           ' but current run has GF_SUBSAMPLE_STEP =', GF_SUBSAMPLE_STEP
+            write(IMAIN,*) 'Delete the existing mesh_info.h5 and restart.'
+            call flush_IMAIN()
+            call exit_MPI(myrank, 'mesh_info.h5 subsample_step mismatch — delete and restart')
+          endif
+        endif
+
         call h5fclose_f(fid, hdferr)
         write(IMAIN,*) 'Green function database: mesh_info.h5 already exists, skipping'
         write(IMAIN,*)

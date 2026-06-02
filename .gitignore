@@ -30,3 +30,6 @@ doc/USER_MANUAL/figures/*-eps-converted-to.pdf
 #
 slurm*
 submit*
+
+# Mac directory file
+.DS_Store
