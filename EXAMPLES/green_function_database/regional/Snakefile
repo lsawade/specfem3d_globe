@@ -54,6 +54,7 @@ SIMDIR = config.get("SIMDIR", "simulations")
 CREATE_VALIDATION = config.get("CREATE_VALIDATION", True)
 VALIDATION_DATA = config.get("VALIDATION_DATA", "validation_data")
 VALIDATION_DIR = config.get("VALIDATION_DIR", "forward")
+VALIDATION_CMT_DIR = config.get("VALIDATION_CMT_DIR", "forward_cmt")
 
 
 # ─── GF database output path ─────────────────────────────────────────────────
@@ -132,9 +133,10 @@ def all_inputs(wildcards):
                      station=STATION_IDS)
     # Manifest built
     inputs.append(os.path.join(GF_DATABASE_PATH, "centroids.bin"))
-    # Optionally run validation forward simulation
+    # Optionally run validation forward simulations and cross-validation plots
     if CREATE_VALIDATION:
-        inputs.append(os.path.join(VALIDATION_DIR, "done.flag"))
+        inputs.append(os.path.join("validation_output", "xvalidate_force.svg"))
+        inputs.append(os.path.join("validation_output", "xvalidate_cmt.svg"))
     return inputs
 
 
@@ -391,6 +393,13 @@ rule setup_validation_forward:
             parfile_content,
             flags=re.MULTILINE,
         )
+        # Ensure force source is enabled for force validation
+        parfile_content = re.sub(
+            r"^(USE_FORCE_POINT_SOURCE\s*=\s*)\.false\.",
+            r"\1.true.",
+            parfile_content,
+            flags=re.MULTILINE,
+        )
         with open(parfile_dst, "w") as f:
             f.write(parfile_content)
 
@@ -438,6 +447,118 @@ rule run_validation_forward:
             f.write("validation forward complete\n")
 
 
+rule setup_validation_cmt:
+    """Set up a CMT forward simulation directory for validation."""
+    input:
+        # Only run after the GF database is built
+        os.path.join(GF_DATABASE_PATH, "centroids.bin"),
+    output:
+        flag=os.path.join(VALIDATION_CMT_DIR, "setup.flag"),
+    params:
+        basedir=BASEDIR,
+        validation_data=VALIDATION_DATA,
+        validation_cmt_dir=VALIDATION_CMT_DIR,
+    run:
+        import re
+
+        vdir = params.validation_cmt_dir
+
+        # Create directories
+        os.makedirs(os.path.join(vdir, "DATA"), exist_ok=True)
+        os.makedirs(os.path.join(vdir, "OUTPUT_FILES"), exist_ok=True)
+
+        # Symlink bin/ and DATABASES_MPI/ from base directory
+        bin_link = os.path.join(vdir, "bin")
+        db_link = os.path.join(vdir, "DATABASES_MPI")
+        bin_target = os.path.abspath(os.path.join(params.basedir, "bin"))
+        db_target = os.path.abspath(os.path.join(params.basedir, "DATABASES_MPI"))
+
+        if not os.path.exists(bin_link):
+            os.symlink(bin_target, bin_link)
+        if not os.path.exists(db_link):
+            os.symlink(db_target, db_link)
+
+        # Copy Par_file from base directory, disable GF and set CMT source
+        parfile_src = os.path.join(params.basedir, "DATA", "Par_file")
+        parfile_dst = os.path.join(vdir, "DATA", "Par_file")
+        with open(parfile_src, "r") as f:
+            parfile_content = f.read()
+        parfile_content = re.sub(
+            r"^(\s*GF_DATABASE_ENABLED\s*=\s*)\.true\.",
+            r"\1.false.",
+            parfile_content,
+            flags=re.MULTILINE,
+        )
+        # Disable force point source so SPECFEM uses CMTSOLUTION
+        parfile_content = re.sub(
+            r"^(USE_FORCE_POINT_SOURCE\s*=\s*)\.true\.",
+            r"\1.false.",
+            parfile_content,
+            flags=re.MULTILINE,
+        )
+        with open(parfile_dst, "w") as f:
+            f.write(parfile_content)
+
+        # Copy STATIONS from validation_data
+        shutil.copy2(
+            os.path.join(params.validation_data, "STATIONS"),
+            os.path.join(vdir, "DATA", "STATIONS"),
+        )
+
+        # Copy CMTSOLUTION (required for CMT simulation)
+        cmt_src = os.path.join(params.validation_data, "CMTSOLUTION")
+        if os.path.exists(cmt_src):
+            shutil.copy2(cmt_src, os.path.join(vdir, "DATA", "CMTSOLUTION"))
+        else:
+            raise FileNotFoundError(f"CMTSOLUTION not found at {cmt_src}")
+
+        # Touch flag
+        with open(output.flag, "w") as f:
+            f.write("validation CMT setup complete\n")
+
+
+rule run_validation_cmt:
+    """Run the CMT validation forward simulation."""
+    input:
+        setup=os.path.join(VALIDATION_CMT_DIR, "setup.flag"),
+    output:
+        flag=os.path.join(VALIDATION_CMT_DIR, "done.flag"),
+    params:
+        validation_cmt_dir=VALIDATION_CMT_DIR,
+        nproc=NPROC,
+        mpirun=MPIRUN,
+    resources:
+        mpi=1,
+    run:
+        vdir = params.validation_cmt_dir
+        shell(
+            "cd {vdir} && "
+            "{params.mpirun} -np {params.nproc} ./bin/xspecfem3D "
+            "> OUTPUT_FILES/output_solver.txt 2>&1"
+        )
+        with open(output.flag, "w") as f:
+            f.write("validation CMT forward complete\n")
+
+
+rule run_cross_validation:
+    """Run cross-validation comparing GF database against forward simulations."""
+    input:
+        force_done=os.path.join(VALIDATION_DIR, "done.flag"),
+        cmt_done=os.path.join(VALIDATION_CMT_DIR, "done.flag"),
+    output:
+        force_svg=os.path.join("validation_output", "xvalidate_force.svg"),
+        cmt_svg=os.path.join("validation_output", "xvalidate_cmt.svg"),
+    params:
+        script=os.path.join(
+            os.path.abspath(SPECFEM_DIR),
+            "utils", "green_function", "xvalidate.py",
+        ),
+    shell:
+        """
+        python {params.script} .
+        """
+
+
 rule clean_base:
     """Clean base directory links and mesher output."""
     shell:
@@ -455,6 +576,16 @@ rule clean_validation:
     shell:
         "rm -rf {VALIDATION_DIR}/*"
 
+rule clean_validation_cmt:
+    """Clean CMT validation forward simulation directory."""
+    shell:
+        "rm -rf {VALIDATION_CMT_DIR}/*"
+
+rule clean_cross_validation:
+    """Clean cross-validation output files."""
+    shell:
+        "rm -rf validation_output/"
+
 rule clean_database:
     """Clean GF database output files."""
     shell:
@@ -466,4 +597,5 @@ rule clean_all:
         "rm -rf {BASEDIR}/bin {BASEDIR}/DATABASES_MPI {BASEDIR}/OUTPUT_FILES "
         "{BASEDIR}/DATA/topo_bathy {BASEDIR}/DATA/s362ani {BASEDIR}/DATA/crust2.0 "
         "{BASEDIR}/mesher.flag "
-        "{SIMDIR}/* {GF_DATABASE_PATH}/* {VALIDATION_DIR}/*"
+        "{SIMDIR}/* {GF_DATABASE_PATH}/* {VALIDATION_DIR}/* {VALIDATION_CMT_DIR}/* "
+        "validation_output/*"

@@ -1,4 +1,11 @@
 .snakemake
+db_base/DATA/crust2.0
+db_base/DATA/s362ani
+db_base/DATA/topo_bathy
 db_base/DATABASES_MPI
 db_base/OUTPUT_FILES
 db_base/mesher.flag
+forward
+forward_cmt
+simulations
+validation_output
