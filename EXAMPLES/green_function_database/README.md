@@ -1,0 +1,81 @@
+# Green Function Database Example
+
+This example demonstrates how to build a Green function (GF) database using
+SPECFEM3D_GLOBE and validate it against direct forward simulations.
+
+## Prerequisites
+
+- SPECFEM3D_GLOBE compiled with HDF5 and GF database support
+  (`GF_DATABASE_ENABLED = .true.` in `Par_file`)
+- MPI (e.g., OpenMPI or MPICH)
+- [uv](https://docs.astral.sh/uv/) for Python dependency management
+
+## Quick Start
+
+1. **Install Python dependencies**
+
+   From this directory (`EXAMPLES/green_function_database/`):
+
+   ```bash
+   uv sync
+   ```
+
+2. **Run the regional workflow**
+
+   ```bash
+   cd regional
+   snakemake -j3
+   ```
+
+   This will:
+   - Set up the base directory and run the mesher
+   - Run reciprocal simulations (N, E, Z force components) for each station
+   - Build the GF database manifest (`GFDB/centroids.bin`)
+   - Run forward validation simulations (force and CMT)
+   - Produce cross-validation plots in `validation_output/`
+
+## Workflow Configuration
+
+The Snakefile accepts configuration overrides via `--config`. Key options:
+
+| Option              | Default       | Description                              |
+|---------------------|---------------|------------------------------------------|
+| `SPECFEM_DIR`       | `../../..`    | Path to the specfem3d_globe root         |
+| `NPROC`             | `4`           | Number of MPI ranks                      |
+| `MPIRUN`            | `mpirun`      | MPI launcher command                     |
+| `CREATE_VALIDATION` | `True`        | Run validation forward simulations       |
+
+Example with overrides:
+
+```bash
+snakemake -j1 --config NPROC=6 MPIRUN="srun"
+```
+
+## Parallelism
+
+Stations can be run in parallel (components within a station are always
+sequential). Use `-jN` with the `mpi` resource to control this:
+
+```bash
+snakemake -j4 --resources mpi=2
+```
+
+This allows up to 4 tasks in parallel, but limits MPI simulations to 2
+concurrent runs.
+
+## Cleaning Up
+
+```bash
+cd regional
+snakemake clean_all    # remove all generated files
+```
+
+Or clean specific parts:
+
+```bash
+snakemake clean_base          # mesher output and symlinks
+snakemake clean_simulations   # station simulation directories
+snakemake clean_database      # GF database files
+snakemake clean_validation    # force validation directory
+snakemake clean_validation_cmt # CMT validation directory
+```
