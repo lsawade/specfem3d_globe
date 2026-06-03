@@ -419,12 +419,12 @@ BROADCAST_SAME_MESH_AND_MODEL   = .false.
 #-----------------------------------------------------------
 
 # set to true to use GPUs
-GPU_MODE                        = .false.
+GPU_MODE                        = .true.
 # Only used if GPU_MODE = .true. :
 GPU_RUNTIME                     = 1
 # 2 (OpenCL), 1 (Cuda) ou 0 (Compile-time -- does not work if configured with --with-cuda *AND* --with-opencl)
 GPU_PLATFORM                    = NVIDIA
-GPU_DEVICE                      = Tesla
+GPU_DEVICE                      = *
 
 # set to true to use the ADIOS library for I/Os
 ADIOS_ENABLED                   = .false.
@@ -443,8 +443,8 @@ HDF5_ENABLED                    = .true.
 
 # Green function database
 GF_DATABASE_ENABLED             = .true.
-GF_DATABASE_PATH                = /Users/lsawade/specfem3d_globe/EXAMPLES/green_function_database/regional/GFDB/
-GF_SUBSAMPLE_STEP               = 0                              # 0 = auto (from mesh resolution), or set manually (>= 1)
+GF_DATABASE_PATH                = /scratch/gpfs/TROMP/lsawade/specfem3d_globe/EXAMPLES/green_function_database/regional/GFDB/
+GF_SUBSAMPLE_STEP               = 4                              # 0 = auto (from mesh resolution), or set manually (>= 1)
 GF_BUFFER_SIZE                  = 100
 GF_NEIGHBOR_SHELLS              = 1
-DT = 0.1
+DT                              = 0.1d0

@@ -363,13 +363,14 @@
 
 #ifdef USE_HDF5
 
-  use constants, only: CUSTOM_REAL,NGLLX,NGLLY,NGLLZ,GF_NCOMP_DISP
+  use constants, only: CUSTOM_REAL,NDIM,NGLLX,NGLLY,NGLLZ,GF_NCOMP_DISP
 
   use shared_parameters, only: GF_DATABASE_ENABLED,GF_SUBSAMPLE_STEP,GF_BUFFER_SIZE
 
-  use specfem_par, only: scale_displ
+  use specfem_par, only: scale_displ,GPU_MODE,Mesh_pointer,NGLOB_CRUST_MANTLE
 
   use specfem_par_crustmantle, only: &
+    displ_crust_mantle, &
     ibool => ibool_crust_mantle, &
     displ => displ_crust_mantle
 
@@ -391,6 +392,12 @@
 
   ! check if this timestep is a subsampled output step
   if (mod(it, GF_SUBSAMPLE_STEP) /= 0) return
+
+  ! In GPU mode the wavefield lives on the device during the time loop; copy
+  ! the crust/mantle displacement back to the host before reading it.
+  if (GPU_MODE) then
+    call transfer_displ_cm_from_device(NDIM*NGLOB_CRUST_MANTLE, displ_crust_mantle, Mesh_pointer)
+  endif
 
   ! increment buffer position
   gf_ibuf = gf_ibuf + 1

@@ -218,6 +218,8 @@
     ! write the seismograms with time shift (GPU_MODE transfer included)
     call write_seismograms()
 
+    
+
     ! Green function database: buffer displacement at subsampled timesteps
     call gf_write_timestep(it)
 

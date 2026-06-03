@@ -345,7 +345,10 @@ rule build_manifest:
         manifest_csv=os.path.join(GF_DATABASE_PATH, "manifest.csv"),
     params:
         gf_db_path=GF_DATABASE_PATH,
-        script="/Users/lsawade/specfem3d_globe/utils/green_function/gf_build_manifest.py",
+        script=os.path.join(
+            os.path.abspath(SPECFEM_DIR),
+            "utils", "green_function", "gf_build_manifest.py",
+        ),
     shell:
         """
         python {params.script} {params.gf_db_path}
