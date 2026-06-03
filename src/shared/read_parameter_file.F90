@@ -466,8 +466,8 @@
 
   ! checks GF database parameter validity
   if (GF_DATABASE_ENABLED) then
-    if (GF_SUBSAMPLE_STEP < 1) &
-      stop 'Error reading Par_file: GF_SUBSAMPLE_STEP must be >= 1'
+    if (GF_SUBSAMPLE_STEP < 0) &
+      stop 'Error reading Par_file: GF_SUBSAMPLE_STEP must be >= 0 (0 = auto)'
     if (GF_BUFFER_SIZE < 1) &
       stop 'Error reading Par_file: GF_BUFFER_SIZE must be >= 1'
     if (GF_NEIGHBOR_SHELLS < 0) &

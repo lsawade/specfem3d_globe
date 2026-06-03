@@ -130,6 +130,8 @@
     write(IMAIN,*) '  lowpass cutoff frequency:  ', sngl(gf_f_cutoff), ' Hz'
     write(IMAIN,*) '  filter order:              ', GF_FILTER_ORDER
     write(IMAIN,*) '  subsample step:            ', GF_SUBSAMPLE_STEP
+    write(IMAIN,*) '  subsampled Nyquist freq:   ', sngl(gf_f_cutoff), ' Hz'
+    write(IMAIN,*) '  mesh max frequency:        ', sngl(1.0d0/T_min_period), ' Hz'
     write(IMAIN,*) '  STF peak value:            ', maxval(gf_stf)
     write(IMAIN,*)
   endif

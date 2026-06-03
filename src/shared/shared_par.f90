@@ -234,7 +234,7 @@
   ! Green function database
   logical :: GF_DATABASE_ENABLED = .false.
   character(len=MAX_STRING_LEN) :: GF_DATABASE_PATH = 'OUTPUT_FILES/gf_database/'
-  integer :: GF_SUBSAMPLE_STEP = 4
+  integer :: GF_SUBSAMPLE_STEP = 0    ! 0 = auto-compute from T_min_period and DT
   integer :: GF_BUFFER_SIZE = 100
   integer :: GF_NEIGHBOR_SHELLS = 1
   logical :: GF_OVERWRITE = .false.
