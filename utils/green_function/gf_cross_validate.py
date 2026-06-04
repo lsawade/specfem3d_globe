@@ -33,6 +33,7 @@ from math import sin, cos, radians, sqrt, pi
 
 import numpy as np
 from scipy.signal import fftconvolve
+from scipy.integrate import cumulative_trapezoid
 
 try:
     import h5py
@@ -539,7 +540,9 @@ def compute_strain(displ, xi, eta, gamma, Jinv):
 def read_mesh_info(gf_db):
     """Read mesh timing parameters from the GF database.
 
-    Returns dict with keys: dt, nstep, subsample_step, nt_sub.
+    Returns dict with keys: dt, nstep, subsample_step, nt_sub, and t0 (the
+    time of the first time step relative to the source origin; None for older
+    databases that did not store it).
     """
     with h5py.File(gf_db / "mesh_info.h5", "r") as f:
         info = {
@@ -547,6 +550,8 @@ def read_mesh_info(gf_db):
             "nstep": int(np.asarray(f.attrs["nstep"]).flat[0]),
             "subsample_step": int(np.asarray(f.attrs["subsample_step"]).flat[0]),
             "nt_sub": int(np.asarray(f.attrs["nt_subsampled"]).flat[0]),
+            "t0": (float(np.asarray(f.attrs["t0"]).flat[0])
+                   if "t0" in f.attrs else None),
         }
     return info
 
@@ -628,9 +633,14 @@ def reconstruct_cmt(displ, xi, eta, gamma, gf_db, morton_hex,
     for i in range(3):
         gf[i] = np.sum(weights[:, None] * strain[:, :, i].T, axis=0)
 
-    # Time-integrate: Gaussian -> Heaviside STF conversion
+    # Time-integrate: Gaussian -> Heaviside STF conversion.
+    # Trapezoidal rule (second-order, phase-correct). A left-endpoint Riemann
+    # sum (np.cumsum * dt) is first-order and lags the true integral by half a
+    # sample (dt_sub/2); on the coarse subsampled grid that is ~0.2 s, a
+    # visible sub-sample phase error. The integrand is band-limited well below
+    # the subsampled Nyquist, so the trapezoid is essentially exact here.
     for i in range(3):
-        gf[i] = np.cumsum(gf[i]) * dt_sub
+        gf[i] = cumulative_trapezoid(gf[i], dx=dt_sub, initial=0.0)
 
     return gf, cmt
 
@@ -863,7 +873,7 @@ def plot_comparison(time_common, gf_traces, fwd_traces, comps, comp_labels,
                     residuals, station, source_type, morton_hex, xi, eta, gamma,
                     highpass_period, lowpass_period, output_plot):
     """Plot GF vs forward comparison and save."""
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(10.5, 7.5), sharex=True)
 
     for ax, comp in zip(axes, comps):
         ax.plot(time_common, fwd_traces[comp], "b-", linewidth=0.8,
@@ -1017,24 +1027,13 @@ def cross_validate(
     # 7. Read forward seismograms
     fwd_traces, channel_prefix = read_forward_seismograms(fwd_dir, station)
 
-    # 8. Construct GF time axis
-    t0_gf = None
-    gf_solver_candidates = [
-        gf_solver_output,
-        fwd_dir.parent / "simulations" / station / "OUTPUT_FILES" / "output_solver.txt",
-        fwd_dir.parent / "simulations" / station / "OUTPUT_FILES" / "output_solver_N.txt",
-    ]
-    for gf_solver_path in gf_solver_candidates:
-        if gf_solver_path is not None and Path(gf_solver_path).exists():
-            gf_solver_text = Path(gf_solver_path).read_text()
-            m = re.search(r"start time\s*:\s*([-\dE.+]+)", gf_solver_text)
-            if m:
-                t0_gf = -float(m.group(1))
-                break
-    if t0_gf is None:
-        t0_gf = sta_meta["hdur"] * 5.0
-        print(f"  WARNING: could not find GF t0, estimating t0_gf={t0_gf:.4f}")
-
+    # 8. Construct GF time axis.
+    # t0_gf is the time of the first time step relative to the source origin
+    # (simulation time is (it-1)*dt - t0). It sets the absolute time origin of
+    # the reconstructed trace, so an error here is a rigid time shift between
+    # the GF and forward traces.
+    t0_gf = mesh.get("t0")
+    
     time_gf = np.array([(isnap * subsample_step - 1) * dt - t0_gf
                          for isnap in range(1, nt_sub + 1)])
 

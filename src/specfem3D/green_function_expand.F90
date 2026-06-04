@@ -205,8 +205,12 @@
 ! indices to the neighbor rank, which then tags any of its elements that
 ! contain those nodes.
 !
-! Uses send_i/recv_i with careful ordering (lower rank sends first) to
-! avoid deadlock.
+! All interface exchanges are posted with non-blocking isend_i/irecv_i and
+! completed with a single wait. This avoids the circular-wait deadlock that
+! a per-pair blocking send/recv ordering cannot prevent: each rank iterates
+! its interfaces in its own local order, so blocking calls can form a cycle
+! (rank A waits on B, B waits on C, C waits on A) even when each individual
+! pair is ordered "lower rank sends first".
 
   use constants_solver, only: NGLLX,NGLLY,NGLLZ,itag
 
@@ -223,17 +227,17 @@
 
   ! local parameters
   integer :: iinterface, ipoin, iglob, ispec, i, j, k, ier
-  integer :: nsend, nrecv, neighbor_rank
-  integer :: ntagged_on_interface
+  integer :: nsend, neighbor_rank
 
   ! node-is-tagged lookup (built from tagged elements)
   logical, allocatable :: node_tagged(:)
 
-  ! send/recv buffers for shared node flags
-  integer, allocatable :: send_flags(:), recv_flags(:)
+  ! send/recv buffers for shared node flags, one column per interface so all
+  ! exchanges can be in flight simultaneously
+  integer, allocatable :: send_flags(:,:), recv_flags(:,:)
+  integer, allocatable :: send_req(:), recv_req(:)
 
-  ! reverse lookup: node -> element mapping for boundary nodes only
-  ! We use ibool to find which elements contain received nodes
+  ! reverse lookup: which boundary nodes were flagged by neighbors
   logical, allocatable :: node_is_shared(:)
 
   ! nothing to do with single process
@@ -255,84 +259,74 @@
     enddo
   enddo
 
-  ! for each MPI interface, exchange flags indicating which shared nodes
-  ! belong to tagged elements
+  ! allocate per-interface exchange buffers and request handles
+  allocate(send_flags(max_nibool_interfaces,num_interfaces), &
+           recv_flags(max_nibool_interfaces,num_interfaces), &
+           send_req(num_interfaces), recv_req(num_interfaces), stat=ier)
+  if (ier /= 0) call exit_MPI(myrank,'Error allocating MPI exchange buffers')
+
+  ! pack send buffers: 1 if a shared node belongs to a tagged element, else 0
+  send_flags(:,:) = 0
+  do iinterface = 1, num_interfaces
+    do ipoin = 1, nibool_interfaces(iinterface)
+      iglob = ibool_interfaces(ipoin, iinterface)
+      if (node_tagged(iglob)) send_flags(ipoin, iinterface) = 1
+    enddo
+  enddo
+
+  ! post all non-blocking receives, then all non-blocking sends
+  do iinterface = 1, num_interfaces
+    neighbor_rank = my_neighbors(iinterface)
+    nsend = nibool_interfaces(iinterface)  ! symmetric interface
+    call irecv_i(recv_flags(1,iinterface), nsend, neighbor_rank, itag, recv_req(iinterface))
+  enddo
   do iinterface = 1, num_interfaces
     neighbor_rank = my_neighbors(iinterface)
     nsend = nibool_interfaces(iinterface)
-    nrecv = nsend  ! symmetric interface
-
-    allocate(send_flags(nsend), recv_flags(nrecv), stat=ier)
-    if (ier /= 0) call exit_MPI(myrank,'Error allocating MPI exchange buffers')
-
-    ! pack: 1 if this shared node belongs to a tagged element, 0 otherwise
-    do ipoin = 1, nsend
-      iglob = ibool_interfaces(ipoin, iinterface)
-      if (node_tagged(iglob)) then
-        send_flags(ipoin) = 1
-      else
-        send_flags(ipoin) = 0
-      endif
-    enddo
-
-    ! exchange using send/recv with ordering to avoid deadlock
-    if (myrank < neighbor_rank) then
-      call send_i(send_flags, nsend, neighbor_rank, itag)
-      call recv_i(recv_flags, nrecv, neighbor_rank, itag)
-    else
-      call recv_i(recv_flags, nrecv, neighbor_rank, itag)
-      call send_i(send_flags, nsend, neighbor_rank, itag)
-    endif
-
-    ! process received flags: for shared nodes flagged by the neighbor,
-    ! find which local elements contain those nodes and tag them
-    ntagged_on_interface = 0
-    do ipoin = 1, nrecv
-      if (recv_flags(ipoin) == 1) then
-        iglob = ibool_interfaces(ipoin, iinterface)
-        ntagged_on_interface = ntagged_on_interface + 1
-        ! mark this node so we can find its elements
-        node_tagged(iglob) = .true.
-      endif
-    enddo
-
-    ! if any nodes were flagged, find elements containing them
-    if (ntagged_on_interface > 0) then
-      ! build a quick set of received flagged node IDs
-      allocate(node_is_shared(nglob), stat=ier)
-      if (ier /= 0) call exit_MPI(myrank,'Error allocating node_is_shared')
-      node_is_shared(:) = .false.
-
-      do ipoin = 1, nrecv
-        if (recv_flags(ipoin) == 1) then
-          iglob = ibool_interfaces(ipoin, iinterface)
-          node_is_shared(iglob) = .true.
-        endif
-      enddo
-
-      ! scan all elements: if any corner node is in the received set, tag it
-      do ispec = 1, nspec
-        if (ispec_tagged(ispec)) cycle  ! already tagged
-
-        ! check 8 corner nodes (sufficient for adjacency — same as xadj/adjncy)
-        if (node_is_shared(ibool(1,1,1,ispec)) .or. &
-            node_is_shared(ibool(NGLLX,1,1,ispec)) .or. &
-            node_is_shared(ibool(NGLLX,NGLLY,1,ispec)) .or. &
-            node_is_shared(ibool(1,NGLLY,1,ispec)) .or. &
-            node_is_shared(ibool(1,1,NGLLZ,ispec)) .or. &
-            node_is_shared(ibool(NGLLX,1,NGLLZ,ispec)) .or. &
-            node_is_shared(ibool(NGLLX,NGLLY,NGLLZ,ispec)) .or. &
-            node_is_shared(ibool(1,NGLLY,NGLLZ,ispec))) then
-          ispec_tagged(ispec) = .true.
-        endif
-      enddo
-
-      deallocate(node_is_shared)
-    endif
-
-    deallocate(send_flags, recv_flags)
+    call isend_i(send_flags(1,iinterface), nsend, neighbor_rank, itag, send_req(iinterface))
   enddo
 
+  ! complete all exchanges
+  do iinterface = 1, num_interfaces
+    call wait_req(recv_req(iinterface))
+  enddo
+  do iinterface = 1, num_interfaces
+    call wait_req(send_req(iinterface))
+  enddo
+
+  ! process received flags: mark every boundary node that a neighbor flagged
+  allocate(node_is_shared(nglob), stat=ier)
+  if (ier /= 0) call exit_MPI(myrank,'Error allocating node_is_shared')
+  node_is_shared(:) = .false.
+
+  do iinterface = 1, num_interfaces
+    do ipoin = 1, nibool_interfaces(iinterface)
+      if (recv_flags(ipoin, iinterface) == 1) then
+        iglob = ibool_interfaces(ipoin, iinterface)
+        node_is_shared(iglob) = .true.
+      endif
+    enddo
+  enddo
+
+  ! scan all elements: if any corner node is in the received set, tag it
+  do ispec = 1, nspec
+    if (ispec_tagged(ispec)) cycle  ! already tagged
+
+    ! check 8 corner nodes (sufficient for adjacency — same as xadj/adjncy)
+    if (node_is_shared(ibool(1,1,1,ispec)) .or. &
+        node_is_shared(ibool(NGLLX,1,1,ispec)) .or. &
+        node_is_shared(ibool(NGLLX,NGLLY,1,ispec)) .or. &
+        node_is_shared(ibool(1,NGLLY,1,ispec)) .or. &
+        node_is_shared(ibool(1,1,NGLLZ,ispec)) .or. &
+        node_is_shared(ibool(NGLLX,1,NGLLZ,ispec)) .or. &
+        node_is_shared(ibool(NGLLX,NGLLY,NGLLZ,ispec)) .or. &
+        node_is_shared(ibool(1,NGLLY,NGLLZ,ispec))) then
+      ispec_tagged(ispec) = .true.
+    endif
+  enddo
+
+  deallocate(node_is_shared)
+  deallocate(send_flags, recv_flags, send_req, recv_req)
   deallocate(node_tagged)
 
   end subroutine gf_expand_cross_mpi

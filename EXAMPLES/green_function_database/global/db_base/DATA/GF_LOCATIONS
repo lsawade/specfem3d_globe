@@ -1,0 +1,8 @@
+# GF_LOCATIONS - earthquake hypocenter locations for Green function database
+# latitude  longitude  depth_km
+# 2010 Chile earthquake (Maule)
+-35.909   -72.733   35.0
+# 2019 Peru earthquake
+-5.812   -75.270   122.6
+# Near center of chunk
+-13.0   -67.0   10.0

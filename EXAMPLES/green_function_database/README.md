@@ -24,7 +24,7 @@ SPECFEM3D_GLOBE and validate it against direct forward simulations.
 
    ```bash
    cd regional
-   snakemake -j3
+   snakemake -j1
    ```
 
    This will:
@@ -33,6 +33,18 @@ SPECFEM3D_GLOBE and validate it against direct forward simulations.
    - Build the GF database manifest (`GFDB/centroids.bin`)
    - Run forward validation simulations (force and CMT)
    - Produce cross-validation plots in `validation_output/`
+
+   **Note 1**: The regional workflow is affected by the absorbing boundary conditions. It is important to choose the stations carefully to avoid strong reflections from the boundaries. 
+
+2. **Run the global workflow**
+
+   ```bash
+   cd global
+   snakemake -j1
+   ```
+   
+   **Note 1**: The global workflow is computationally more expensive but does not have issues with boundary reflections. It is recommended to run the global workflow if you have sufficient computational resources.
+
 
 ## Workflow Configuration
 

@@ -134,7 +134,7 @@ def main():
             station=station,
             force=True,
             lowpass_period=lowpass_period,
-            highpass_period=0.004,
+            # highpass_period=0.004,
             output=output_dir / "xvalidate_force.svg",
         )
 
@@ -150,7 +150,7 @@ def main():
             force=False,
             cmtsolution=cmtsolution,
             lowpass_period=lowpass_period,
-            highpass_period=0.004,
+            # highpass_period=0.004,
             output=output_dir / "xvalidate_cmt.svg",
         )
 

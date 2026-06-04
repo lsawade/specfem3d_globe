@@ -200,9 +200,9 @@
 
   ! Auto-compute GF_SUBSAMPLE_STEP if sentinel value 0
   if (GF_DATABASE_ENABLED .and. GF_SUBSAMPLE_STEP == 0) then
-    ! Nyquist constraint with 0.5x margin (2x oversampling):
-    !   step = floor(T_min_period / (4 * DT))
-    GF_SUBSAMPLE_STEP = int(T_min_period / (4.0d0 * DT))
+    ! Nyquist constraint with 0.1x margin (10x oversampling):
+    !   step = floor(T_min_period / (20 * DT))
+    GF_SUBSAMPLE_STEP = int(T_min_period / (20.0d0 * DT))
     if (GF_SUBSAMPLE_STEP < 1) GF_SUBSAMPLE_STEP = 1
     if (myrank == 0) then
       print *, 'Green function database:'

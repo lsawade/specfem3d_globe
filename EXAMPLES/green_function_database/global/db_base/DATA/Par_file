@@ -10,7 +10,7 @@ NOISE_TOMOGRAPHY                = 0   # flag of noise tomography, three steps (1
 SAVE_FORWARD                    = .false.   # save last frame of forward simulation or not
 
 # number of chunks (1,2,3 or 6)
-NCHUNKS                         = 1
+NCHUNKS                         = 6
 
 # angular width of the first chunk (not used if full sphere with six chunks)
 ANGULAR_WIDTH_XI_IN_DEGREES     = 90.d0   # angular size of a chunk
@@ -71,7 +71,7 @@ MODEL                           = s362ani
 OCEANS                          = .true.
 ELLIPTICITY                     = .true.
 TOPOGRAPHY                      = .true.
-GRAVITY                         = .false.
+GRAVITY                         = .true.
 ROTATION                        = .true.
 ATTENUATION                     = .true.
 
@@ -94,7 +94,7 @@ RECORD_LENGTH_IN_MINUTES        = 30.0d0
 ## regional mesh cut-off
 # using this flag will cut-off the mesh in the mantle at a layer matching to the given cut-off depth.
 # this flag only has an effect for regional simulations, i.e., for NCHUNKS values less than 6.
-REGIONAL_MESH_CUTOFF            = .true.
+REGIONAL_MESH_CUTOFF            = .false.
 
 # regional mesh cut-off depth (in km)
 # possible selections are: 24.4d0, 80.d0, 220.d0, 400.d0, 600.d0, 670.d0, 771.d0
@@ -112,7 +112,7 @@ REGIONAL_MESH_ADD_2ND_DOUBLING  = .false.
 #-----------------------------------------------------------
 
 # absorbing boundary conditions for a regional simulation
-ABSORBING_CONDITIONS            = .true.
+ABSORBING_CONDITIONS            = .false.
 
 # run global simulation for a circular region and apply high attenuation for the rest of the model
 # this creates an absorbing boundary with less reflection than stacey at a cost of 6x the computational cost
@@ -443,7 +443,7 @@ HDF5_ENABLED                    = .true.
 
 # Green function database
 GF_DATABASE_ENABLED             = .true.
-GF_DATABASE_PATH                = /scratch/gpfs/TROMP/lsawade/specfem3d_globe/EXAMPLES/green_function_database/regional/GFDB/
+GF_DATABASE_PATH                = /scratch/gpfs/TROMP/lsawade/specfem3d_globe/EXAMPLES/green_function_database/global/GFDB/
 GF_SUBSAMPLE_STEP               = 0                              # 0 = auto (from mesh resolution), or set manually (>= 1)
 GF_BUFFER_SIZE                  = 100
 GF_NEIGHBOR_SHELLS              = 1

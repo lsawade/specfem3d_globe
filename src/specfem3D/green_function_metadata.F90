@@ -213,7 +213,7 @@
 
   use constants, only: CUSTOM_REAL,NGLLX,IMAIN,MAX_STRING_LEN,NR_DENSITY
 
-  use specfem_par, only: myrank, NSTEP, DT, &
+  use specfem_par, only: myrank, NSTEP, DT, t0, &
     ibathy_topo, NX_BATHY_VAL, NY_BATHY_VAL, &
     nspl_ellip, rspl_ellip, ellipicity_spline, ellipicity_spline2, &
     scale_displ
@@ -366,6 +366,19 @@
   call h5screate_simple_f(1, adim, aspace_id, hdferr)
   call h5acreate_f(fid, 'dt', H5T_NATIVE_DOUBLE, aspace_id, attr_id, hdferr)
   attr_dp(1) = DT
+  call h5awrite_f(attr_id, H5T_NATIVE_DOUBLE, attr_dp, adim, hdferr)
+  call h5aclose_f(attr_id, hdferr)
+  call h5sclose_f(aspace_id, hdferr)
+
+  ! t0: time of the first time step relative to the source origin.
+  ! The simulation time axis is timeval(it) = (it-1)*DT - t0, so the first
+  ! stored (subsampled) sample sits at -t0 + (first_snap-1)*DT. The GF
+  ! reconstruction needs t0 to place its trace on an absolute time axis that
+  ! is consistent with a forward simulation; storing it here makes the
+  ! database self-contained (no need to parse output_solver.txt).
+  call h5screate_simple_f(1, adim, aspace_id, hdferr)
+  call h5acreate_f(fid, 't0', H5T_NATIVE_DOUBLE, aspace_id, attr_id, hdferr)
+  attr_dp(1) = t0
   call h5awrite_f(attr_id, H5T_NATIVE_DOUBLE, attr_dp, adim, hdferr)
   call h5aclose_f(attr_id, hdferr)
   call h5sclose_f(aspace_id, hdferr)
