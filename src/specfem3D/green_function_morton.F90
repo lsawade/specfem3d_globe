@@ -60,35 +60,38 @@
   ! local parameters
   integer :: i, ispec, iglob_center, ier
 
-  if (gf_nelem_local == 0) return
+  ! NOTE: do not early-return on empty ranks. gf_report_morton_codes() below
+  ! contains a collective (gather_all_i) that every rank must reach, otherwise
+  ! ranks with no local GF elements would skip it and the run would deadlock.
+  if (gf_nelem_local > 0) then
+    ! allocate arrays
+    allocate(gf_center_xyz(3, gf_nelem_local), stat=ier)
+    if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_center_xyz')
 
-  ! allocate arrays
-  allocate(gf_center_xyz(3, gf_nelem_local), stat=ier)
-  if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_center_xyz')
+    allocate(gf_morton_codes(gf_nelem_local), stat=ier)
+    if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_morton_codes')
 
-  allocate(gf_morton_codes(gf_nelem_local), stat=ier)
-  if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_morton_codes')
+    allocate(gf_morton_hex(gf_nelem_local), stat=ier)
+    if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_morton_hex')
 
-  allocate(gf_morton_hex(gf_nelem_local), stat=ier)
-  if (ier /= 0) call exit_MPI(myrank, 'Error allocating gf_morton_hex')
+    ! extract center GLL node coordinates and compute Morton codes
+    do i = 1, gf_nelem_local
+      ispec = gf_local_elements(i)
+      iglob_center = ibool(MIDX, MIDY, MIDZ, ispec)
 
-  ! extract center GLL node coordinates and compute Morton codes
-  do i = 1, gf_nelem_local
-    ispec = gf_local_elements(i)
-    iglob_center = ibool(MIDX, MIDY, MIDZ, ispec)
+      gf_center_xyz(1, i) = xstore(iglob_center)
+      gf_center_xyz(2, i) = ystore(iglob_center)
+      gf_center_xyz(3, i) = zstore(iglob_center)
 
-    gf_center_xyz(1, i) = xstore(iglob_center)
-    gf_center_xyz(2, i) = ystore(iglob_center)
-    gf_center_xyz(3, i) = zstore(iglob_center)
+      ! gf_morton_encode is a standalone function defined below
+      gf_morton_codes(i) = gf_morton_encode( &
+        gf_center_xyz(1, i), gf_center_xyz(2, i), gf_center_xyz(3, i))
 
-    ! gf_morton_encode is a standalone function defined below
-    gf_morton_codes(i) = gf_morton_encode( &
-      gf_center_xyz(1, i), gf_center_xyz(2, i), gf_center_xyz(3, i))
+      write(gf_morton_hex(i), '(Z16.16)') gf_morton_codes(i)
+    enddo
+  endif
 
-    write(gf_morton_hex(i), '(Z16.16)') gf_morton_codes(i)
-  enddo
-
-  ! report on rank 0
+  ! report on rank 0 (collective: all ranks must call this)
   call gf_report_morton_codes()
 
   end subroutine gf_compute_morton_codes

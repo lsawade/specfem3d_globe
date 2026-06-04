@@ -38,8 +38,8 @@
 
   if (.not. GF_DATABASE_ENABLED) return
 
-  ! precompute Butterworth-filtered STF
-  call gf_compute_stf()
+  ! note: the Butterworth-filtered STF (gf_stf) is precomputed earlier in
+  !       prepare_timerun(), before prepare_GPU() builds the local source arrays.
 
   ! compute Morton codes from element center coordinates
   call gf_compute_morton_codes()

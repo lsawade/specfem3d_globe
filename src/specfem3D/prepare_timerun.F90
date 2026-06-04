@@ -88,6 +88,11 @@
   ! prepares oceans
   call prepare_oceans()
 
+  ! Green function database: precompute the Butterworth-filtered STF before
+  ! prepare_GPU(), because the GPU local source-time-function array is built
+  ! there and must use gf_stf (matching the CPU path in compute_add_sources()).
+  if (GF_DATABASE_ENABLED) call gf_compute_stf()
+
   ! prepares GPU arrays
   call prepare_GPU()
 
