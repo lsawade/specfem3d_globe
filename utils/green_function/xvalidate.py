@@ -115,11 +115,11 @@ def main():
 
     # Parse derived parameters
     station = parse_station_from_file(stations_file)
-    highpass_period = parse_min_period(values_from_mesher)
+    lowpass_period = parse_min_period(values_from_mesher)
 
     print(f"Base directory: {basedir}")
     print(f"Station: {station}")
-    print(f"Highpass period: {highpass_period:.1f} s (from mesh)")
+    print(f"Lowpass period: {lowpass_period:.1f} s (from mesh)")
 
     output_dir.mkdir(exist_ok=True)
 
@@ -133,7 +133,8 @@ def main():
             forward_output=forward_force_output,
             station=station,
             force=True,
-            highpass_period=highpass_period,
+            lowpass_period=lowpass_period,
+            highpass_period=0.004,
             output=output_dir / "xvalidate_force.svg",
         )
 
@@ -148,7 +149,8 @@ def main():
             station=station,
             force=False,
             cmtsolution=cmtsolution,
-            highpass_period=highpass_period,
+            lowpass_period=lowpass_period,
+            highpass_period=0.004,
             output=output_dir / "xvalidate_cmt.svg",
         )
 

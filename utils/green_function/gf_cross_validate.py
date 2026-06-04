@@ -699,9 +699,71 @@ def read_forward_seismograms(fwd_dir, station):
     return traces, channel_prefix
 
 
+def sinc_interp(y_coarse, time_coarse, time_fine):
+    """Whittaker-Shannon (finite-support sinc) interpolation onto a fine axis.
+
+    Reconstructs the band-limited continuous signal from its uniform samples via
+
+        recon(t) = sum_n y[n] * sinc((t - t_n) / Ts)
+
+    where ``Ts`` is the coarse sampling interval. This is the ideal band-limited
+    interpolant. Because the sum runs only over the finite set of stored samples
+    (no circular wrap), it makes no periodicity assumption and is therefore safe
+    at the edges of a finite, non-periodic transient -- unlike FFT-based
+    ``resample``, whose periodic sinc wraps the endpoints and rings. It also has
+    a flat passband all the way to the band edge, unlike a cubic spline, which
+    droops over the upper part of the band.
+
+    A non-zero endpoint level or tilt (e.g. the DC pedestal left by the
+    Gaussian->Heaviside cumsum in the CMT reconstruction) is a low-frequency
+    component that the truncated, slowly-decaying sinc kernel reproduces poorly
+    near the trace boundaries, producing a large spurious swing at the edges. To
+    avoid this, the straight line through the first and last samples is removed
+    before the sinc sum and added back (exactly, since a line is reproduced
+    exactly on the fine grid) afterward. This leaves an endpoint-zeroed,
+    well-behaved signal for the band-limited interpolation.
+
+    Parameters
+    ----------
+    y_coarse : ndarray, shape (n_coarse,)
+        Samples on the coarse, uniformly spaced grid.
+    time_coarse : ndarray, shape (n_coarse,)
+        Coarse time axis (uniform spacing ``Ts``).
+    time_fine : ndarray, shape (n_fine,)
+        Target (fine) time axis.
+
+    Returns
+    -------
+    ndarray, shape (n_fine,)
+        ``y_coarse`` reconstructed on ``time_fine``.
+    """
+    # Remove the endpoint-connecting linear trend (kills the CMT DC pedestal and
+    # any tilt) before interpolating; restore it on the fine grid afterward.
+    slope = (y_coarse[-1] - y_coarse[0]) / (time_coarse[-1] - time_coarse[0])
+    trend_coarse = y_coarse[0] + slope * (time_coarse - time_coarse[0])
+    trend_fine = y_coarse[0] + slope * (time_fine - time_coarse[0])
+    y_detrended = y_coarse - trend_coarse
+
+    Ts = time_coarse[1] - time_coarse[0]
+    # M[i, n] = sinc((t_fine[i] - t_coarse[n]) / Ts); shape (n_fine, n_coarse).
+    # For the regional example this is ~18000 x 106, a small matmul. If a much
+    # finer/longer case makes M too large, chunk time_fine into blocks.
+    M = np.sinc((time_fine[:, None] - time_coarse[None, :]) / Ts)
+    return M @ y_detrended + trend_fine
+
+
 def align_and_filter(gf, time_gf, fwd_traces, dt, subsample_step, dt_sub,
                      f_cutoff, lowpass_period, highpass_period):
-    """Lowpass-filter forward traces, subsample, align with GF, and apply optional filters.
+    """Lowpass-filter forward traces, upsample GF to forward rate, align, and filter.
+
+    The comparison is carried out on the forward simulation's full-resolution
+    time axis. The forward traces are kept at their native sampling rate (only
+    anti-alias lowpassed to match the band-limited GF), and the subsampled GF
+    reconstruction is upsampled onto the forward axis with finite-support sinc
+    (Whittaker-Shannon) interpolation -- the ideal band-limited interpolant for
+    the finite, non-periodic GF transient. This gives an honest full-resolution
+    reconstruction error and avoids the edge ringing that FFT-based resampling
+    produces on a non-periodic signal.
 
     Parameters
     ----------
@@ -734,9 +796,11 @@ def align_and_filter(gf, time_gf, fwd_traces, dt, subsample_step, dt_sub,
     comps = list(fwd_traces.keys())
     comp_labels = {comps[0]: "North", comps[1]: "East", comps[2]: "Vertical"}
 
-    # Lowpass filter forward traces to match GF anti-alias
+    # Lowpass filter forward traces to the GF band (kept at full resolution).
+    # This band-limits the forward trace to the same cutoff the GF database
+    # stored, so the comparison measures reconstruction error, not a band
+    # mismatch. lp_fc defaults to the database anti-alias cutoff.
     lp_fc = 1.0 / lowpass_period if lowpass_period else f_cutoff
-    lp_filter = lowpass_period is not None
     sos = butterworth_sos(4, lp_fc, 1.0 / dt)
 
     fwd_filtered = {}
@@ -745,46 +809,34 @@ def align_and_filter(gf, time_gf, fwd_traces, dt, subsample_step, dt_sub,
             fwd_traces[comp]["amp"].astype(np.float64), sos
         )
 
-    # Subsample forward traces
-    fwd_sub = {comp: fwd_filtered[comp][::subsample_step] for comp in comps}
-    time_fwd = fwd_traces[comps[0]]["time"][::subsample_step]
+    time_fwd = fwd_traces[comps[0]]["time"]
 
-    # Align traces using overlapping time window
+    # Align traces using the overlapping time window. The common axis is the
+    # forward (full-resolution) time axis.
     t_start = max(time_fwd[0], time_gf[0])
     t_end = min(time_fwd[-1], time_gf[-1])
 
-    mask_gf = (time_gf >= t_start) & (time_gf <= t_end)
-    time_common = time_gf[mask_gf]
+    mask_fwd = (time_fwd >= t_start) & (time_fwd <= t_end)
+    time_common = time_fwd[mask_fwd]
 
+    fwd_aligned = {comp: fwd_filtered[comp][mask_fwd] for comp in comps}
+
+    # Upsample the GF reconstruction onto the forward axis with finite-support
+    # sinc interpolation (band-limited, non-periodic -> no edge ringing).
     gf_aligned = {
-        comps[0]: gf[0][mask_gf],
-        comps[1]: gf[1][mask_gf],
-        comps[2]: gf[2][mask_gf],
+        comps[i]: sinc_interp(gf[i], time_gf, time_common)
+        for i in range(3)
     }
 
-    fwd_aligned = {}
+    # Lowpass the reconstructed GF to the same band as the forward trace. The GF
+    # is already band-limited by construction, but this cleans any residual
+    # band-edge wiggle and keeps both traces in an identical band.
     for comp in comps:
-        fwd_aligned[comp] = np.interp(time_common, time_fwd, fwd_sub[comp])
+        gf_aligned[comp] = filter_with_taper(gf_aligned[comp], sos)
 
-    # Taper both signals to suppress edge artifacts
-    n_compare = len(time_common)
-    n_taper = max(1, int(0.15 * n_compare))
-    taper = np.ones(n_compare)
-    taper[:n_taper] = 0.5 * (1.0 - np.cos(np.linspace(0, pi, n_taper)))
-    taper[-n_taper:] = 0.5 * (1.0 - np.cos(np.linspace(pi, 0, n_taper)))
-    for comp in comps:
-        gf_aligned[comp] = gf_aligned[comp] * taper
-        fwd_aligned[comp] = fwd_aligned[comp] * taper
-
-    # Optional lowpass filter on GF traces (when overriding database cutoff)
-    if lp_filter:
-        lp_sos_sub = butterworth_sos(4, 1.0 / lowpass_period, 1.0 / dt_sub)
-        for comp in comps:
-            gf_aligned[comp] = filter_with_taper(gf_aligned[comp], lp_sos_sub)
-
-    # Optional highpass filter on both
+    # Optional highpass filter on both, at the forward sampling rate.
     if highpass_period is not None:
-        hp_sos = butterworth_highpass_sos(4, 1.0 / highpass_period, 1.0 / dt_sub)
+        hp_sos = butterworth_highpass_sos(4, 1.0 / highpass_period, 1.0 / dt)
         for comp in comps:
             gf_aligned[comp] = filter_with_taper(gf_aligned[comp], hp_sos)
             fwd_aligned[comp] = filter_with_taper(fwd_aligned[comp], hp_sos)
