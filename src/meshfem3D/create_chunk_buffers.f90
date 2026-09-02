@@ -128,7 +128,11 @@
 ! number of faces between chunks
   integer :: NUM_FACES
   integer :: NPROC_ONE_DIRECTION
+  integer :: NUM_CORNER_MEMBERS
   integer :: ier
+
+  ! A valid MPI rank is non-negative; do not use rank zero as a sentinel.
+  integer, parameter :: INVALID_RANK = -1
 
   logical,parameter :: DEBUG = .false.
 
@@ -152,8 +156,14 @@
   NCORNERSCHUNKS = 0
 
   ! number of corners and faces shared between chunks and number of message types
-  if (NCHUNKS == 1 .or. NCHUNKS == 2) then
+  if (NCHUNKS == 1) then
     NCORNERSCHUNKS = 1
+    NUM_FACES = 1
+    NUM_MSG_TYPES = 1
+  else if (NCHUNKS == 2) then
+    ! AB and AC share the xi-min/xi-max edge. Its eta-min and eta-max
+    ! endpoints need separate two-rank records.
+    NCORNERSCHUNKS = 2
     NUM_FACES = 1
     NUM_MSG_TYPES = 1
   else if (NCHUNKS == 3) then
@@ -168,8 +178,14 @@
     call exit_MPI(myrank,'number of chunks must be either 1, 2, 3 or 6')
   endif
 
-  ! if more than one chunk then same number of processors in each direction
-  NPROC_ONE_DIRECTION = NPROC_XI
+  ! The two-chunk AB--AC interface is xi-constant and is segmented in eta.
+  ! The historical mappings for three and six chunks still assume square
+  ! processor decompositions and continue to use the xi count.
+  if (NCHUNKS == 2) then
+    NPROC_ONE_DIRECTION = NPROC_ETA
+  else
+    NPROC_ONE_DIRECTION = NPROC_XI
+  endif
 
   ! total number of messages corresponding to these common faces
   NUMMSGS_FACES = NPROC_ONE_DIRECTION * NUM_FACES * NUM_MSG_TYPES
@@ -187,8 +203,8 @@
            imsg_type(NUMMSGS_FACES),stat=ier)
   if (ier /= 0 ) call exit_mpi(myrank,'Error allocating iproc faces arrays')
   ! clear arrays allocated
-  iprocfrom_faces(:) = -1
-  iprocto_faces(:) = -1
+  iprocfrom_faces(:) = INVALID_RANK
+  iprocto_faces(:) = INVALID_RANK
   imsg_type(:) = 0
 
   ! communication pattern for corners between chunks
@@ -196,9 +212,9 @@
            iproc_worker1_corners(NCORNERSCHUNKS), &
            iproc_worker2_corners(NCORNERSCHUNKS),stat=ier)
   if (ier /= 0 ) call exit_mpi(myrank,'Error allocating iproc corner arrays')
-  iproc_main_corners(:) = -1
-  iproc_worker1_corners(:) = -1
-  iproc_worker2_corners(:) = -1
+  iproc_main_corners(:) = INVALID_RANK
+  iproc_worker1_corners(:) = INVALID_RANK
+  iproc_worker2_corners(:) = INVALID_RANK
 
   ! checks that there is more than one chunk, otherwise nothing to do
   if (NCHUNKS == 1) then
@@ -297,7 +313,9 @@
 
         if (myrank == 0) write(IMAIN,*) 'Generating message ',imsg,' for faces out of ',NUMMSGS_FACES
 
-        ! we know there is the same number of slices in both directions
+        ! For two chunks only the eta values are used below. The three- and
+        ! six-chunk mappings retain their historical square-decomposition
+        ! assumption for the xi and eta loop values.
         iproc_xi_loop = iproc_loop
         iproc_eta_loop = iproc_loop
 
@@ -826,12 +844,21 @@
 !---- generate the 8 message patterns sharing a corner of valence 3
 !
 
+  ! A two-chunk endpoint record has two direct face participants. Nodes on
+  ! the same radial line can have more owners after face buffers are combined;
+  ! their pairwise MPI links are retained by the downstream interface setup.
+  if (NCHUNKS == 2) then
+    NUM_CORNER_MEMBERS = 2
+  else
+    NUM_CORNER_MEMBERS = 3
+  endif
+
   ! allocate temporary array for corners
   allocate(iprocscorners(3,NCORNERSCHUNKS), &
            itypecorner(3,NCORNERSCHUNKS), &
            stat=ier)
   if (ier /= 0 ) call exit_mpi(myrank,'Error allocating iproccorner arrays')
-  iprocscorners(:,:) = -1
+  iprocscorners(:,:) = INVALID_RANK
   itypecorner(:,:) = 0
 
   ! initializes corner arrays
@@ -841,20 +868,30 @@
   addressing_big(:,:,:) = 0
   addressing_big(1:NCHUNKS,:,:) = addressing(1:NCHUNKS,:,:)
 
-  ichunk = 1
-  iprocscorners(1,ichunk) = addressing_big(CHUNK_AB,0,NPROC_ETA-1)
-  iprocscorners(2,ichunk) = addressing_big(CHUNK_AC,NPROC_XI-1,NPROC_ETA-1)
-  ! this line is ok even for NCHUNKS = 2
-  iprocscorners(3,ichunk) = addressing_big(CHUNK_BC,NPROC_XI-1,0)
+  if (NCHUNKS == 2) then
+    ! AB(xi=-1,eta) and AC(xi=+1,eta) have the same eta orientation.
+    ! Both eta endpoints must be included; the third slot is unused.
+    ichunk = 1
+    iprocscorners(1,ichunk) = addressing_big(CHUNK_AB,0,0)
+    iprocscorners(2,ichunk) = addressing_big(CHUNK_AC,NPROC_XI-1,0)
+    itypecorner(1,ichunk) = ILOWERLOWER
+    itypecorner(2,ichunk) = IUPPERLOWER
 
-  itypecorner(1,ichunk) = ILOWERUPPER
-  itypecorner(2,ichunk) = IUPPERUPPER
-  itypecorner(3,ichunk) = IUPPERLOWER
+    ichunk = 2
+    iprocscorners(1,ichunk) = addressing_big(CHUNK_AB,0,NPROC_ETA-1)
+    iprocscorners(2,ichunk) = addressing_big(CHUNK_AC,NPROC_XI-1,NPROC_ETA-1)
+    itypecorner(1,ichunk) = ILOWERUPPER
+    itypecorner(2,ichunk) = IUPPERUPPER
+  else
+    ichunk = 1
+    iprocscorners(1,ichunk) = addressing_big(CHUNK_AB,0,NPROC_ETA-1)
+    iprocscorners(2,ichunk) = addressing_big(CHUNK_AC,NPROC_XI-1,NPROC_ETA-1)
+    iprocscorners(3,ichunk) = addressing_big(CHUNK_BC,NPROC_XI-1,0)
 
-!! todo: in the future, should also assemble second corner when NCHUNKS = 2
-!!       for now we only assemble one corner for simplicity
-!!       formally this is incorrect and should be changed in the future
-!!       in practice this trick works fine
+    itypecorner(1,ichunk) = ILOWERUPPER
+    itypecorner(2,ichunk) = IUPPERUPPER
+    itypecorner(3,ichunk) = IUPPERLOWER
+  endif
 
   ! this only if more than 3 chunks
   if (NCHUNKS > 3) then
@@ -952,16 +989,14 @@
     endif
 
     ! checks bounds
-    if (iproc_main_corners(imsg) < 0 &
-        .or. iproc_worker1_corners(imsg) < 0 &
-        .or. iproc_worker2_corners(imsg) < 0 &
-        .or. iproc_main_corners(imsg) > NPROCTOT-1 &
-        .or. iproc_worker1_corners(imsg) > NPROCTOT-1 &
-        .or. iproc_worker2_corners(imsg) > NPROCTOT-1) &
-        call exit_MPI(myrank,'incorrect chunk corner numbering')
+    do imember_corner = 1,NUM_CORNER_MEMBERS
+      if (iprocscorners(imember_corner,imsg) < 0 .or. &
+          iprocscorners(imember_corner,imsg) > NPROCTOT-1) &
+          call exit_MPI(myrank,'incorrect chunk corner numbering')
+    enddo
 
-    ! loop on the three processors of a given corner
-    do imember_corner = 1,3
+    ! loop on the members of a given corner
+    do imember_corner = 1,NUM_CORNER_MEMBERS
 
       ! debug file output
       if (DEBUG) then
@@ -1032,7 +1067,8 @@
         icount_corners = icount_corners + 1
 
         ! checks counter
-        if (icount_corners > 1 .and. (NPROC_XI > 1 .or. NPROC_ETA > 1)) then
+        if (NCHUNKS /= 2 .and. icount_corners > 1 .and. &
+            (NPROC_XI > 1 .or. NPROC_ETA > 1)) then
           print *,'Error ',myrank,'icount_corners:',icount_corners
           print *,'iregion_code:',iregion_code
           call exit_MPI(myrank,'more than one corner for this slice')
@@ -1091,4 +1127,3 @@
   deallocate(mask_ibool)
 
   end subroutine create_chunk_buffers
-
