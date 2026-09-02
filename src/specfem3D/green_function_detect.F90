@@ -169,8 +169,8 @@
   ! broadcast station identity and location to all ranks
   call bcast_all_ch(gf_network_name, 8)
   call bcast_all_ch(gf_station_name, 32)
-  call bcast_all_dp(gf_station_lat, 1)
-  call bcast_all_dp(gf_station_lon, 1)
-  call bcast_all_dp(gf_station_depth, 1)
+  call bcast_all_singledp(gf_station_lat)
+  call bcast_all_singledp(gf_station_lon)
+  call bcast_all_singledp(gf_station_depth)
 
   end subroutine gf_detect_force_component
