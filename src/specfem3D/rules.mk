@@ -474,6 +474,7 @@ $O/green_function_expand.solverstatic.o: $O/green_function_par.solverstatic_modu
 $O/green_function_morton.solverstatic.o: $O/green_function_par.solverstatic_module.o
 $O/green_function_io.solverstatic.o: $O/green_function_par.solverstatic_module.o
 $O/green_function_metadata.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/compute_add_sources.solverstatic.o: $O/green_function_par.solverstatic_module.o
 
 ###
 ### specfem3D - optimized flags and dependence on values from mesher here

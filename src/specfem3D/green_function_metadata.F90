@@ -69,7 +69,7 @@
 
   implicit none
 
-  integer :: ielem, ispec, i, j, k, iglob, hdferr, ier
+  integer :: ielem, ispec, i, j, k, iglob, hdferr
   character(len=MAX_STRING_LEN) :: filepath
   logical :: file_exists
 
@@ -566,6 +566,7 @@
   implicit none
 
   character(len=MAX_STRING_LEN) :: filepath, dirpath
+  character(len=MAX_STRING_LEN) :: command
   logical :: file_exists
   integer :: hdferr
 
@@ -584,7 +585,9 @@
 
   ! create stations directory
   dirpath = trim(GF_DATABASE_PATH) // '/stations'
-  call system('mkdir -p ' // trim(dirpath))
+  ! note: uses the system_command() wrapper, system() is a non-standard GNU extension
+  command = 'mkdir -p ' // trim(dirpath)
+  call system_command(command)
 
   filepath = trim(dirpath) // '/' // &
              trim(gf_network_name) // '.' // trim(gf_station_name) // '.h5'

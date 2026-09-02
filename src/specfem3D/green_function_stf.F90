@@ -43,7 +43,7 @@
 ! Stores the result in gf_stf(:) array (allocated here).
 
   use constants, only: IMAIN,PI,CUSTOM_REAL,MAX_STRING_LEN
-  use specfem_par, only: DT,NSTEP,t0,hdur,hdur_Gaussian,myrank,OUTPUT_FILES
+  use specfem_par, only: DT,NSTEP,t0,myrank,OUTPUT_FILES
   use shared_parameters, only: GF_SUBSAMPLE_STEP,T_min_period
   use green_function_par, only: gf_stf,gf_f_cutoff,gf_hdur
 

@@ -181,10 +181,13 @@
 
   integer :: i
   character(len=MAX_STRING_LEN) :: dirpath
+  character(len=MAX_STRING_LEN) :: command
 
   ! rank 0 creates base directories
   if (myrank == 0) then
-    call system('mkdir -p ' // trim(GF_DATABASE_PATH) // '/elements')
+    ! note: uses the system_command() wrapper, system() is a non-standard GNU extension
+    command = 'mkdir -p ' // trim(GF_DATABASE_PATH) // '/elements'
+    call system_command(command)
 
     write(IMAIN,*) 'Green function database: creating directories'
     write(IMAIN,*) '  base path: ', trim(GF_DATABASE_PATH)
@@ -197,7 +200,8 @@
   ! each rank creates directories for its local elements
   do i = 1, gf_nelem_local
     dirpath = trim(GF_DATABASE_PATH) // '/elements/' // gf_morton_hex(i)
-    call system('mkdir -p ' // trim(dirpath))
+    command = 'mkdir -p ' // trim(dirpath)
+    call system_command(command)
   enddo
 
   call synchronize_all()

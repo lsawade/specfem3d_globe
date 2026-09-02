@@ -1033,7 +1033,7 @@ def cross_validate(
     # the reconstructed trace, so an error here is a rigid time shift between
     # the GF and forward traces.
     t0_gf = mesh.get("t0")
-    
+
     time_gf = np.array([(isnap * subsample_step - 1) * dt - t0_gf
                          for isnap in range(1, nt_sub + 1)])
 

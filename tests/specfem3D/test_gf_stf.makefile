@@ -14,5 +14,4 @@ OBJECTS = \
 # The main green_function_stf.F90 has specfem module dependencies that we
 # don't need for pure filter testing.
 test_gf_stf:
-	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -o ./bin/test_gf_stf test_gf_stf.f90 $(LDFLAGS) $(LIBS)
-
+	${FCCOMPILE_CHECK} ${FCFLAGS_f90} -o ./bin/test_gf_stf test_gf_stf.f90 $(LDFLAGS)

@@ -43,7 +43,7 @@
   implicit none
 
   ! local parameters
-  integer :: ier,iline,igf
+  integer :: ier,igf
   character(len=MAX_STRING_LEN) :: line
   character(len=MAX_STRING_LEN) :: gf_locations_file
   double precision :: lat,lon,depth_km
@@ -155,7 +155,7 @@
   use constants_solver, only: &
     ELLIPTICITY_VAL,NDIM,HUGEVAL,IMAIN, &
     DEGREES_TO_RADIANS,R_UNIT_SPHERE, &
-    nrec_SUBSET_MAX,NPROCTOT_VAL
+    nrec_SUBSET_MAX
 
   use shared_parameters, only: R_PLANET
 

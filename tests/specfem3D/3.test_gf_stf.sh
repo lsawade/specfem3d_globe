@@ -12,14 +12,10 @@ echo >> $testdir/results.log
 echo "directory: `pwd`" >> $testdir/results.log
 
 # clean
+# note: this test is a self-contained serial program, it needs neither OUTPUT_FILES/
+#       nor DATABASES_MPI/ (the latter is a symlink to ../meshfem3D/DATABASES_MPI/ here)
 mkdir -p bin
 rm -f ./bin/$var
-
-mkdir -p OUTPUT_FILES
-rm -f OUTPUT_FILES/*
-
-mkdir -p DATABASES_MPI
-rm -f DATABASES_MPI/*
 
 # single compilation
 echo "compilation: $var" >> $testdir/results.log
@@ -54,5 +50,6 @@ rm -f $testdir/error.log
 
 #cleanup
 rm -f bin/$var
+rm -f $testdir/test_stf_output.txt
 # done
 echo "successfully tested: `date`" >> $testdir/results.log
