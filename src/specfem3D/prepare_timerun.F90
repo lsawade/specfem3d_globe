@@ -88,11 +88,20 @@
   ! prepares oceans
   call prepare_oceans()
 
+  ! Green function database: precompute the Butterworth-filtered STF before
+  ! prepare_GPU(), because the GPU local source-time-function array is built
+  ! there and must use gf_stf (matching the CPU path in compute_add_sources()).
+  if (GF_DATABASE_ENABLED) call gf_compute_stf()
+
   ! prepares GPU arrays
   call prepare_GPU()
 
   ! prepares VTK window visualization
   call prepare_vtk_window()
+
+  ! Green function database: STF, Morton codes, directories, manifest
+  ! (must be called before xstore/ystore/zstore_crust_mantle are deallocated)
+  call prepare_green_function_storage()
 
   ! optimizes array memory layout for better performance
   call prepare_optimized_arrays()
@@ -636,6 +645,11 @@
     if (SIMULATION_TYPE == 3) then
       ! reconstructed wavefield together with +/- b_deltat will spin backward/forward
       b_two_omega_earth = real(2.d0 * TWO_PI / (HOURS_PER_DAY * SECONDS_PER_HOUR * scale_t_inv), kind=CUSTOM_REAL)
+    endif
+
+    ! Green function database: reciprocity requires reversed rotation
+    if (GF_DATABASE_ENABLED) then
+      two_omega_earth = -two_omega_earth
     endif
   endif
 

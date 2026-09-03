@@ -76,8 +76,8 @@
         timeval = time_t - tshift_src(isource)
 
         ! determines source time function value
+        ! (the Green function database STF override is handled inside get_stf_viscoelastic)
         stf = get_stf_viscoelastic(timeval,isource,it)
-
         ! distinguishes between single and double precision for reals
         stf_used = real(stf,kind=CUSTOM_REAL)
 
@@ -492,6 +492,8 @@
 ! returns source time function value for specified time
 
   use specfem_par, only: USE_FORCE_POINT_SOURCE,USE_MONOCHROMATIC_CMT_SOURCE,force_stf,hdur,hdur_Gaussian,USE_SINSQ_STF
+  use shared_parameters, only: GF_DATABASE_ENABLED
+  use green_function_par, only: gf_stf
 
   implicit none
 
@@ -506,6 +508,17 @@
   double precision, external :: comp_source_time_function_gauss
   double precision, external :: comp_source_time_function_gauss_2
   double precision, external :: comp_source_time_function_mono
+
+  ! Green function database: use the precomputed Butterworth-filtered Gaussian STF,
+  ! indexed by time step only (no source/tshift/stage dependence). Handling it here
+  ! mirrors the EXTERNAL_SOURCE_TIME_FUNCTION pattern so that both the CPU source
+  ! injection and the GPU local source-time-function array inherit it automatically.
+  ! GF database runs are SIMULATION_TYPE == 1 (forward) only, so it_index is the
+  ! forward time step.
+  if (GF_DATABASE_ENABLED) then
+    get_stf_viscoelastic = dble(gf_stf(it_index))
+    return
+  endif
 
   ! note: calling comp_source_time_function() includes the handling for external source time functions
 

@@ -86,6 +86,15 @@ specfem3D_SOLVER_OBJECTS += \
 	$O/compute_strain_att.solverstatic.o \
 	$O/finalize_simulation.solverstatic.o \
 	$O/get_attenuation.solverstatic.o \
+	$O/green_function_par.solverstatic_module.o \
+	$O/green_function_detect.solverstatic.o \
+	$O/green_function_stf.solverstatic.o \
+	$O/green_function_locate.solverstatic.o \
+	$O/green_function_expand.solverstatic.o \
+	$O/green_function_morton.solverstatic.o \
+	$O/green_function_io.solverstatic.o \
+	$O/green_function_metadata.solverstatic.o \
+	$O/prepare_green_function_storage.solverstatic.o \
 	$O/initialize_simulation.solverstatic.o \
 	$O/iterate_time.solverstatic.o \
 	$O/iterate_time_undoatt.solverstatic.o \
@@ -150,6 +159,7 @@ specfem3D_SOLVER_OBJECTS += \
 
 specfem3D_MODULES = \
 	$(FC_MODDIR)/asdf_data.$(FC_MODEXT) \
+	$(FC_MODDIR)/green_function_par.$(FC_MODEXT) \
 	$(FC_MODDIR)/constants_solver.$(FC_MODEXT) \
 	$(FC_MODDIR)/manager_adios.$(FC_MODEXT) \
 	$(FC_MODDIR)/mod_element.$(FC_MODEXT) \
@@ -456,6 +466,15 @@ $O/SIEM_solver_petsc.solverstatic.o: $O/SIEM_math_library.shared.o
 $O/SIEM_compute_seismograms.solverstatic.o: $O/SIEM_math_library.shared.o
 $O/prepare_gravity.solverstatic.o: $O/SIEM_math_library.shared.o
 
+# Green function database
+$O/green_function_detect.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/green_function_stf.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/green_function_locate.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/green_function_expand.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/green_function_morton.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/green_function_io.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/green_function_metadata.solverstatic.o: $O/green_function_par.solverstatic_module.o
+$O/compute_add_sources.solverstatic.o: $O/green_function_par.solverstatic_module.o
 
 ###
 ### specfem3D - optimized flags and dependence on values from mesher here

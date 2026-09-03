@@ -1444,3 +1444,14 @@
 ! (perturbed gravity is still computed from the density perturbation)
   logical, parameter :: DISCARD_GCONTRIB = .false.
 
+!!-----------------------------------------------------------
+!!
+!! Green function database
+!!
+!!-----------------------------------------------------------
+
+! number of force components (N, E, Z)
+  integer, parameter :: GF_NCOMP_FORCE = 3
+! number of displacement dimensions (x, y, z)
+  integer, parameter :: GF_NCOMP_DISP  = 3
+

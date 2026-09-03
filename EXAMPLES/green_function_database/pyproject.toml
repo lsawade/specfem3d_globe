@@ -1,0 +1,13 @@
+[project]
+name = "green-function-database"
+version = "0.1.0"
+description = "Green function database workflow for SPECFEM3D_GLOBE"
+requires-python = ">=3.10"
+dependencies = [
+    "h5py",
+    "matplotlib",
+    "numpy",
+    "scipy",
+    "snakemake",
+    "obspy",
+]

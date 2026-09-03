@@ -54,9 +54,6 @@
   double precision :: length
   character(len=MAX_STRING_LEN) :: string
   character(len=MAX_STRING_LEN) :: FORCESOLUTION,path_to_add
-  integer :: dummyval
-  character(len=7) :: dummy
-
   ! initializes
   lat(:) = 0.d0
   long(:) = 0.d0
@@ -103,8 +100,8 @@
 
     ! read header with event information
     ! format: FORCE  id
-    ! as example: FORCE 001
-    read(string,"(a6,i4)") dummy,dummyval  ! not used any further
+    ! as example: FORCE 001 or FORCE IU.SJG
+    ! (header label is not used any further, just skip)
 
     ! read time shift
     read(IIN,"(a)") string

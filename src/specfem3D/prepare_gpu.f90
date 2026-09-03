@@ -772,6 +772,7 @@
             timeval = time_t - tshift_src(isource)
 
             ! source time function value (in range [-1,1]
+            ! (the Green function database STF override is handled inside get_stf_viscoelastic)
             stf = get_stf_viscoelastic(timeval,isource,it_tmp)
 
             ! distinguishes between single and double precision for reals

@@ -1,0 +1,11 @@
+FORCE  IU.SJG
+time shift:     0.0000
+f0:             0.0500
+latitude:      -13.8200
+longitude:     -67.2500
+depth:         647.1000
+source time function: 0
+factor force source:  1.0d15
+comp dir vect source E:   0.0
+comp dir vect source N:   0.0
+comp dir vect source Z:   1.0
